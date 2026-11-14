@@ -130,8 +130,109 @@ function pickVoice() {
   voice = c || null;
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-let sayTimer = null, keepUtt = null;
+// ----- recorded voices (OpenRouter text-to-speech), saved on this device -----
+const PRESETS = [
+  { id: 'ms-emily', label: 'Emily, British (Microsoft)', model: 'microsoft/mai-voice-2.1-flash', voice: 'en-GB-Emily:MAI-Voice-2.1-Flash' },
+  { id: 'mistral-jane', label: 'Jane, British (Mistral)', model: 'mistralai/voxtral-mini-tts-3-0', voice: 'gb_jane_neutral' },
+  { id: 'el-alice', label: 'Alice (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'alice' },
+  { id: 'el-lily', label: 'Lily (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'lily' },
+  { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' },
+  { id: 'hg-tabitha', label: 'Tabitha (HeyGen, cheapest)', model: 'heygen/heygen-voice-1-turbo', voice: 'tabitha' }
+];
+const POOL = ['Priya', 'Maya', 'Jess', 'Tilly', 'Zara', 'Ellie', 'Ruby', 'Amber', 'Daisy', 'Freya', 'Lola', 'Poppy', 'Isla', 'Hana', 'Skye', 'Rosie'];
+const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantastic!', 'Super spelling!'];
+const FIX_TAIL = ' Have a good look. Then try once more.';
+const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
+const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
+const COMMON = [...POOL, ...PRAISE, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
+const preset = () => PRESETS.find(p => p.id === S.vp);
+const ttsOn = () => !!(S.orKey && preset());
+const idb = new Promise(res => {
+  try { const r = indexedDB.open('bellaspeller-voice', 1); r.onupgradeneeded = () => r.result.createObjectStore('clips'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (e) { res(null); }
+});
+async function idbGet(k) { const db = await idb; if (!db) return null; return new Promise(res => { try { const q = db.transaction('clips').objectStore('clips').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); } }); }
+async function idbPut(k, v) { const db = await idb; if (!db) return; return new Promise(res => { try { const tx = db.transaction('clips', 'readwrite'); tx.objectStore('clips').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => res(); } catch (e) { res(); } }); }
+const urlCache = new Map();
+const clipKey = t => S.vp + '|' + t;
+async function getClipUrl(t) {
+  if (!ttsOn()) return null;
+  const k = clipKey(t);
+  if (urlCache.has(k)) return urlCache.get(k);
+  const blob = await idbGet(k);
+  if (!blob) return null;
+  const u = URL.createObjectURL(blob); urlCache.set(k, u); return u;
+}
+async function fetchClip(t) {
+  const p = preset();
+  const r = await fetch('https://openrouter.ai/api/v1/audio/speech', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + S.orKey, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' },
+    body: JSON.stringify({ model: p.model, input: t, voice: p.voice, response_format: 'mp3' })
+  });
+  if (!r.ok) throw new Error('The voice service answered ' + r.status + '. ' + (await r.text()).slice(0, 200));
+  const blob = await r.blob();
+  if (/json|text/i.test(blob.type) || blob.size < 200) throw new Error('The voice service did not send audio. ' + (await blob.text()).slice(0, 200));
+  await idbPut(clipKey(t), blob);
+  const u = URL.createObjectURL(blob); urlCache.set(clipKey(t), u);
+  return u;
+}
+// Makes sure the clips exist. Shows a short "getting ready" screen, which Bella can skip.
+async function prep(texts, msg) {
+  if (!ttsOn()) return null;
+  const need = [];
+  for (const t of new Set(texts)) { if (t && sendable(t) && !(await getClipUrl(t))) need.push(t); }
+  if (!need.length) return null;
+  let n = 0, skip = false, err = null;
+  await new Promise(res => {
+    h(`<div class="screen"><h1>${esc(msg)}</h1><p class="lead" id="pc">0 of ${need.length}</p><button id="go" class="btn">Start now</button></div>`);
+    on('#go', () => { skip = true; res(); });
+    let i = 0;
+    const worker = async () => {
+      while (i < need.length && !skip && !err) {
+        try { await fetchClip(need[i++]); } catch (e) { err = e; }
+        n++; const pc = $('#pc'); if (pc) pc.textContent = n + ' of ' + need.length;
+      }
+    };
+    Promise.all([worker(), worker(), worker()]).then(() => res());
+  });
+  lastTtsErr = err ? err.message : '';
+  return err;
+}
+let sayTimer = null, keepUtt = null, sayTok = 0, audioEl = null, ttsFails = 0, lastTtsErr = '';
+const SAMPLE = 'Hello! Let us spell some words. Every one is a star.';
+// Her own name is never sent to the voice service; those lines use the device voice.
+const sendable = t => !(S.meIn && S.name && t.toLowerCase().includes(S.name.toLowerCase()));
+function partTexts(beats, last) {
+  const o = [];
+  beats.forEach(b => {
+    if (b.n) o.push(fill(b.n));
+    else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
+    else if (b.w) { const s = fill(b.w.before) + b.w.word + fill(b.w.after); if (!last) o.push(s); o.push(s + ' ... ' + b.w.word); }
+  });
+  return o;
+}
+function stopAll() {
+  clearTimeout(sayTimer);
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (audioEl) { audioEl.onended = audioEl.onerror = null; audioEl.pause(); audioEl = null; }
+}
 function say(t) {
+  const tok = ++sayTok;
+  stopAll();
+  if (!ttsOn()) return builtinSay(t);
+  getClipUrl(t).then(url => {
+    if (tok !== sayTok) return;
+    if (url) {
+      audioEl = new Audio(url);
+      audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
+      audioEl.play().catch(() => { if (tok === sayTok) builtinSay(t); });
+    } else {
+      builtinSay(t);
+      if (ttsFails < 3 && sendable(t)) fetchClip(t).then(() => { ttsFails = 0; }, e => { ttsFails++; lastTtsErr = e.message; });
+    }
+  });
+}
+function builtinSay(t) {
   if (!('speechSynthesis' in window)) return;
   clearTimeout(sayTimer);
   speechSynthesis.cancel();
@@ -147,7 +248,7 @@ function say(t) {
     speechSynthesis.speak(u);
   }, 120);
 }
-const hush = () => { clearTimeout(sayTimer); if ('speechSynthesis' in window) speechSynthesis.cancel(); };
+const hush = () => { sayTok++; stopAll(); };
 
 // ---------- rendering ----------
 let keyHandler = null, prog = '';
@@ -267,16 +368,15 @@ function showFix(word, typed) {
   return new Promise(res => {
     const mask = matchMask(word, typed);
     const hiding = mask.some(x => !x);
-    const msg = hiding ? 'So close. The yellow letters were hiding.' : 'So close. Here is how it looks.';
+    const msg = hiding ? FIX_A : FIX_B;
     h(`<div class="screen"><p class="lead">${msg}</p>
       <div class="word">${[...word].map((c, i) => mask[i] ? esc(c) : `<span class="hid">${esc(c)}</span>`).join('')}</div>
       <p class="lead">Have a good look. Then try once more.</p>
       <button id="next" class="btn big">Try once more</button></div>`);
     on('#next', () => { hush(); res(); });
-    say(msg + ' Have a good look. Then try once more.');
+    say(msg + FIX_TAIL);
   });
 }
-const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantastic!', 'Super spelling!'];
 function praise(word, clean) {
   return new Promise(res => {
     const p = clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!';
@@ -318,9 +418,8 @@ async function doWord(week, wobj, mode, ctx, withCard, starred) {
 // ---------- the two kinds of day ----------
 function clubSetup() {
   return new Promise(res => {
-    const POOL = ['Priya', 'Maya', 'Jess', 'Tilly', 'Zara', 'Ellie', 'Ruby', 'Amber', 'Daisy', 'Freya', 'Lola', 'Poppy', 'Isla', 'Hana', 'Skye', 'Rosie'];
     const names = S.girls.slice();
-    const msg = 'These are the four girls in your story. Tap a name to change it.';
+    const msg = CLUB_MSG;
     h(`<div class="screen"><h1>Your story</h1><p class="lead">${msg}</p>
       <div class="club">${names.map((g, i) => `<button class="btn choice" id="g${i}">${esc(g)}</button>`).join('')}
       ${S.name ? `<label><input type="checkbox" id="meIn" ${S.meIn ? 'checked' : ''}> Put me in the story</label>` : ''}</div>
@@ -347,6 +446,8 @@ async function storyDay() {
   const last = ep.parts.length > 1 && st.part === ep.parts.length - 1;
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   const beats = ep.parts[st.part], starred = new Set();
+  await prep(partTexts(beats, last).concat(COMMON), 'Getting the story ready');
+  prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   let i = 0;
   while (i < beats.length) {
     const b = beats[i];
@@ -368,6 +469,7 @@ async function storyDay() {
 async function quickDay() {
   const wk = curWeek(), ws = shuffle(wk.words.slice());
   const starred = new Set(), results = [];
+  await prep(wk.words.map(x => x.w).concat(COMMON), 'Getting the words ready');
   let i = 0;
   while (i <= ws.length) {
     if (i < ws.length) {
@@ -495,6 +597,9 @@ function adult() {
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">Voices come from this device. If none sounds good, tell Claude and we can add recorded voices instead.</p>
+    <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${S.vp === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
+    <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
+    <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
     <label>AI model</label><input id="orModel" type="text" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
@@ -512,6 +617,25 @@ function adult() {
       });
     } catch (e) { out.innerHTML = `<p class="note">${esc(e.message || 'Something went wrong.')}</p>`; }
     btn.disabled = false; btn.textContent = 'Try another';
+  });
+  $('#psel').onchange = e => { S.vp = e.target.value; save(); };
+  on('#psample', async () => {
+    const st = $('#pstat');
+    if (!S.orKey) { st.textContent = 'Add the OpenRouter key below and press Save settings first.'; return; }
+    if (!preset()) { st.textContent = 'Choose a voice first.'; return; }
+    st.textContent = 'Getting a sample...';
+    try { await fetchClip(SAMPLE); st.textContent = 'Playing the sample.'; say(SAMPLE); } catch (e) { st.textContent = e.message; }
+  });
+  on('#pready', async () => {
+    const st = $('#pstat');
+    if (!ttsOn()) { st.textContent = 'Choose a voice and save the OpenRouter key first.'; return; }
+    const need = [];
+    for (const t of new Set(wk.words.map(x => x.w).concat(COMMON))) if (!(await getClipUrl(t))) need.push(t);
+    if (!need.length) { st.textContent = 'Already ready.'; return; }
+    let n = 0, err = null, i = 0;
+    const w = async () => { while (i < need.length && !err) { try { await fetchClip(need[i++]); } catch (e) { err = e; } n++; st.textContent = n + ' of ' + need.length + ' ready'; } };
+    await Promise.all([w(), w(), w()]);
+    st.textContent = err ? err.message : 'Ready: ' + need.length + ' phrases saved on this device.';
   });
   $('#vsel').onchange = e => { S.voiceName = e.target.value; save(); pickVoice(); say('Hello! Let us spell some words. Every one is a star.'); };
   $('#cur').onchange = e => { S.cur = e.target.value; save(); adult(); };
