@@ -1,6 +1,6 @@
 // Network first, so updates arrive; falls back to the saved copy when offline.
-const C = 'bellaspeller-v12';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'episodes.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
+const C = 'bellaspeller-v17';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'episodes.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'fonts/atkinson-400.woff2', 'fonts/atkinson-700.woff2'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {

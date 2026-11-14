@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 1.10, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.0, 14 November 2026 (new look)'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -185,13 +185,14 @@ async function prep(texts, msg) {
   if (!need.length) return null;
   let n = 0, skip = false, err = null;
   await new Promise(res => {
-    h(`<div class="screen"><h1>${esc(msg)}</h1><p class="lead" id="pc">0 of ${need.length}</p><button id="go" class="btn">Start now</button></div>`);
+    h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><div class="bar"><i id="pbar"></i></div><p class="subtle" id="pc">0 of ${need.length}</p><button id="go" class="btn small">Start now</button></div>`);
     on('#go', () => { skip = true; res(); });
     let i = 0;
     const worker = async () => {
       while (i < need.length && !skip && !err) {
         try { await fetchClip(need[i++]); } catch (e) { err = e; }
         n++; const pc = $('#pc'); if (pc) pc.textContent = n + ' of ' + need.length;
+        const pb = $('#pbar'); if (pb) pb.style.width = Math.round(100 * n / need.length) + '%';
       }
     };
     Promise.all([worker(), worker(), worker()]).then(() => res());
@@ -208,7 +209,7 @@ function partTexts(beats, last) {
   beats.forEach(b => {
     if (b.n) o.push(fill(b.n));
     else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
-    else if (b.w) { const s = fill(b.w.before) + b.w.word + fill(b.w.after); if (!last) o.push(s); o.push(s + ' ... ' + b.w.word); }
+    else if (b.w) { const s = fill(b.w.before) + b.w.word + fill(b.w.after); if (!last) o.push(fill(b.w.lead || '') + ' ' + s); o.push(s + ' ... ' + b.w.word); }
   });
   return o;
 }
@@ -254,9 +255,24 @@ const hush = () => { sayTok++; stopAll(); };
 // ---------- rendering ----------
 let keyHandler = null, prog = '';
 document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
+const ICONS = {
+  home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  back: '<path d="M15 5l-7 7 7 7"/>',
+  next: '<path d="M9 5l7 7-7 7"/>',
+  speaker: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19.5 5.5a9 9 0 0 1 0 13"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+  book: '<path d="M12 6C10 4.5 7 4 4 4v14c3 0 6 .5 8 2 2-1.5 5-2 8-2V4c-3 0-6 .5-8 2z"/><path d="M12 6v14"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  lock: '<path d="M6 11h12v10H6z"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  check: '<path d="M5 12.5l5 5 9-10"/>',
+  del: '<path d="M21 5H9l-6 7 6 7h12z"/><path d="M13 9.5l4 5M17 9.5l-4 5"/>',
+  swap: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  star: '<path fill="currentColor" stroke="none" d="M12 2.2l2.95 6.1 6.7.95-4.85 4.7 1.15 6.65L12 17.4l-5.95 3.2 1.15-6.65L2.35 9.25l6.7-.95z"/>'
+};
+const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
 function h(html, opts) {
   keyHandler = null;
-  const top = opts && opts.noTop ? '' : `<div class="top"><button id="goHome" aria-label="Home">🏠 Home</button><span>${esc(prog)}</span></div>`;
+  const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div><span class="prog">${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
   window.scrollTo(0, 0);
@@ -264,11 +280,11 @@ function h(html, opts) {
 const on = (sel, fn) => { const e = $(sel); if (e) e.onclick = fn; };
 const BACK = Symbol('back');
 function backBtn(res) {
-  const t = $('.top'); if (!t) return;
+  const t = $('.top .lhs'); if (!t) return;
   const b = document.createElement('button');
-  b.className = 'backbtn'; b.textContent = '← Back';
+  b.className = 'iconbtn backbtn'; b.setAttribute('aria-label', 'Back'); b.innerHTML = ico('back') + '<span>Back</span>';
   b.onclick = () => { hush(); res(BACK); };
-  t.insertBefore(b, t.children[1]);
+  t.appendChild(b);
 }
 function fill(t) {
   const g = S.girls.slice();
@@ -279,8 +295,8 @@ function fill(t) {
 // ---------- small screens ----------
 function narrate(text, label) {
   return new Promise(res => {
-    h(`<div class="screen"><p class="story">${esc(text)}</p>
-      <div class="row"><button id="hear" class="btn small">🔊 Hear it again</button><button id="next" class="btn big">${esc(label || 'Next')}</button></div></div>`);
+    h(`<div class="screen"><div class="page"><p class="story">${esc(text)}</p></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">${esc(label || 'Next')} ${ico('next')}</button></div></div>`);
     on('#hear', () => say(text));
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
@@ -290,7 +306,10 @@ function narrate(text, label) {
 }
 function choose(q, opts) {
   return new Promise(res => {
-    h(`<div class="screen"><p class="story">${esc(q)}</p>${opts.map((o, i) => `<button class="btn choice" id="o${i}">${esc(o)}</button>`).join('')}</div>`);
+    h(`<div class="screen"><div class="page"><p class="story">${esc(q)}</p></div><div class="msg">Tap what happens next</div>
+      <div class="choices">${opts.map((o, i) => `<button class="choice" id="o${i}">${esc(o)}</button>`).join('')}</div>
+      <button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button></div>`);
+    on('#hear', () => say(q + ' ' + opts.join('. Or. ')));
     opts.forEach((o, i) => on('#o' + i, () => { hush(); res(i); }));
     backBtn(res);
     say(q + ' ' + opts.join('. Or. '));
@@ -298,12 +317,13 @@ function choose(q, opts) {
 }
 function learnCard(week, wobj, ctx) {
   return new Promise(res => {
-    const story = ctx ? `<p class="lead">${esc(fill(ctx.lead || ''))}</p><p class="sentence">${esc(fill(ctx.before))}<b>${esc(wobj.w)}</b>${esc(fill(ctx.after))}</p><p class="lead">This is the word to learn. Say it out loud.</p>` : `<p class="lead">Look at it. Say it out loud.</p>`;
-    const tag = wobj.red ? `<span class="tag red">Red word. No rule. Just remember it.</span>` : (week.rule ? `<span class="tag">${esc(week.rule)}</span>` : '');
-    const sv = wobj.say ? `<p class="lead">Say it the spelling way: <b>${esc(wobj.say)}</b></p>` : '';
-    h(`<div class="screen">${story}<div class="word">${esc(wobj.w)}</div>${tag}${sv}
-      <div class="row"><button id="hear" class="btn small">🔊 Hear it</button><button id="next" class="btn big">I've said it</button></div></div>`);
-    const spoken = ctx ? fill(ctx.before) + wobj.w + fill(ctx.after) : wobj.w;
+    const story = ctx ? `<div class="page"><p class="lead-in">${esc(fill(ctx.lead || ''))}</p><p class="story">“${esc(fill(ctx.before))}<mark>${esc(wobj.w)}</mark>${esc(fill(ctx.after))}”</p></div>` : '';
+    const tag = wobj.red ? `<span class="tag red">Red word. No rule. Just remember it.</span>` : (week.rule ? `<span class="tag">${ico('book')}<span>${esc(week.rule)}</span></span>` : '');
+    const sv = wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '';
+    h(`<div class="screen">${story}<div class="wordtile">${esc(wobj.w)}</div>${tag}${sv}
+      <div class="cue">${ico('speaker')}<span>Say it out loud, then tap</span></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="next" class="btn big">I've said it ${ico('check')}</button></div></div>`);
+    const spoken = ctx ? fill(ctx.lead || '') + ' ' + fill(ctx.before) + wobj.w + fill(ctx.after) : wobj.w;
     on('#hear', () => say(spoken));
     on('#next', () => { hush(); res(); });
     backBtn(res);
@@ -313,7 +333,7 @@ function learnCard(week, wobj, ctx) {
 
 // ---------- keyboard and writing ----------
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
-const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? '<button class="key wide" data-k="del">⌫</button>' : ''}</div>`).join('')}</div>`;
+const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button>` : ''}</div>`).join('')}</div>`;
 
 function writeWord(word, ctx, noBack) {
   return new Promise(res => {
@@ -321,11 +341,11 @@ function writeWord(word, ctx, noBack) {
     const sentence = ctx ? fill(ctx.before) + word + fill(ctx.after) : '';
     const sayIt = () => say(ctx ? sentence + ' ... ' + word : word);
     h(`<div class="screen">
-      ${ctx ? `<p class="lead">${esc(fill(ctx.lead || ''))}</p><p class="sentence">${esc(fill(ctx.before))}<span class="blank">&nbsp;</span>${esc(fill(ctx.after))}</p>` : `<p class="lead">Listen. Then write the word.</p>`}
+      ${ctx ? `<div class="page"><p class="lead-in">${esc(fill(ctx.lead || ''))}</p><p class="story">“${esc(fill(ctx.before))}<span class="blank"></span>${esc(fill(ctx.after))}”</p></div>` : `<div class="cue">${ico('speaker')}<span>Listen, then write the word</span></div>`}
       <div id="slots" class="slots"></div>
-      <div class="row"><button id="hear" class="btn small">🔊 Hear it</button><button id="hint" class="btn small">💡 Next letter</button></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
       ${kbHtml()}
-      <button id="done" class="btn big">Done</button></div>`);
+      <button id="done" class="btn big">Done ${ico('check')}</button></div>`);
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
       $('#done').disabled = !typed;
@@ -370,10 +390,10 @@ function showFix(word, typed) {
     const mask = matchMask(word, typed);
     const hiding = mask.some(x => !x);
     const msg = hiding ? FIX_A : FIX_B;
-    h(`<div class="screen"><p class="lead">${msg}</p>
-      <div class="word">${[...word].map((c, i) => mask[i] ? esc(c) : `<span class="hid">${esc(c)}</span>`).join('')}</div>
-      <p class="lead">Have a good look. Then try once more.</p>
-      <button id="next" class="btn big">Try once more</button></div>`);
+    h(`<div class="screen"><p class="msg">${msg}</p>
+      <div class="wordtile">${[...word].map((c, i) => mask[i] ? esc(c) : `<span class="hid">${esc(c)}</span>`).join('')}</div>
+      <p class="subtle">Have a good look. Then try once more.</p>
+      <button id="next" class="btn big">Try once more ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
     say(msg + FIX_TAIL);
   });
@@ -381,8 +401,8 @@ function showFix(word, typed) {
 function praise(word, clean) {
   return new Promise(res => {
     const p = clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!';
-    h(`<div class="screen"><div class="bigstar">★</div><h1>${esc(p)}</h1><div class="word">${esc(word)}</div>
-      <button id="next" class="btn big">Next</button></div>`);
+    h(`<div class="screen"><div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(p)}</h1><div class="wordtile small">${esc(word)}</div>
+      <button id="next" class="btn big">Next ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
     say(p);
@@ -421,14 +441,14 @@ function clubSetup() {
   return new Promise(res => {
     const names = S.girls.slice();
     const msg = CLUB_MSG;
-    h(`<div class="screen"><h1>Your story</h1><p class="lead">${msg}</p>
-      <div class="club">${names.map((g, i) => `<button class="btn choice" id="g${i}">${esc(g)}</button>`).join('')}
-      ${S.name ? `<label><input type="checkbox" id="meIn" ${S.meIn ? 'checked' : ''}> Put me in the story</label>` : ''}</div>
-      <button id="next" class="btn big">Start the story</button></div>`);
+    h(`<div class="screen"><h1>Who is in your story?</h1><p class="subtle">${msg}</p>
+      <div class="chips">${names.map((g, i) => `<button class="chip" id="g${i}"><span>${esc(g)}</span>${ico('swap')}</button>`).join('')}</div>
+      ${S.name ? `<label class="toggle"><input type="checkbox" id="meIn" ${S.meIn ? 'checked' : ''}> Put me in the story</label>` : ''}
+      <button id="next" class="btn big">Start the story ${ico('next')}</button></div>`);
     names.forEach((g, i) => on('#g' + i, () => {
       let k = POOL.indexOf(names[i]);
       do { k = (k + 1) % POOL.length; } while (names.includes(POOL[k]));
-      names[i] = POOL[k]; $('#g' + i).textContent = names[i]; say(names[i]);
+      names[i] = POOL[k]; $('#g' + i + ' span').textContent = names[i]; say(names[i]);
     }));
     on('#next', () => {
       hush(); S.girls = names;
@@ -499,7 +519,7 @@ function ceiling() {
     }
     prog = '';
     h(`<div class="screen"><div class="sky">${stars}</div><h1>${S.stars} ${S.stars === 1 ? 'star' : 'stars'}</h1>
-      <button id="next" class="btn big">Done</button></div>`);
+      <button id="next" class="btn big">Done ${ico('check')}</button></div>`);
     on('#next', res);
   });
 }
@@ -512,13 +532,13 @@ function home() {
   if (ep) {
     const st = S.story[wk.id];
     const sub = !st ? 'A new story' : st.part >= ep.parts.length ? 'Finished. Tell it again?' : `Part ${st.part + 1} of ${ep.parts.length}`;
-    storyBtn = `<button id="story" class="btn homebtn">📖 Story day<small>${esc(sub)}</small></button>`;
+    storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story day</b><small>${esc(sub)}</small></div></button>`;
   }
-  h(`<div class="top"><span></span><button id="lock" aria-label="Grown-ups">🔒</button></div>
-    <div class="screen"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p class="lead">What shall we do today?</p>
-    ${storyBtn}
-    <button id="quick" class="btn homebtn quick">⚡ Quick day<small>Just the ${wk.words.length} words</small></button>
-    <button id="sky" class="btn homebtn starsbtn">★ My stars<small>${S.stars}</small></button></div>`, { noTop: true });
+  h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span><button id="lock" class="iconbtn" aria-label="Grown-ups">${ico('lock')}</button></div>
+    <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
+    <div class="tiles">${storyBtn}
+    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>Quick day</b><small>Just the ${wk.words.length} words</small></div></button>
+    <button id="sky" class="tile t-sky"><span class="ticon">${ico('star')}</span><div class="tt"><b>My stars</b><small>${S.stars} ${S.stars === 1 ? 'star' : 'stars'}</small></div></button></div></div>`, { noTop: true });
   on('#story', storyDay); on('#quick', quickDay); on('#sky', () => ceiling().then(home)); on('#lock', adultGate);
 }
 
@@ -666,6 +686,47 @@ function adult() {
     });
   });
 }
+
+// ---------- the sleepover scene behind everything ----------
+function buildScene() {
+  const el = document.createElement('div');
+  el.id = 'scene'; el.setAttribute('aria-hidden', 'true');
+  const cols = ['#ffc83d', '#ff7a90', '#62d6aa', '#9d8cff'];
+  let lights = '<g fill="none" stroke="rgba(255,255,255,.28)" stroke-width="2.5">';
+  let bulbs = '';
+  for (let i = 0; i < 6; i++) {
+    const x0 = i * 200;
+    lights += `<path d="M${x0} 8 Q${x0 + 100} 60 ${x0 + 200} 8"/>`;
+    [[50, 24], [100, 31], [150, 24]].forEach(([dx, y], k) => {
+      const c = cols[(i * 3 + k) % 4];
+      bulbs += `<circle cx="${x0 + dx}" cy="${y + 6}" r="13" fill="${c}" opacity=".22"/><circle cx="${x0 + dx}" cy="${y + 6}" r="5.5" fill="${c}"/>`;
+    });
+  }
+  lights += '</g>';
+  const star = (x, y, s, d) => `<g class="tw" style="animation-delay:${d}s" opacity=".7" transform="translate(${x} ${y}) scale(${s})"><path fill="#fff1a8" d="M0 -12l3.5 7.4 8.1 1.1-5.9 5.7 1.4 8L0 5.2l-7.1 4 1.4-8-5.9-5.7 8.1-1.1z"/></g>`;
+  const stars = star(290, 190, 1.1, 0) + star(380, 300, .8, .8) + star(500, 150, .9, 1.6) + star(640, 250, 1.2, .4) + star(760, 160, .8, 2.2) + star(920, 330, 1, 1.2) + star(260, 380, .7, 2.8) + star(700, 340, .8, .6) + star(60, 220, .9, 1.4) + star(1140, 200, .9, .2);
+  el.innerHTML = `<svg viewBox="0 0 1200 800" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="moonglow"><stop offset="0" stop-color="#fff3b8" stop-opacity=".55"/><stop offset="1" stop-color="#fff3b8" stop-opacity="0"/></radialGradient>
+      <radialGradient id="lantern"><stop offset="0" stop-color="#ffd27a" stop-opacity=".75"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient>
+    </defs>
+    <circle cx="880" cy="170" r="120" fill="url(#moonglow)"/>
+    <mask id="moonmask"><rect x="800" y="90" width="160" height="160" fill="#fff"/><circle cx="900" cy="158" r="38" fill="#000"/></mask>
+    <circle cx="880" cy="170" r="46" fill="#fff3b8" mask="url(#moonmask)"/>
+    ${lights}${bulbs}${stars}
+    <path d="M0 800V700Q200 650 420 705T860 695T1200 670V800z" fill="#1b1650" opacity=".7"/>
+    <circle cx="350" cy="745" r="150" fill="url(#lantern)"/>
+    <path d="M250 800L350 590L450 800z" fill="#3b2c82"/>
+    <path d="M350 590L250 800h44L350 660z" fill="#4a389a" opacity=".7"/>
+    <path d="M322 800L350 690L378 800z" fill="#ffcf6b"/>
+    <rect x="480" y="738" width="250" height="90" rx="45" fill="#34277a"/>
+    <rect x="496" y="750" width="72" height="62" rx="28" fill="#5a47b0"/>
+    <rect x="750" y="752" width="230" height="86" rx="43" fill="#43338f"/>
+    <rect x="770" y="764" width="70" height="60" rx="28" fill="#6a56c4"/>
+  </svg>`;
+  document.body.insertBefore(el, document.body.firstChild);
+}
+buildScene();
 
 // ---------- start ----------
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
