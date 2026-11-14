@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.1, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.2, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -143,6 +143,8 @@ const POOL = ['Priya', 'Maya', 'Jess', 'Tilly', 'Zara', 'Ellie', 'Ruby', 'Amber'
 const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantastic!', 'Super spelling!'];
 const FIX_TAIL = ' Have a good look. Then try once more.';
 const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
+const RED_WHY = 'This is a tricky word. It has no rule. You just have to remember it.';
+const cardSpeech = (word, sentence) => (sentence ? word + '. ' + sentence + ' Say it out loud.' : word + '. Say it out loud.');
 const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
 const COMMON = [...POOL, ...PRAISE, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
 const effVp = () => (S.vp === undefined ? 'ms-emily' : S.vp); // Emily unless a grown-up chose otherwise
@@ -204,12 +206,17 @@ let sayTimer = null, keepUtt = null, sayTok = 0, audioEl = null, ttsFails = 0, l
 const SAMPLE = 'Hello! Let us spell some words. Every one is a star.';
 // Her own name is never sent to the voice service; those lines use the device voice.
 const sendable = t => !(S.meIn && S.name && t.toLowerCase().includes(S.name.toLowerCase()));
-function partTexts(beats, last) {
+function partTexts(beats, last, wk) {
   const o = [];
+  if (wk && !last) { if (wk.rule) o.push(wk.rule); o.push(RED_WHY); }
   beats.forEach(b => {
     if (b.n) o.push(fill(b.n));
     else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
-    else if (b.w) { const s = fill(b.w.before) + b.w.word + fill(b.w.after); if (!last) o.push(fill(b.w.lead || '') + ' ' + s); o.push(s + ' ... ' + b.w.word); }
+    else if (b.w) {
+      const s = fill(b.w.before) + b.w.word + fill(b.w.after);
+      if (!last) o.push(cardSpeech(b.w.word, s));
+      o.push(fill(b.w.lead || '') + ' ' + s + ' ... ' + b.w.word);
+    }
   });
   return o;
 }
@@ -317,14 +324,16 @@ function choose(q, opts) {
 }
 function learnCard(week, wobj, ctx) {
   return new Promise(res => {
-    const story = ctx ? `<div class="page"><p class="lead-in">${esc(fill(ctx.lead || ''))}</p><p class="story">“${esc(fill(ctx.before))}<mark>${esc(wobj.w)}</mark>${esc(fill(ctx.after))}”</p></div>` : '';
-    const tag = wobj.red ? `<span class="tag red">Red word. No rule. Just remember it.</span>` : (week.rule ? `<span class="tag">${ico('book')}<span>${esc(week.rule)}</span></span>` : '');
-    const sv = wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '';
-    h(`<div class="screen">${story}<div class="wordtile">${esc(wobj.w)}</div>${tag}${sv}
-      <div class="cue">${ico('speaker')}<span>Say it out loud, then tap</span></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="next" class="btn big">I've said it ${ico('check')}</button></div></div>`);
-    const spoken = ctx ? fill(ctx.lead || '') + ' ' + fill(ctx.before) + wobj.w + fill(ctx.after) : wobj.w;
+    const sentence = ctx ? fill(ctx.before) + wobj.w + fill(ctx.after) : '';
+    const why = wobj.red ? RED_WHY : (week.rule || '');
+    const cap = ctx ? `<p class="caption">${esc(fill(ctx.before))}<mark>${esc(wobj.w)}</mark>${esc(fill(ctx.after))}</p>` : '';
+    const tags = (wobj.red ? `<span class="tag red">Tricky word</span>` : '') + (wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '');
+    h(`<div class="screen"><div class="wordtile">${esc(wobj.w)}</div>${cap}${tags ? `<div class="row">${tags}</div>` : ''}
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${why ? `<button id="why" class="btn small">${ico('bulb')}<span>Why?</span></button>` : ''}<button id="next" class="btn big">I've said it ${ico('check')}</button></div>
+      <div id="whybox" style="width:100%"></div></div>`);
+    const spoken = cardSpeech(wobj.w, sentence);
     on('#hear', () => say(spoken));
+    on('#why', () => { $('#whybox').innerHTML = `<div class="page small"><p class="story">${esc(why)}</p></div>`; say(why); });
     on('#next', () => { hush(); res(); });
     backBtn(res);
     say(spoken);
@@ -339,7 +348,7 @@ function writeWord(word, ctx, noBack) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false;
     const sentence = ctx ? fill(ctx.before) + word + fill(ctx.after) : '';
-    const sayIt = () => say(ctx ? sentence + ' ... ' + word : word);
+    const sayIt = () => say(ctx ? fill(ctx.lead || '') + ' ' + sentence + ' ... ' + word : word);
     h(`<div class="screen">
       ${ctx ? `<div class="page"><p class="lead-in">${esc(fill(ctx.lead || ''))}</p><p class="story">“${esc(fill(ctx.before))}<span class="blank"></span>${esc(fill(ctx.after))}”</p></div>` : `<div class="cue">${ico('speaker')}<span>Listen, then write the word</span></div>`}
       <div id="slots" class="slots"></div>
@@ -472,7 +481,7 @@ async function storyDay() {
   const last = ep.parts.length > 1 && st.part === ep.parts.length - 1;
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   const beats = ep.parts[st.part], starred = new Set();
-  await prep(partTexts(beats, last).concat(COMMON), 'Getting the story ready');
+  await prep(partTexts(beats, last, wk).concat(COMMON), 'Getting the story ready');
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   let i = 0;
   while (i < beats.length) {
