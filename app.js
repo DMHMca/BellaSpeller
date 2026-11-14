@@ -174,16 +174,18 @@ function choose(q, opts) {
     say(q + ' ' + opts.join('. Or. '));
   });
 }
-function learnCard(week, wobj) {
+function learnCard(week, wobj, ctx) {
   return new Promise(res => {
+    const story = ctx ? `<p class="lead">${esc(fill(ctx.lead || ''))}</p><p class="sentence">${esc(fill(ctx.before))}<b>${esc(wobj.w)}</b>${esc(fill(ctx.after))}</p><p class="lead">This is the word to learn. Say it out loud.</p>` : `<p class="lead">Look at it. Say it out loud.</p>`;
     const tag = wobj.red ? `<span class="tag red">Red word. No rule. Just remember it.</span>` : (week.rule ? `<span class="tag">${esc(week.rule)}</span>` : '');
     const sv = wobj.say ? `<p class="lead">Say it the spelling way: <b>${esc(wobj.say)}</b></p>` : '';
-    h(`<div class="screen"><p class="lead">Look at it. Say it out loud.</p><div class="word">${esc(wobj.w)}</div>${tag}${sv}
+    h(`<div class="screen">${story}<div class="word">${esc(wobj.w)}</div>${tag}${sv}
       <div class="row"><button id="hear" class="btn small">🔊 Hear it</button><button id="next" class="btn big">I've said it</button></div></div>`);
-    on('#hear', () => say(wobj.w));
+    const spoken = ctx ? fill(ctx.before) + wobj.w + fill(ctx.after) : wobj.w;
+    on('#hear', () => say(spoken));
     on('#next', () => { hush(); res(); });
     backBtn(res);
-    say(wobj.w);
+    say(spoken);
   });
 }
 
@@ -271,7 +273,7 @@ async function doWord(week, wobj, mode, ctx, withCard, starred) {
   const word = wobj.w;
   let a;
   for (;;) {
-    if (withCard && (await learnCard(week, wobj)) === BACK) return BACK;
+    if (withCard && (await learnCard(week, wobj, ctx)) === BACK) return BACK;
     a = await writeWord(word, ctx);
     if (a === BACK) { if (withCard) continue; return BACK; }
     break;
