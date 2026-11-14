@@ -134,12 +134,20 @@ let keyHandler = null, prog = '';
 document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
 function h(html, opts) {
   keyHandler = null;
-  const top = opts && opts.noTop ? '' : `<div class="top"><button id="goHome" aria-label="Home">🏠</button><span>${esc(prog)}</span></div>`;
+  const top = opts && opts.noTop ? '' : `<div class="top"><button id="goHome" aria-label="Home">🏠 Home</button><span>${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
   window.scrollTo(0, 0);
 }
 const on = (sel, fn) => { const e = $(sel); if (e) e.onclick = fn; };
+const BACK = Symbol('back');
+function backBtn(res) {
+  const t = $('.top'); if (!t) return;
+  const b = document.createElement('button');
+  b.className = 'backbtn'; b.textContent = '← Back';
+  b.onclick = () => { hush(); res(BACK); };
+  t.insertBefore(b, t.children[1]);
+}
 function fill(t) {
   const g = S.girls.slice();
   if (S.meIn && S.name) g[0] = S.name;
@@ -154,6 +162,7 @@ function narrate(text, label) {
     on('#hear', () => say(text));
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
+    backBtn(res);
     say(text);
   });
 }
@@ -161,6 +170,7 @@ function choose(q, opts) {
   return new Promise(res => {
     h(`<div class="screen"><p class="story">${esc(q)}</p>${opts.map((o, i) => `<button class="btn choice" id="o${i}">${esc(o)}</button>`).join('')}</div>`);
     opts.forEach((o, i) => on('#o' + i, () => { hush(); res(i); }));
+    backBtn(res);
     say(q + ' ' + opts.join('. Or. '));
   });
 }
@@ -172,6 +182,7 @@ function learnCard(week, wobj) {
       <div class="row"><button id="hear" class="btn small">🔊 Hear it</button><button id="next" class="btn big">I've said it</button></div></div>`);
     on('#hear', () => say(wobj.w));
     on('#next', () => { hush(); res(); });
+    backBtn(res);
     say(wobj.w);
   });
 }
@@ -180,7 +191,7 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? '<button class="key wide" data-k="del">⌫</button>' : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, ctx) {
+function writeWord(word, ctx, noBack) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false;
     const sentence = ctx ? fill(ctx.before) + word + fill(ctx.after) : '';
@@ -211,6 +222,7 @@ function writeWord(word, ctx) {
       else if (/^[a-zA-Z'-]$/.test(e.key)) { add(e.key.toLowerCase()); e.preventDefault(); }
     };
     on('#hear', sayIt); on('#hint', hint); on('#done', finish);
+    if (!noBack) backBtn(res);
     draw(); sayIt();
   });
 }
@@ -255,21 +267,28 @@ function praise(word, clean) {
 }
 
 // One word, start to finish. Returns true if right first time with no hints.
-async function doWord(week, wobj, mode, ctx, withCard) {
+async function doWord(week, wobj, mode, ctx, withCard, starred) {
   const word = wobj.w;
-  if (withCard) await learnCard(week, wobj);
-  const a = await writeWord(word, ctx);
+  let a;
+  for (;;) {
+    if (withCard && (await learnCard(week, wobj)) === BACK) return BACK;
+    a = await writeWord(word, ctx);
+    if (a === BACK) { if (withCard) continue; return BACK; }
+    break;
+  }
   const ok = a.typed === word;
   S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode, typed: a.typed, hints: a.hints, ok });
   save();
   let got = ok;
   if (!ok) {
     await showFix(word, a.typed);
-    const b = await writeWord(word, ctx);
+    const b = await writeWord(word, ctx, true);
     got = b.typed === word;
     if (!got) await showFix(word, b.typed);
   }
-  S.stars++; save();
+  const sk = mode + ':' + word;
+  if (!starred || !starred.has(sk)) { S.stars++; if (starred) starred.add(sk); }
+  save();
   await praise(word, ok && a.hints === 0);
   return ok && a.hints === 0;
 }
@@ -294,6 +313,7 @@ function clubSetup() {
       if ($('#meIn')) S.meIn = $('#meIn').checked;
       save(); res();
     });
+    backBtn(res);
     say(msg);
   });
 }
@@ -301,13 +321,23 @@ async function storyDay() {
   const wk = curWeek(), ep = epOf(wk);
   if (!ep) return home();
   let st = S.story[wk.id];
-  if (!st || st.part >= ep.parts.length) { await clubSetup(); st = S.story[wk.id] = { part: 0 }; save(); }
+  if (!st || st.part >= ep.parts.length) { if ((await clubSetup()) === BACK) return home(); st = S.story[wk.id] = { part: 0 }; save(); }
   const last = ep.parts.length > 1 && st.part === ep.parts.length - 1;
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
-  for (const b of ep.parts[st.part]) {
-    if (b.n) await narrate(fill(b.n));
-    else if (b.c) { const i = await choose(fill(b.c.q), b.c.o.map(o => fill(o.l))); await narrate(fill(b.c.o[i].n)); }
-    else if (b.w) { const wobj = wk.words.find(x => x.w === b.w.word) || { w: b.w.word }; await doWord(wk, wobj, 'story', b.w, !last); }
+  const beats = ep.parts[st.part], starred = new Set();
+  let i = 0;
+  while (i < beats.length) {
+    const b = beats[i];
+    let r;
+    if (b.n) r = await narrate(fill(b.n));
+    else if (b.c) {
+      for (;;) {
+        const k = await choose(fill(b.c.q), b.c.o.map(o => fill(o.l)));
+        if (k === BACK) { r = BACK; break; }
+        if ((await narrate(fill(b.c.o[k].n))) !== BACK) break;
+      }
+    } else if (b.w) { const wobj = wk.words.find(x => x.w === b.w.word) || { w: b.w.word }; r = await doWord(wk, wobj, 'story', b.w, !last, starred); }
+    if (r === BACK) { if (i === 0) return home(); i--; } else i++;
   }
   st.part++; save();
   await ceiling();
@@ -315,13 +345,22 @@ async function storyDay() {
 }
 async function quickDay() {
   const wk = curWeek(), ws = shuffle(wk.words.slice());
-  let right = 0;
-  for (let i = 0; i < ws.length; i++) {
-    prog = `Word ${i + 1} of ${ws.length}`;
-    if (await doWord(wk, ws[i], 'quick', null, false)) right++;
+  const starred = new Set(), results = [];
+  let i = 0;
+  while (i <= ws.length) {
+    if (i < ws.length) {
+      prog = `Word ${i + 1} of ${ws.length}`;
+      const r = await doWord(wk, ws[i], 'quick', null, false, starred);
+      if (r === BACK) { if (i === 0) return home(); i--; continue; }
+      results[i] = r; i++;
+    } else {
+      prog = '';
+      const right = results.filter(Boolean).length;
+      const r = await narrate(`${right} out of ${ws.length} on the first try. ${right === ws.length ? 'Every single one!' : 'And a star for every word.'}`, 'See my stars');
+      if (r === BACK) { i--; continue; }
+      break;
+    }
   }
-  prog = '';
-  await narrate(`${right} out of ${ws.length} on the first try. ${right === ws.length ? 'Every single one!' : 'And a star for every word.'}`, 'See my stars');
   await ceiling();
   home();
 }
