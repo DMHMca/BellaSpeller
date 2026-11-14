@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.0, 14 November 2026 (new look)'; // change this with every release
+const APP_VERSION = 'version 2.1, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -395,6 +395,7 @@ function showFix(word, typed) {
       <p class="subtle">Have a good look. Then try once more.</p>
       <button id="next" class="btn big">Try once more ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
+    backBtn(res);
     say(msg + FIX_TAIL);
   });
 }
@@ -405,6 +406,7 @@ function praise(word, clean) {
       <button id="next" class="btn big">Next ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
+    backBtn(res);
     say(p);
   });
 }
@@ -412,28 +414,31 @@ function praise(word, clean) {
 // One word, start to finish. Returns true if right first time with no hints.
 async function doWord(week, wobj, mode, ctx, withCard, starred) {
   const word = wobj.w;
-  let a;
-  for (;;) {
-    if (withCard && (await learnCard(week, wobj, ctx)) === BACK) return BACK;
-    a = await writeWord(word, ctx);
-    if (a === BACK) { if (withCard) continue; return BACK; }
-    break;
+  let attempts = 0;
+  for (;;) { // Back from the correction or praise screens restarts the word
+    let a;
+    for (;;) {
+      if (withCard && (await learnCard(week, wobj, ctx)) === BACK) return BACK;
+      a = await writeWord(word, ctx);
+      if (a === BACK) { if (withCard) continue; return BACK; }
+      break;
+    }
+    const ok = a.typed === word;
+    // A repeat go after pressing Back is recorded as a redo, and kept out of her results.
+    S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode, typed: a.typed, hints: a.hints, ok, redo: attempts++ > 0 || undefined });
+    save();
+    if (!ok) {
+      if ((await showFix(word, a.typed)) === BACK) continue;
+      const b = await writeWord(word, ctx, false);
+      if (b === BACK) continue;
+      if (b.typed !== word && (await showFix(word, b.typed)) === BACK) continue;
+    }
+    const sk = mode + ':' + word;
+    if (!starred || !starred.has(sk)) { S.stars++; if (starred) starred.add(sk); }
+    save();
+    if ((await praise(word, ok && a.hints === 0)) === BACK) continue;
+    return ok && a.hints === 0 && attempts === 1;
   }
-  const ok = a.typed === word;
-  S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode, typed: a.typed, hints: a.hints, ok });
-  save();
-  let got = ok;
-  if (!ok) {
-    await showFix(word, a.typed);
-    const b = await writeWord(word, ctx, true);
-    got = b.typed === word;
-    if (!got) await showFix(word, b.typed);
-  }
-  const sk = mode + ':' + word;
-  if (!starred || !starred.has(sk)) { S.stars++; if (starred) starred.add(sk); }
-  save();
-  await praise(word, ok && a.hints === 0);
-  return ok && a.hints === 0;
 }
 
 // ---------- the two kinds of day ----------
@@ -574,18 +579,18 @@ function findEpisode(words) {
 }
 function owned() {
   const days = {};
-  S.log.forEach(l => { if (l.ok && !l.hints) (days[l.w] = days[l.w] || new Set()).add(l.d); });
+  S.log.forEach(l => { if (l.ok && !l.hints && !l.redo) (days[l.w] = days[l.w] || new Set()).add(l.d); });
   return Object.keys(days).filter(w => days[w].size >= 2);
 }
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
-    const logs = S.log.filter(l => l.wk === w.id), days = new Set(logs.map(l => l.d)).size;
+    const logs = S.log.filter(l => l.wk === w.id && !l.redo), days = new Set(logs.map(l => l.d)).size;
     const clean = logs.filter(l => l.ok && !l.hints).length;
     return `<tr><td>${esc(w.label)}${w.id === wk.id ? ' (current)' : ''}</td><td>${w.score == null ? 'not entered' : w.score + ' / ' + w.words.length}</td><td>${days}</td><td>${logs.length ? clean + ' of ' + logs.length : 'none'}</td><td>${w.ep ? 'yes' : 'no'}</td></tr>`;
   }).join('');
   const wordRows = wk.words.map(x => {
-    const logs = S.log.filter(l => l.wk === wk.id && l.w === x.w);
+    const logs = S.log.filter(l => l.wk === wk.id && l.w === x.w && !l.redo);
     const wrong = logs.filter(l => !l.ok).map(l => esc(l.typed)).join(', ');
     return `<tr><td>${esc(x.w)}${x.red ? ' (red)' : ''}</td><td>${logs.length}</td><td>${logs.filter(l => l.ok && !l.hints).length}</td><td>${logs.reduce((a, l) => a + l.hints, 0)}</td><td>${wrong}</td><td>${own.includes(x.w) ? 'yes' : ''}</td></tr>`;
   }).join('');
