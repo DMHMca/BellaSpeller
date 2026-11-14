@@ -118,16 +118,24 @@ function pickVoice() {
   voice = v.find(x => /en[-_]GB/i.test(x.lang)) || v.find(x => /^en/i.test(x.lang)) || null;
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+let sayTimer = null, keepUtt = null;
 function say(t) {
   if (!('speechSynthesis' in window)) return;
+  clearTimeout(sayTimer);
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(t);
-  if (voice) u.voice = voice;
-  u.lang = voice ? voice.lang : 'en-GB';
-  u.rate = 0.9;
-  speechSynthesis.speak(u);
+  // Chrome drops speech requested straight after a cancel, so wait a moment.
+  sayTimer = setTimeout(() => {
+    if (!voice) pickVoice();
+    if (speechSynthesis.paused) speechSynthesis.resume();
+    const u = new SpeechSynthesisUtterance(t);
+    if (voice) u.voice = voice;
+    u.lang = voice ? voice.lang : 'en-GB';
+    u.rate = 0.9;
+    keepUtt = u; // stops the browser discarding it before it has finished
+    speechSynthesis.speak(u);
+  }, 120);
 }
-const hush = () => { if ('speechSynthesis' in window) speechSynthesis.cancel(); };
+const hush = () => { clearTimeout(sayTimer); if ('speechSynthesis' in window) speechSynthesis.cancel(); };
 
 // ---------- rendering ----------
 let keyHandler = null, prog = '';
