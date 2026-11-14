@@ -114,8 +114,20 @@ function storyPreview(ep) {
 // ---------- speech ----------
 let voice = null;
 function pickVoice() {
-  const v = speechSynthesis.getVoices();
-  voice = v.find(x => /en[-_]GB/i.test(x.lang)) || v.find(x => /^en/i.test(x.lang)) || null;
+  const v = speechSynthesis.getVoices(), en = v.filter(x => /^en/i.test(x.lang));
+  let c = S.voiceName && v.find(x => x.name === S.voiceName);
+  if (!c && en.length) {
+    const score = x => {
+      let s = 0;
+      if (/en[-_]GB/i.test(x.lang)) s += 10;
+      if (/natural|online/i.test(x.name)) s += 20;
+      if (/sonia|libby|maisie|hazel|susan|serena|female/i.test(x.name)) s += 8;
+      if (/george|ryan|thomas|daniel|alfie|mark|david|\bmale\b/i.test(x.name) && !/female/i.test(x.name)) s -= 8;
+      return s;
+    };
+    c = en.slice().sort((a, b) => score(b) - score(a))[0];
+  }
+  voice = c || null;
 }
 if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 let sayTimer = null, keepUtt = null;
@@ -481,6 +493,8 @@ function adult() {
 
     <h2>Settings</h2>
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
+    <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <p class="note">Voices come from this device. If none sounds good, tell Claude and we can add recorded voices instead.</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
     <label>AI model</label><input id="orModel" type="text" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
@@ -499,6 +513,7 @@ function adult() {
     } catch (e) { out.innerHTML = `<p class="note">${esc(e.message || 'Something went wrong.')}</p>`; }
     btn.disabled = false; btn.textContent = 'Try another';
   });
+  $('#vsel').onchange = e => { S.voiceName = e.target.value; save(); pickVoice(); say('Hello! Let us spell some words. Every one is a star.'); };
   $('#cur').onchange = e => { S.cur = e.target.value; save(); adult(); };
   on('#saveScore', () => { const v = $('#score').value; wk.score = v === '' ? null : Math.max(0, Math.min(wk.words.length, parseInt(v, 10) || 0)); save(); adult(); });
   on('#delWeek', () => {
