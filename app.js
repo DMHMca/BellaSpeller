@@ -2,6 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
+const APP_VERSION = 'version 1.6, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -603,7 +604,7 @@ function adult() {
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
     <label>AI model</label><input id="orModel" type="text" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
-    <p class="note">BellaSpeller version 1. Everything is stored on this device only.</p></div>`);
+    <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div>`);
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; save(); adult(); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
