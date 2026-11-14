@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.3, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.4, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -548,6 +548,7 @@ function ceiling() {
 
 // ---------- home ----------
 function home() {
+  if (pendingReload) { pendingReload = false; location.reload(); return; }
   prog = '';
   const wk = curWeek(), ep = epOf(wk);
   let storyBtn = '';
@@ -751,5 +752,14 @@ function buildScene() {
 buildScene();
 
 // ---------- start ----------
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
+// When a new version takes over, reload onto it, but only from the home screen so nobody loses their place.
+let pendingReload = false;
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if ($('#story, #quick')) location.reload(); else pendingReload = true;
+  });
+  navigator.serviceWorker.register('sw.js').catch(() => { });
+}
 home();
