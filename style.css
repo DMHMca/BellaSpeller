@@ -166,3 +166,10 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .caption { margin:0; font-size:clamp(22px,3.8vw,30px); line-height:1.4; color:#fff; font-weight:400; }
 .page.small { padding:18px 22px; }
 .page.small .story { font-size:clamp(20px,3.2vw,24px); line-height:1.45; }
+
+/* ----- the word grows inside the sentence ----- */
+.grow { display:inline-block; font-weight:700; line-height:1.05; vertical-align:baseline; transition:font-size .7s cubic-bezier(.2,1.4,.4,1), color .5s, letter-spacing .7s; }
+.grow.big { font-size:3.4em; color:#d4276a; letter-spacing:.03em; }
+.page .story.solo { text-align:center; }
+@media (prefers-reduced-motion:reduce) { .grow { transition:none; } }
+.cardscreen { padding-top:8vh; }

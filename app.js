@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.2, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.3, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -144,7 +144,7 @@ const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantasti
 const FIX_TAIL = ' Have a good look. Then try once more.';
 const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
 const RED_WHY = 'This is a tricky word. It has no rule. You just have to remember it.';
-const cardSpeech = (word, sentence) => (sentence ? word + '. ' + sentence + ' Say it out loud.' : word + '. Say it out loud.');
+const cardSpeech = (word, sentence) => (sentence ? sentence + ' ... ' + word + '. Say it out loud.' : word + '. Say it out loud.');
 const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
 const COMMON = [...POOL, ...PRAISE, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
 const effVp = () => (S.vp === undefined ? 'ms-emily' : S.vp); // Emily unless a grown-up chose otherwise
@@ -326,17 +326,25 @@ function learnCard(week, wobj, ctx) {
   return new Promise(res => {
     const sentence = ctx ? fill(ctx.before) + wobj.w + fill(ctx.after) : '';
     const why = wobj.red ? RED_WHY : (week.rule || '');
-    const cap = ctx ? `<p class="caption">${esc(fill(ctx.before))}<mark>${esc(wobj.w)}</mark>${esc(fill(ctx.after))}</p>` : '';
+    const word = `<span class="grow" id="gw">${esc(wobj.w)}</span>`;
+    const body = ctx ? `<p class="story">${esc(fill(ctx.before))}${word}${esc(fill(ctx.after))}</p>` : `<p class="story solo">${word}</p>`;
     const tags = (wobj.red ? `<span class="tag red">Tricky word</span>` : '') + (wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '');
-    h(`<div class="screen"><div class="wordtile">${esc(wobj.w)}</div>${cap}${tags ? `<div class="row">${tags}</div>` : ''}
+    h(`<div class="screen cardscreen"><div class="page">${body}</div>${tags ? `<div class="row">${tags}</div>` : ''}
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${why ? `<button id="why" class="btn small">${ico('bulb')}<span>Why?</span></button>` : ''}<button id="next" class="btn big">I've said it ${ico('check')}</button></div>
       <div id="whybox" style="width:100%"></div></div>`);
+    // The word starts small, in line with the sentence, then grows and changes colour as it is spoken.
+    let tm = null;
+    const grow = () => {
+      clearTimeout(tm);
+      const g = $('#gw'); if (g) g.classList.remove('big');
+      tm = setTimeout(() => { const g2 = $('#gw'); if (g2) g2.classList.add('big'); }, 1900);
+    };
     const spoken = cardSpeech(wobj.w, sentence);
-    on('#hear', () => say(spoken));
+    on('#hear', () => { grow(); say(spoken); });
     on('#why', () => { $('#whybox').innerHTML = `<div class="page small"><p class="story">${esc(why)}</p></div>`; say(why); });
-    on('#next', () => { hush(); res(); });
+    on('#next', () => { clearTimeout(tm); hush(); res(); });
     backBtn(res);
-    say(spoken);
+    grow(); say(spoken);
   });
 }
 
