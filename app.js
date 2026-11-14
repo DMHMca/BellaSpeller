@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 1.7, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 1.8, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -145,7 +145,8 @@ const FIX_TAIL = ' Have a good look. Then try once more.';
 const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
 const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
 const COMMON = [...POOL, ...PRAISE, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
-const preset = () => PRESETS.find(p => p.id === S.vp);
+const effVp = () => (S.vp === undefined ? 'ms-emily' : S.vp); // Emily unless a grown-up chose otherwise
+const preset = () => PRESETS.find(p => p.id === effVp());
 const ttsOn = () => !!(S.orKey && preset());
 const idb = new Promise(res => {
   try { const r = indexedDB.open('bellaspeller-voice', 1); r.onupgradeneeded = () => r.result.createObjectStore('clips'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (e) { res(null); }
@@ -153,7 +154,7 @@ const idb = new Promise(res => {
 async function idbGet(k) { const db = await idb; if (!db) return null; return new Promise(res => { try { const q = db.transaction('clips').objectStore('clips').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); } }); }
 async function idbPut(k, v) { const db = await idb; if (!db) return; return new Promise(res => { try { const tx = db.transaction('clips', 'readwrite'); tx.objectStore('clips').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => res(); } catch (e) { res(); } }); }
 const urlCache = new Map();
-const clipKey = t => S.vp + '|' + t;
+const clipKey = t => effVp() + '|' + t;
 async function getClipUrl(t) {
   if (!ttsOn()) return null;
   const k = clipKey(t);
@@ -597,7 +598,7 @@ function adult() {
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">Voices come from this device. If none sounds good, tell Claude and we can add recorded voices instead.</p>
-    <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${S.vp === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
+    <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${effVp() === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
