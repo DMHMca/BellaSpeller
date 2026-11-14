@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 1.6, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 1.7, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -137,8 +137,7 @@ const PRESETS = [
   { id: 'mistral-jane', label: 'Jane, British (Mistral)', model: 'mistralai/voxtral-mini-tts-3-0', voice: 'gb_jane_neutral' },
   { id: 'el-alice', label: 'Alice (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'alice' },
   { id: 'el-lily', label: 'Lily (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'lily' },
-  { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' },
-  { id: 'hg-tabitha', label: 'Tabitha (HeyGen, cheapest)', model: 'heygen/heygen-voice-1-turbo', voice: 'tabitha' }
+  { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' }
 ];
 const POOL = ['Priya', 'Maya', 'Jess', 'Tilly', 'Zara', 'Ellie', 'Ruby', 'Amber', 'Daisy', 'Freya', 'Lola', 'Poppy', 'Isla', 'Hana', 'Skye', 'Rosie'];
 const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantastic!', 'Super spelling!'];
