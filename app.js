@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 1.9, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 1.10, 14 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -581,7 +581,7 @@ function adult() {
     <div id="draftOut"></div>
 
     <h2>Add a new week</h2>
-    <label>Name of the week, for example "Test on 24 November"</label><input id="nl" type="text">
+    <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
     <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
     <label>Paste the words here, one per line or separated by commas</label><textarea id="nw" spellcheck="false"></textarea>
     <p class="note">To add a spelling voice for a tricky word, write it after a bar, like this: every | ev-er-y</p>
@@ -661,7 +661,7 @@ function adult() {
     on('#saveWeek', () => {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
-      S.weeks.push({ id, label: $('#nl').value.trim() || 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: findEpisode(ws) });
+      S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: findEpisode(ws) });
       S.cur = id; save(); adult();
     });
   });
