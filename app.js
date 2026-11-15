@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.35'; // bump with every release
+const APP_VER = '2.36'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -57,6 +57,7 @@ const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 
 // ---------- stories written by AI (grown-ups page only) ----------
 const DEFAULT_MODEL = 'openai/gpt-6.1-sol';
+const modelSelect = id => { const cur = S.orModel || DEFAULT_MODEL, list = MODEL_SUGGESTIONS.includes(cur) ? MODEL_SUGGESTIONS : MODEL_SUGGESTIONS.concat([cur]); return `<select id="${id}">${list.map(m => `<option value="${esc(m)}" ${m === cur ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>`; };
 const MODEL_SUGGESTIONS = ['openai/gpt-6.1-sol', 'openai/gpt-6.1-terra', 'anthropic/claude-sonnet-5.5'];
 const STORY_RULES = `You write a short story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens. The story is told in parts, and each of the week's spelling words is met inside the story's own text, at the end of one paragraph, where the app will point it out to her.
 
@@ -1067,7 +1068,8 @@ function adult() {
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
     <label>Family rules for the stories (added to every story request)</label><textarea id="famRules" style="min-height:110px">${esc(S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules)}</textarea>
-    <label>AI model for writing stories</label><input id="orModel" type="text" list="modelList" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}"><datalist id="modelList">${MODEL_SUGGESTIONS.map(m => `<option value="${m}">`).join('')}</datalist>
+    <label>AI model for writing stories</label>${modelSelect('orModel')}
+    <label>Or type another model name (optional)</label><input id="orModelOther" type="text" autocomplete="off" placeholder="for example openai/gpt-6.1-sol">
     <label>Story AI address (leave blank for OpenRouter; any OpenAI-style service works, for example Z.ai)</label><input id="aiBase" type="text" autocomplete="off" placeholder="https://openrouter.ai/api/v1" value="${esc(S.aiBase || '')}">
     <label>Story AI key (leave blank to use the OpenRouter key)</label><input id="aiKey" type="password" autocomplete="off" value="${esc(S.aiKey || '')}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
@@ -1076,7 +1078,7 @@ function adult() {
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
-  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
+  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   on('#readStory', () => { $('#draftOut').innerHTML = storyPreview(epOf(wk)); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
@@ -1213,7 +1215,7 @@ function toggleDebug() {
     <p class="note">${esc(APP_VERSION)}<br>Week: ${esc(wk.label)} · stars ${S.stars} · answers logged ${S.log.length}</p>
     <label>Recorded voice</label><select id="dvp"><option value="">None: use this device's voice</option>${PRESETS.map(x => `<option value="${x.id}" ${effVp() === x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
     <label>Device voice</label><select id="dvs"><option value="">Automatic</option>${dev.map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
-    <label>Story model</label><input id="dmodel" type="text" list="dmodels" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}"><datalist id="dmodels">${MODEL_SUGGESTIONS.map(m => `<option value="${m}">`).join('')}</datalist>
+    <label>Story model</label>${modelSelect('dmodel')}
     <div class="dbgrow"><button id="dsample" class="btn small">Hear a sample</button><button id="dhome" class="btn small">Go home</button><button id="dstory" class="btn small">Restart this week's story</button><button id="dclear" class="btn small">Clear stars and answers</button><button id="dreload" class="btn small">Reload fresh copy</button><button id="dfull" class="btn small">Full grown-ups page</button></div>
     <p id="dmsg" class="note"></p></div>`;
   document.body.appendChild(p);
