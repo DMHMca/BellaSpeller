@@ -249,3 +249,4 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 /* shelf: already-told section */
 .shelfhead { margin: 28px 0 4px; font-size: 22px; opacity: .9; }
 .shelf.told .shelfcard { opacity: .72; }
+.tile.t-grown { background:linear-gradient(150deg,#4f7fb8,#2b4f7f); }

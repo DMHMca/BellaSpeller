@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.40'; // bump with every release
+const APP_VER = '2.41'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1001,12 +1001,12 @@ function home() {
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : `Part ${stNow.part + 1} of ${ep.parts.length}`;
   const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story</b><small>${esc(sub)}</small></div></button>`;
-  h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span><button id="lock" class="iconbtn" aria-label="Grown-ups">${ico('lock')}</button></div>
+  h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span></div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}
     <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>Revise</b><small>Just the ${wk.words.length} words</small></div></button>
-    <button id="sky" class="tile t-sky"><span class="ticon">${ico('star')}</span><div class="tt"><b>My stars</b><small>${S.stars} ${S.stars === 1 ? 'star' : 'stars'}</small></div></button></div></div>`, { noTop: true });
-  on('#story', storyDay); on('#quick', quickDay); on('#sky', () => ceiling().then(home)); on('#lock', adultGate);
+    <button id="grown" class="tile t-grown"><span class="ticon">${ico('users')}</span><div class="tt"><b>Grown-ups</b><small>This week's words and story</small></div></button></div></div>`, { noTop: true });
+  on('#story', storyDay); on('#quick', quickDay); on('#grown', adultGate);
 }
 
 // ---------- grown-ups ----------
