@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.30'; // bump with every release
+const APP_VER = '2.31'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -58,15 +58,19 @@ How to work:
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
 {"p": "a paragraph of two to four sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
-{"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}
+{{CHOICE_FORMAT}}
 
 Rules:
 1. Every spelling word is the "word" of exactly one p beat in the whole story, and no other word is. The word is in lower case exactly as given, and appears exactly once, as a whole word, in the last sentence of that paragraph. Do not use a longer form in its place (for "nice" do not write "nicer" there).
-2. Each part has exactly one choice. Put the choice after at least two paragraphs. Both options must lead sensibly into the rest of the part.
+{{CHOICE_RULE}}
 3. Every part except the last ends with a cliffhanger. The last part resolves the story and ends warmly. Do not end by repeating the words.
 4. A spelling word may also appear naturally elsewhere in the story, in narration, in other paragraphs and in choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
 5. Reply with the JSON object only.`;
 
+const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}';
+const CHOICE_RULE = '2. Each part has exactly one choice. Put the choice after at least two paragraphs. Both options must lead sensibly into the rest of the part.';
+const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it straight through, and never use a c beat.';
+const storyRules = () => STORY_RULES.replace('{{CHOICE_FORMAT}}', S.choices ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', S.choices ? CHOICE_RULE : NO_CHOICE_RULE);
 const WORDS_PER_PART = 6;
 function partPlan(n) { // how many words in each part: about six to a part, shared evenly
   const parts = Math.max(1, Math.ceil(n / WORDS_PER_PART)), base = Math.floor(n / parts), extra = n % parts;
@@ -101,7 +105,7 @@ function checkEpisode(ep, words) {
         else if (wholeWord(b.word, lastSentence(b.p)) !== 1) bad.push('The last sentence of the paragraph for "' + b.word + '" should contain "' + b.word + '" exactly once as a whole word.');
       } else bad.push('Part ' + (pi + 1) + ' has a beat the app cannot read.');
     });
-    if (choices !== 1) bad.push('Part ' + (pi + 1) + ' should have exactly one choice.');
+    if (S.choices ? choices !== 1 : choices !== 0) bad.push('Part ' + (pi + 1) + (S.choices ? ' should have exactly one choice.' : ' should have no choice.'));
     if (Math.abs(here - plan[pi]) > 1) bad.push('Part ' + (pi + 1) + ' should have about ' + plan[pi] + ' word paragraphs, not ' + here + '.');
   });
   words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
@@ -129,7 +133,7 @@ async function askAI(wk, problems, model, extra) {
   const t0 = Date.now();
   const r = await fetch(aiBase() + '/chat/completions', {
     method: 'POST', headers,
-    body: JSON.stringify({ model: model || S.orModel || DEFAULT_MODEL, max_tokens: 8000, messages: [{ role: 'system', content: STORY_RULES }, { role: 'user', content: ask }] })
+    body: JSON.stringify({ model: model || S.orModel || DEFAULT_MODEL, max_tokens: 8000, messages: [{ role: 'system', content: storyRules() }, { role: 'user', content: ask }] })
   });
   if (!r.ok) throw new Error('The AI service answered ' + r.status + '. ' + (await r.text()).slice(0, 200));
   const j = await r.json();
@@ -580,6 +584,7 @@ function shelf(ep, st, sample) {
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
     h(`<div class="screen"><h1>Choose your story</h1>
       <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, 4).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
+      <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${S.choices ? 'on' : 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
@@ -587,6 +592,7 @@ function shelf(ep, st, sample) {
       </div>`);
     on('#own', () => { hush(); res({ kind: 'own' }); });
     on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
+    on('#chtoggle', () => { S.choices = !S.choices; save(); $('#chstate').textContent = S.choices ? 'on' : 'off'; });
     STORY_TYPES.forEach((t, i) => on('#t' + i, () => { hush(); res({ kind: 'type', type: t }); }));
     on('#sample', () => { hush(); res({ kind: 'sample' }); });
     on('#again', () => { hush(); res({ kind: 'again' }); });
