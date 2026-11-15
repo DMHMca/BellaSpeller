@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.16'; // bump with every release
+const APP_VER = '2.17'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -157,8 +157,8 @@ const PRESETS = [
   { id: 'el-lily', label: 'Lily (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'lily' },
   { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' }
 ];
-const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind'];
-const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus'];
+const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind', 'Amelia', 'Poppy', 'Isla', 'Ivy', 'Willow', 'Edith', 'Harriet', 'Lottie', 'Elsie', 'Maisie', 'Winnie', 'Georgia', 'Felicity', 'Verity'];
+const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus', 'Oscar', 'Freddie', 'Arthur', 'Theo', 'Rufus', 'Jasper', 'Hector', 'Barney', 'Kit', 'Rory', 'Toby', 'Max', 'Ned', 'Felix', 'Louis', 'Jack', 'Edmund', 'Ralph', 'Humphrey', 'Orlando'];
 const TRAITS = ['', 'funny', 'shy', 'bossy', 'always late', 'worries a lot', 'brave', 'clumsy', 'notices everything', 'loves gadgets', 'asks lots of questions', 'loves experiments'];
 const STORY_TYPES = [
   { title: 'The detective agency', blurb: 'Clues, suspects and a case to solve', icon: 'search', idea: 'The friends set up their own detective agency and take on their first case: clues, a notebook, a few suspects with reasons, and a fair puzzle that a careful reader could solve. In the spirit of a children\'s detective TV series: a small team where each member is good at something different, a case file, and a clever reveal at the end.' },
@@ -183,7 +183,7 @@ const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. He
 const RED_WHY = 'This is a tricky word. It has no rule. You just have to remember it.';
 const cardSpeech = (word, sentence) => (sentence ? sentence + ' ... ' + word + '. Say it out loud.' : word + '. Say it out loud.');
 const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
-const COMMON = [...POOL, ...BOYS, ...PRAISE, ...SCREEN_PROMPTS, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
+const COMMON = [...PRAISE, ...SCREEN_PROMPTS, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
 const effVp = () => (S.vp === undefined ? 'ms-emily' : S.vp); // Emily unless a grown-up chose otherwise
 const preset = () => PRESETS.find(p => p.id === effVp());
 const ttsOn = () => !!(S.orKey && preset());
@@ -545,12 +545,14 @@ function shelf(ep, st, sample) {
     const hasStory = ep && st, done = hasStory && st.part >= ep.parts.length;
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
     h(`<div class="screen"><h1>Choose your story</h1>
+      <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, 4).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       <div class="shelf">${STORY_TYPES.map((t, i) => card('t' + i, t.icon, t.title, t.blurb)).join('')}${sample ? card('sample', 'book', 'Sample story', 'The Silver Shoes Sleepover') : ''}</div>
       </div>`);
     on('#own', () => { hush(); res({ kind: 'own' }); });
+    on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
     STORY_TYPES.forEach((t, i) => on('#t' + i, () => { hush(); res({ kind: 'type', type: t }); }));
     on('#sample', () => { hush(); res({ kind: 'sample' }); });
     on('#again', () => { hush(); res({ kind: 'again' }); });
@@ -558,21 +560,88 @@ function shelf(ep, st, sample) {
     say(SCREEN_PROMPTS[0]);
   });
 }
+function typeText({ title, initial = '', max = 400, names = false }) {
+  return new Promise(res => {
+    let txt = initial;
+    const ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'typeOverlay';
+    const show = () => (names ? txt.replace(/(^|[ '-])([a-z])/g, (m, a, b) => a + b.toUpperCase()) : txt);
+    const rows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+    ov.innerHTML = `<div class="pickcard"><div class="dbghead"><b>${esc(title)}</b><button class="btn small" id="tt-x">Cancel</button></div>
+      <div class="typed${names ? ' name' : ''}" id="tt-view"></div>
+      <div class="kb">${rows.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${c}">${c}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button>` : ''}</div>`).join('')}
+        <div><button class="key" data-k="'">'</button><button class="key space" data-k=" ">space</button>${names ? '' : '<button class="key" data-k=".">.</button><button class="key" data-k=",">,</button>'}</div></div>
+      <button class="btn big" id="tt-ok" style="margin-top:12px">Done ${ico('check')}</button></div>`;
+    document.body.appendChild(ov);
+    const paint = () => { $('#tt-view').textContent = show() || ' '; };
+    const onKey = e => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      e.stopPropagation();
+      if (e.key === 'Backspace') { del(); e.preventDefault(); }
+      else if (e.key === 'Enter') { finish(show().trim()); e.preventDefault(); }
+      else if (e.key.length === 1 && /[A-Za-z' .,-]/.test(e.key)) { add(names ? e.key.toLowerCase() : e.key); e.preventDefault(); }
+    };
+    const finish = v => { document.removeEventListener('keydown', onKey, true); ov.remove(); res(v); };
+    const add = c => { if (txt.length < max) { txt += c; paint(); } };
+    const del = () => { txt = txt.slice(0, -1); paint(); };
+    ov.querySelectorAll('.key').forEach(k => { k.onclick = () => { const c = k.dataset.k; c === 'del' ? del() : add(c); }; });
+    document.addEventListener('keydown', onKey, true);
+    $('#tt-x').onclick = () => finish(null);
+    $('#tt-ok').onclick = () => finish(show().trim());
+    paint();
+  });
+}
+function pickName(boy, current, used) {
+  return new Promise(res => {
+    const pool = boy ? BOYS : POOL;
+    const ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'namePicker';
+    document.body.appendChild(ov);
+    let rec = null;
+    const close = v => { if (rec && rec.state === 'recording') { try { rec.stop(); } catch (e) { } } ov.remove(); res(v); };
+    const take = v => { const n = String(v || '').replace(/[^A-Za-z' -]/g, '').trim().slice(0, 14); if (n) close(n.charAt(0).toUpperCase() + n.slice(1)); };
+    ov.innerHTML = `<div class="pickcard"><div class="dbghead"><b>${boy ? "Pick a boy's name" : "Pick a girl's name"}</b><button class="btn small" id="pk-x">Close</button></div>
+      <div class="namegrid">${pool.filter(n => n === current || !used.includes(n)).map(n => `<button class="chip small${n === current ? ' on' : ''}" data-n="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+      <div class="row"><button class="btn small" id="pk-type">${ico('pencil')}<span>Type a name</span></button><button class="btn small" id="pk-say">${ico('mic')}<span>Say a name</span></button></div><p class="note" id="pk-msg"></p></div>`;
+    ov.querySelectorAll('[data-n]').forEach(b => { b.onclick = () => { say(b.dataset.n); close(b.dataset.n); }; });
+    $('#pk-x').onclick = () => close(null);
+    $('#pk-type').onclick = async () => { const t = await typeText({ title: 'Type a name', initial: '', max: 14, names: true }); if (t) take(t); };
+    $('#pk-say').onclick = async () => {
+      const msg = $('#pk-msg'), lab = $('#pk-say span');
+      if (rec && rec.state === 'recording') { rec.stop(); return; }
+      if (!S.orKey) { msg.textContent = 'To use your voice, add the OpenRouter key with the settings gear. You can type instead.'; return; }
+      if (!navigator.mediaDevices || !window.MediaRecorder) { msg.textContent = 'This device cannot record. Please type the name.'; return; }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const chunks = []; rec = new MediaRecorder(stream);
+        rec.ondataavailable = e => chunks.push(e.data);
+        rec.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(chunks, { type: (rec && rec.mimeType) || 'audio/webm' });
+          if (lab.isConnected) lab.textContent = 'Say a name';
+          if (msg.isConnected) msg.textContent = 'Listening to what you said...';
+          try { const text = (await transcribe(blob)).split(/\s+/)[0]; if (ov.isConnected) take(text); } catch (e) { if (msg.isConnected) msg.textContent = e.message; }
+        };
+        rec.start(); lab.textContent = 'Tap when done'; msg.textContent = 'Listening... say the name.';
+        setTimeout(() => { if (rec && rec.state === 'recording') rec.stop(); }, 15000);
+      } catch (e) { msg.textContent = 'I could not use the microphone. Please type the name.'; }
+    };
+  });
+}
 function castScreen() {
   return new Promise(res => {
-    const cast = [0, 1, 2, 3].map(i => Object.assign({ name: S.girls[i] || POOL[i], boy: false, trait: '' }, (S.cast || [])[i] || {}, { name: S.girls[i] || POOL[i] }));
-    const pool = c => (c.boy ? BOYS : POOL);
-    const row = (c, i) => `<div class="castrow"><input class="nameinput" id="n${i}" value="${esc(c.name)}" maxlength="14" autocomplete="off" autocapitalize="words" spellcheck="false" aria-label="Name ${i + 1}"><button class="iconbtn" id="sh${i}" aria-label="Another name">${ico('swap')}</button><button class="chip small" id="g${i}">${c.boy ? 'Boy' : 'Girl'}</button><button class="chip small" id="t${i}">${esc(c.trait || '+ trait')}</button></div>`;
-    h(`<div class="screen"><h1>Who is in your story?</h1><p class="subtle">Type a name, or tap the arrows to swap it. Boy or girl, and a trait, are up to you.</p>
-      <div class="cast">${cast.map(row).join('')}</div>
+    const cast = [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return { name: S.girls[i] || POOL[i], boy: !!m.boy, trait: m.trait || '' }; });
+    h(`<div class="screen"><h1>Who is in your story?</h1><p class="subtle">Tap Girl or Boy to choose a name. Then pick a trait if you like.</p>
+      <div class="cast" id="castlist"></div>
       ${S.name ? `<label class="toggle"><input type="checkbox" id="meIn" ${S.meIn ? 'checked' : ''}> Put me in the story as the first one</label>` : ''}
-      <button id="next" class="btn big">Next ${ico('next')}</button></div>`);
-    cast.forEach((c, i) => {
-      $('#sh' + i).onclick = () => { const used = cast.map(x => x.name); let k = pool(c).indexOf(c.name); do { k = (k + 1) % pool(c).length; } while (used.includes(pool(c)[k])); c.name = pool(c)[k]; $('#n' + i).value = c.name; say(c.name); };
-      $('#n' + i).oninput = e => { c.name = e.target.value.replace(/[^A-Za-z' -]/g, '').slice(0, 14); };
-      $('#g' + i).onclick = () => { c.boy = !c.boy; $('#g' + i).textContent = c.boy ? 'Boy' : 'Girl'; };
-      $('#t' + i).onclick = () => { c.trait = TRAITS[(TRAITS.indexOf(c.trait) + 1) % TRAITS.length]; $('#t' + i).textContent = c.trait || '+ trait'; };
-    });
+      <button id="next" class="btn big">Use these ${ico('check')}</button></div>`);
+    const others = i => cast.filter((_, j) => j !== i).map(c => c.name);
+    const choose_ = async i => { const c = cast[i]; const n = await pickName(c.boy, c.name, others(i)); if (n) c.name = n; draw(); };
+    const draw = () => {
+      $('#castlist').innerHTML = cast.map((c, i) => `<div class="castrow2"><div class="seg"><button class="segbtn${c.boy ? '' : ' on'}" data-g="${i}" data-v="0">Girl</button><button class="segbtn${c.boy ? ' on' : ''}" data-g="${i}" data-v="1">Boy</button></div><button class="namebtn" data-n="${i}">${esc(c.name)}</button><button class="chip small" data-t="${i}">${esc(c.trait || '+ trait')}</button></div>`).join('');
+      document.querySelectorAll('#castlist [data-g]').forEach(b => { b.onclick = () => { const i = +b.dataset.g, boy = b.dataset.v === '1', c = cast[i]; if (boy !== c.boy) { c.boy = boy; if (!(boy ? BOYS : POOL).includes(c.name)) c.name = (boy ? BOYS : POOL).find(n => !others(i).includes(n)); } draw(); choose_(i); }; });
+      document.querySelectorAll('#castlist [data-n]').forEach(b => { b.onclick = () => choose_(+b.dataset.n); });
+      document.querySelectorAll('#castlist [data-t]').forEach(b => { b.onclick = () => { const c = cast[+b.dataset.t]; c.trait = TRAITS[(TRAITS.indexOf(c.trait) + 1) % TRAITS.length]; draw(); }; });
+    };
+    draw();
     on('#next', () => {
       hush();
       S.girls = cast.map((c, i) => c.name.trim() || POOL[i]);
@@ -591,7 +660,7 @@ function outlineScreen() {
     h(`<div class="screen"><h1>Your story idea</h1><p class="subtle">Tap ideas, say your idea, or type it. Any mix is fine.</p>
       <div class="page small"><p class="lead-in">Where is it?</p>${chips('where', WHERE)}<p class="lead-in">What goes wrong?</p>${chips('wrong', WRONG)}<p class="lead-in">How does it end?</p>${chips('end', ENDS)}</div>
       <textarea id="idea" class="ideabox" rows="3" placeholder="Say it or type it here"></textarea>
-      <div class="row"><button id="mic" class="btn small">${ico('mic')}<span>Tell me</span></button><button id="next" class="btn big">Done ${ico('check')}</button></div><p id="micmsg" class="subtle"></p></div>`);
+      <div class="row"><button id="mic" class="btn small">${ico('mic')}<span>Tell me</span></button><button id="typeit" class="btn small">${ico('pencil')}<span>Type it</span></button><button id="next" class="btn big">Done ${ico('check')}</button></div><p id="micmsg" class="subtle"></p></div>`);
     document.querySelectorAll('.chiprow').forEach(row => row.querySelectorAll('.chip').forEach(c => {
       c.onclick = () => { const k = row.dataset.k, on_ = c.classList.contains('on'); row.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); if (!on_) { c.classList.add('on'); pick[k] = c.dataset.v; } else pick[k] = ''; };
     }));
@@ -617,6 +686,7 @@ function outlineScreen() {
         setTimeout(() => { if (rec && rec.state === 'recording') rec.stop(); }, 60000);
       } catch (e) { msg.textContent = 'I could not use the microphone. Please type your idea.'; }
     });
+    on('#typeit', async () => { const t = await typeText({ title: 'Type your story idea', initial: $('#idea').value, max: 400 }); if (t !== null) $('#idea').value = t; });
     on('#next', () => {
       const bits = [];
       if (pick.where) bits.push('Where: ' + pick.where + '.');
@@ -655,21 +725,20 @@ async function writeNewStory(wk, idea) {
   }
 }
 async function storyStart(wk) {
-  // Steps, so Back and "Change it" always go back one screen: shelf, cast, outline, confirm, write.
+  // Quick route: pick a story and it starts. Characters are optional (the Change strip on the shelf).
+  // Steps: shelf, outline (own story only), confirm, write. Back goes one step back.
   let step = 'shelf', pick = null, idea = null, final = null;
   for (;;) {
     if (step === 'shelf') {
       pick = await shelf(epOf(wk), S.story[wk.id], !!findEpisode(wk.words));
       if (pick === BACK) return false;
+      if (pick.kind === 'cast') { await castScreen(); continue; }
       if (pick.kind === 'again') { const e0 = epOf(wk), s0 = S.story[wk.id]; if (e0 && s0 && s0.part >= e0.parts.length) { S.story[wk.id] = { part: 0 }; save(); } return true; }
-      step = 'cast';
-    } else if (step === 'cast') {
-      if ((await castScreen()) === BACK) { step = 'shelf'; continue; }
       if (pick.kind === 'sample') { wk.ep = findEpisode(wk.words); S.story[wk.id] = { part: 0 }; save(); return true; }
       if (pick.kind === 'type') { final = pick.type.idea; step = 'write'; } else step = 'outline';
     } else if (step === 'outline') {
       idea = await outlineScreen();
-      if (idea === BACK) { step = 'cast'; continue; }
+      if (idea === BACK) { step = 'shelf'; continue; }
       step = 'confirm';
     } else if (step === 'confirm') {
       waiting('Tidying your idea'); say('One moment.');
@@ -679,7 +748,7 @@ async function storyStart(wk) {
       final = 'Tidied version: ' + tidy + ' Original: ' + idea; step = 'write';
     } else {
       const made = await writeNewStory(wk, final);
-      if (made === BACK) { step = pick.kind === 'own' ? 'outline' : 'cast'; continue; }
+      if (made === BACK) { step = pick.kind === 'own' ? 'outline' : 'shelf'; continue; }
       const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = made; wk.ep = id; S.story[wk.id] = { part: 0 }; save();
       return true;
     }
