@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.36'; // bump with every release
+const APP_VER = '2.37'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -104,8 +104,12 @@ function partPlan(n) { // how many words in each part: about six to a part, shar
   return Array.from({ length: parts }, (_, i) => base + (i < extra ? 1 : 0));
 }
 function lastSentence(t) {
-  const m = String(t).trim().match(/[^.!?]+[.!?]+["”’')]*|[^.!?]+$/g);
-  return m ? m[m.length - 1].trim() : '';
+  // A sentence ends at . ! or ? (and any closing quote) when the next word starts with a capital or an opening quote.
+  // So "Is it really happy?" she whispered. stays one sentence.
+  t = String(t).trim();
+  let start = 0;
+  for (const m of t.matchAll(/[.!?]+["”’')]*\s+(?=["“‘'A-Z])/g)) start = m.index + m[0].length;
+  return t.slice(start).trim();
 }
 const wholeWord = (w, t) => (String(t).match(new RegExp('(^|[^A-Za-z\'’])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z]|[\'’][A-Za-z])', 'gi')) || []).length;
 // Stores each word's story sentence (the last sentence of its paragraph) for Revise.
