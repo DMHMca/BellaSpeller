@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.45'; // bump with every release
+const APP_VER = '2.46'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -178,7 +178,12 @@ async function askAI(wk, problems, model, extra) {
   const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
   const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}');
   if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a story.');
-  return { ep: JSON.parse(t.slice(i0, i1 + 1)), usage: j.usage || null, ms: Date.now() - t0 };
+  const raw = t.slice(i0, i1 + 1);
+  try { return { ep: JSON.parse(raw), usage: j.usage || null, ms: Date.now() - t0 }; }
+  catch (e) {
+    const fr = j.choices[0].finish_reason || '?', out = j.usage && j.usage.completion_tokens;
+    throw new Error('The reply was not valid story data (' + e.message + '). The model stopped because: ' + fr + (out ? ', after ' + out + ' tokens' : '') + '. The reply began: ' + t.slice(0, 160).replace(/\s+/g, ' ') + ' ... and ended: ' + t.slice(-120).replace(/\s+/g, ' '));
+  }
 }
 async function draftStory(wk, extra) {
   const words = wk.words.map(x => x.w);
