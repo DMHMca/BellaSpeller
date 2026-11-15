@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.32'; // bump with every release
+const APP_VER = '2.33'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,8 +26,31 @@ function fresh() {
     cur: 'w1', log: [], stars: 0, story: {}
   };
 }
-function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return s; } } catch (e) { } return fresh(); }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return s; } } catch (e) { } loadedFresh = true; return fresh(); }
+let loadedFresh = false;
+function save() {
+  const j = JSON.stringify(S);
+  try { localStorage.setItem(KEY, j); } catch (e) { saveWarn('Saving is not working in this browser. Please do not rely on what is on screen.'); }
+  mirrorPut(j);
+}
+function saveWarn(msg) {
+  if (document.getElementById('savewarn') || !document.body) return;
+  const d = document.createElement('div'); d.id = 'savewarn'; d.textContent = msg;
+  d.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#b3261e;color:#fff;padding:12px 16px;border-radius:12px;font:600 16px sans-serif';
+  document.body.appendChild(d);
+}
+// A second copy of everything, in a different store, so one browser clearing its storage cannot lose it all.
+const looksFresh = st => !st || !st.weeks || (st.weeks.length === 1 && st.weeks[0].id === 'w1' && !(st.log || []).length && !Object.keys(st.eps || {}).length);
+const mirrorDb = new Promise(res => { try { const r = indexedDB.open('bellaspeller-state', 1); r.onupgradeneeded = () => r.result.createObjectStore('state'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (e) { res(null); } });
+async function mirrorPut(j) {
+  if (looksFresh(JSON.parse(j))) return; // never overwrite the safety copy with an empty start
+  const db = await mirrorDb; if (!db) return;
+  try { db.transaction('state', 'readwrite').objectStore('state').put(j, 'S'); } catch (e) { }
+}
+async function mirrorGet() {
+  const db = await mirrorDb; if (!db) return null;
+  return new Promise(res => { try { const q = db.transaction('state').objectStore('state').get('S'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); } });
+}
 let S = load();
 const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.length - 1];
 const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
@@ -1242,3 +1265,6 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch(() => { });
 }
 home();
+// Ask the browser to keep the data permanently, and restore from the safety copy if the main store came back empty.
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
+if (loadedFresh) mirrorGet().then(j => { try { const m = JSON.parse(j); if (m && !looksFresh(m)) { S = m; localStorage.setItem(KEY, j); home(); } } catch (e) { } });
