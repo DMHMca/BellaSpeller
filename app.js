@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.42'; // bump with every release
+const APP_VER = '2.43'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -349,7 +349,7 @@ function partTexts(beats, last, wk) {
   if (wk && !last) { if (wk.rule) o.push(wk.rule); o.push(RED_WHY); }
   beats.forEach(b => {
     if (b.n) o.push(fill(b.n));
-    else if (b.p) o.push(fill(b.p));
+    else if (b.p) { o.push(fill(b.p)); if (b.word) { o.push(pointLine(b.word)); o.push(b.word); } }
     else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
     else if (b.w) {
       const s = fill(b.w.before) + b.w.word + fill(b.w.after);
@@ -398,6 +398,22 @@ function builtinSay(t) {
   }, 120);
 }
 const hush = () => { sayTok++; stopAll(); };
+// Speak, and resolve true when the speech has ended (or, with sound off, after a reading pause); false if something else spoke or hush() was called.
+function sayDone(t) {
+  return new Promise(resolve => {
+    say(t);
+    const tok = sayTok, t0 = Date.now(), n = String(t).split(/\s+/).length, quiet = !soundOn();
+    const cap = quiet ? n * 300 + 2200 : n * 450 + 3500;
+    let started = false;
+    const iv = setInterval(() => {
+      if (tok !== sayTok) { clearInterval(iv); return resolve(false); }
+      const playing = (audioEl && !audioEl.ended && !audioEl.paused) || ('speechSynthesis' in window && speechSynthesis.speaking);
+      if (playing) started = true;
+      const el = Date.now() - t0;
+      if (quiet ? el > cap : ((started && !playing && el > 800) || el > cap)) { clearInterval(iv); resolve(true); }
+    }, 200);
+  });
+}
 
 // ---------- rendering ----------
 let keyHandler = null, prog = '';
@@ -578,6 +594,112 @@ function praise(word, clean) {
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
     backBtn(res);
     say(p);
+  });
+}
+
+// The word line spoken when a word is pointed out
+const pointLine = w => 'This is one of your words: ' + w + '. Have a good look.';
+
+// One page for a story word: the paragraph is read, the word is pointed out where it stands, it hides, she writes it into the gap.
+// Returns true if right first time with no hints, or BACK.
+function storyWord(week, wobj, rawText, starred) {
+  return new Promise(res => {
+    const word = wobj.w, text = fill(rawText);
+    const ls = lastSentence(text), cut = text.lastIndexOf(ls);
+    const head = text.slice(0, cut), sent = text.slice(cut);
+    const mt = new RegExp("(^|[^A-Za-z'’])(" + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ")(?![A-Za-z]|['’][A-Za-z])", 'i').exec(sent);
+    const at = mt ? mt.index + mt[1].length : sent.length;
+    const pre = sent.slice(0, at), post = mt ? sent.slice(at + word.length) : '';
+    const why = wobj.red ? RED_WHY : (week.rule || '');
+    const tags = (wobj.red ? '<span class="tag red">Tricky word</span>' : '') + (wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '');
+    let state = 'read', typed = '', hints = 0, attempts = 0, tries = 0, firstOk = false, firstHints = 0, mask = null, tm = null, pr = '';
+    const para = () => {
+      const dh = state === 'read' || state === 'settle' ? '' : ' dim', dp = state === 'point' ? ' dim' : '';
+      let w;
+      if (state === 'read') w = `<span class="pw">${esc(word)}</span>`;
+      else if (state === 'point') w = `<span class="pw hl" id="pwd">${esc(word)}</span>`;
+      else if (state === 'gap') w = '<span class="blank"></span>';
+      else if (state === 'fix') w = `<span class="pw fixw">${[...word].map((c, i) => mask[i] ? esc(c) : `<span class="hid">${esc(c)}</span>`).join('')}</span>`;
+      else w = `<span class="pw set">${esc(word)}</span>`;
+      return `<div class="page"><p class="story para${state === 'gap' ? ' gapmode' : ''}"><span class="phead${dh}">${esc(head)}</span><span class="${dp.trim()}">${esc(pre)}</span>${w}<span class="${dp.trim()}">${esc(post)}</span></p></div>`;
+    };
+    const stop = () => { clearTimeout(tm); hush(); };
+    const toPoint = () => {
+      stop(); state = 'point'; typed = ''; hints = 0; render();
+      tm = setTimeout(() => { const e = $('#pwd'); if (e) e.classList.add('big'); }, 450);
+      say(pointLine(word));
+    };
+    const toGap = () => { stop(); state = 'gap'; typed = ''; hints = 0; render(); };
+    const toSettle = (praiseText, clean) => {
+      stop(); state = 'settle'; pr = praiseText;
+      const sk = 'story:' + word;
+      if (!starred || !starred.has(sk)) { S.stars++; if (starred) starred.add(sk); }
+      save(); render(); say(pr);
+    };
+    const attempt = () => {
+      const ok = typed === word;
+      S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: 'story', typed, hints, ok, redo: attempts++ > 0 || undefined });
+      save();
+      if (tries === 0) { firstOk = ok; firstHints = hints; }
+      tries++;
+      if (ok) return toSettle(firstOk && firstHints === 0 && tries === 1 ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!');
+      if (tries === 1) { mask = matchMask(word, typed); stop(); state = 'fix'; render(); say((mask.some(x => !x) ? FIX_A : FIX_B) + FIX_TAIL); return; }
+      toSettle('Well done. You got there!');
+    };
+    function render() {
+      let body = para();
+      if (state === 'read') {
+        body += `<div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div>`;
+      } else if (state === 'point') {
+        body += `<p class="msg">${esc(pointLine(word))}</p>${tags ? `<div class="row">${tags}</div>` : ''}
+          <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${why ? `<button id="why" class="btn small">${ico('bulb')}<span>Why?</span></button>` : ''}<button id="next" class="btn big">I've had a good look ${ico('check')}</button></div><div id="whybox" style="width:100%"></div>`;
+      } else if (state === 'gap') {
+        body += `<div id="slots" class="slots"></div>
+          <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
+          ${kbHtml()}<button id="done" class="btn big">Done ${ico('check')}</button>`;
+      } else if (state === 'fix') {
+        body += `<p class="msg">${mask.some(x => !x) ? FIX_A : FIX_B}</p><p class="subtle">Have a good look. Then try once more.</p><button id="next" class="btn big">Try once more ${ico('next')}</button>`;
+      } else {
+        body += `<div class="bigstar mini"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(pr)}</p><button id="next" class="btn big">Next ${ico('next')}</button>`;
+      }
+      h(`<div class="screen wordpage">${body}</div>`);
+      keyHandler = null;
+      if (state === 'read') {
+        on('#hear', () => { sayDone(text).then(ok => { if (ok && state === 'read') toPoint(); }); });
+        on('#next', toPoint);
+        keyHandler = e => { if (e.key === 'Enter') toPoint(); };
+      } else if (state === 'point') {
+        on('#hear', () => say(pointLine(word)));
+        on('#why', () => { $('#whybox').innerHTML = `<div class="page small"><p class="story">${esc(why)}</p></div>`; say(why); });
+        on('#next', toGap);
+        keyHandler = e => { if (e.key === 'Enter') toGap(); };
+      } else if (state === 'gap') {
+        const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; $('#done').disabled = !typed; };
+        const add = c => { if (typed.length < 24) { typed += c; draw(); } };
+        const del = () => { typed = typed.slice(0, -1); draw(); };
+        const finish = () => { if (typed) attempt(); };
+        const hint = () => { let i = 0; while (i < typed.length && i < word.length && typed[i] === word[i]) i++; if (i < word.length) { typed = word.slice(0, i + 1); hints++; draw(); } };
+        document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; k === 'del' ? del() : add(k); }; });
+        keyHandler = e => {
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.key === 'Backspace') { del(); e.preventDefault(); }
+          else if (e.key === 'Enter') { finish(); e.preventDefault(); }
+          else if (/^[a-zA-Z'-]$/.test(e.key)) { add(e.key.toLowerCase()); e.preventDefault(); }
+        };
+        on('#hear', () => say(word)); on('#hint', hint); on('#done', finish);
+        draw();
+      } else if (state === 'fix') {
+        on('#next', toGap);
+        keyHandler = e => { if (e.key === 'Enter') toGap(); };
+      } else {
+        on('#next', () => { stop(); res(firstOk && firstHints === 0 && attempts === 1); });
+        keyHandler = e => { if (e.key === 'Enter') { stop(); res(firstOk && firstHints === 0 && attempts === 1); } };
+      }
+      // Back: while looking or reading it goes to the step before the word; later it restarts the word's look.
+      backBtn(r => { if (state === 'read' || state === 'point') { stop(); res(BACK); } else toPoint(); });
+    }
+    render();
+    sayDone(text).then(ok => { if (ok && state === 'read') toPoint(); });
   });
 }
 
@@ -942,7 +1064,7 @@ async function storyDay() {
     const b = beats[i];
     let r;
     if (b.n) r = await narrate(fill(b.n));
-    else if (b.p) r = await narrate(fill(b.p)); // temporary until the one-page word screen (build step 2)
+    else if (b.p) { const wobj = wk.words.find(x => x.w === b.word) || { w: b.word }; r = await storyWord(wk, wobj, b.p, starred); }
     else if (b.c) {
       for (;;) {
         const k = await choose(fill(b.c.q), b.c.o.map(o => fill(o.l)));

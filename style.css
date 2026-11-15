@@ -250,3 +250,16 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .shelfhead { margin: 28px 0 4px; font-size: 22px; opacity: .9; }
 .shelf.told .shelfcard { opacity: .72; }
 .tile.t-grown { background:linear-gradient(150deg,#4f7fb8,#2b4f7f); }
+
+/* one-page story word */
+.wordpage { gap: 16px; }
+.pw { display: inline-block; margin: 0 .42em; transform-origin: center 80%; transition: transform .7s cubic-bezier(.2,1.4,.4,1), color .5s; }
+.pw.hl { color: #d4276a; font-weight: 700; }
+.pw.hl.big { transform: scale(1.5); }
+.pw.set { color: #d4276a; font-weight: 700; }
+.pw.fixw { font-weight: 700; }
+.dim { opacity: .38; transition: opacity .4s; }
+.phead { transition: opacity .4s; }
+.bigstar.mini { width: 72px; height: 72px; }
+@media (max-height:760px) { .para.gapmode .phead { display: none; } }
+@media (prefers-reduced-motion:reduce) { .pw { transition: none; } }
