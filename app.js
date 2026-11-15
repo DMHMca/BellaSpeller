@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.49'; // bump with every release
+const APP_VER = '2.50'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1154,11 +1154,11 @@ function home() {
   const wk = curWeek(), ep = epOf(wk);
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : `Part ${stNow.part + 1} of ${ep.parts.length}`;
-  const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story</b><small>${esc(sub)}</small></div></button>`;
+  const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s story" : "My story"}</b><small>${esc(sub)}</small></div></button>`;
   h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span></div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}
-    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>Revise</b><small>Just the ${wk.words.length} words</small></div></button>
+    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Just the ${wk.words.length} words</small></div></button>
     <button id="grown" class="tile t-grown"><span class="ticon">${ico('users')}</span><div class="tt"><b>Grown-ups</b><small>This week's words and story</small></div></button></div></div>`, { noTop: true });
   on('#story', storyDay); on('#quick', revise); on('#grown', adultGate);
 }
@@ -1240,7 +1240,7 @@ function adult() {
     <label>Score for ${esc(wk.label)}, out of ${wk.words.length}</label><input id="score" type="number" min="0" max="${wk.words.length}" value="${wk.score == null ? '' : wk.score}" style="max-width:120px">
     <div><button id="saveScore" class="btn">Save score</button></div>
     </div><div class="tabpane" data-tab="story"><h2>Story for this week</h2>
-    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revise works without one.'}</p>
+    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revision works without one.'}</p>
     ${aiKey() ? `${epOf(wk) ? '<button id="readStory" class="btn">Read this story</button> ' : ''}<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
 
@@ -1251,7 +1251,7 @@ function adult() {
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
-    <h2>Revise sittings</h2>
+    <h2>Revision sittings</h2>
     ${(S.sittings || []).filter(x => x.wk === wk.id).length ? `<table><tr><th>Day</th><th>Right first time</th></tr>${(S.sittings || []).filter(x => x.wk === wk.id).map(x => `<tr><td>${esc(x.d)}</td><td>${x.score} out of ${x.of}</td></tr>`).join('')}</table>` : '<p class="note">None yet. The score counts a word only when she writes it right first time, without Remind me or Next letter.</p>'}
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
@@ -1356,7 +1356,7 @@ function adult() {
     const redFrom = ws.length >= 6 ? ws.length - 3 : ws.length;
     $('#preview').innerHTML = `<p>Nearly done. Tick any red words from the school list, then save.</p>` +
       ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${i >= redFrom ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
-      `<p class="note">You can write a story for these words on the Story tab. Revise works without one.</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
+      `<p class="note">You can write a story for these words on the Story tab. Revision works without one.</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
     on('#saveWeek', () => {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
