@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.28'; // bump with every release
+const APP_VER = '2.29'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,8 +33,8 @@ const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.lengt
 const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 
 // ---------- stories written by AI (grown-ups page only) ----------
-const DEFAULT_MODEL = 'z-ai/glm-5.3';
-const MODEL_SUGGESTIONS = ['z-ai/glm-5.3', 'z-ai/glm-5.3-flashx', 'openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'];
+const DEFAULT_MODEL = 'openai/gpt-6.1-terra';
+const MODEL_SUGGESTIONS = ['openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'];
 const STORY_RULES = `You write a short story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens. The story is told in parts, and each of the week's spelling words is met inside the story's own text, at the end of one paragraph, where the app will point it out to her.
 
 The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
@@ -1003,7 +1003,7 @@ function adult() {
     <div id="draftOut"></div>
 
     ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
-    <input id="cm1" type="text" value="z-ai/glm-5.3"><input id="cm2" type="text" value="z-ai/glm-5.3-flashx" style="margin-top:8px"><input id="cm3" type="text" value="openai/gpt-6.1-terra" style="margin-top:8px">
+    <input id="cm1" type="text" value="openai/gpt-6.1-terra"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="anthropic/claude-sonnet-5.5" style="margin-top:8px">
     <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
 
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
