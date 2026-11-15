@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.27'; // bump with every release
+const APP_VER = '2.28'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -999,7 +999,7 @@ function adult() {
     <div><button id="saveScore" class="btn">Save score</button></div>
     </div><div class="tabpane" data-tab="story"><h2>Story for this week</h2>
     <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revise works without one.'}</p>
-    ${aiKey() ? `<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
+    ${aiKey() ? `${epOf(wk) ? '<button id="readStory" class="btn">Read this story</button> ' : ''}<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
 
     ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
@@ -1031,6 +1031,7 @@ function adult() {
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
+  on('#readStory', () => { $('#draftOut').innerHTML = storyPreview(epOf(wk)); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
     btn.disabled = true; out.innerHTML = '<p class="note">Writing the story. This can take up to a minute.</p>';
