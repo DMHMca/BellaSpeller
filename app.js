@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.19'; // bump with every release
+const APP_VER = '2.21'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,7 +41,7 @@ The story idea in the request comes from the nine-year-old author, so follow it,
 
 Style: real children with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
 
-Setting and values: the story is set in a modern, sensible English family world, with kind, responsible parents and carers. Use British daily life and British English: school uniform, PE kit, break time, assembly, tea, squash, toast, fruit, sandwiches, soup, pasta, jacket potatoes, flapjacks, wellies, rain, the park, the corner shop. Never include fast food or junk food (no pizza, burgers, fries, soda, candy, takeaways) and no American words or customs (no mom, cookies, sidewalk, vacation, recess). Sleepovers are realistic: parents are at home, bedtimes are respected, and nobody is left unsupervised or put in danger. Fantasy is welcome when the idea asks for it (witches, dragons, other worlds), but everyday life stays British and sensible.
+Setting and values: the story is set in a modern, sensible English family world, with kind, responsible parents and carers. Use British daily life and British English: school uniform, PE kit, break time, assembly, wellies, rain, the park, the corner shop, board games, torches, den-building, stargazing, reading under the covers. Never include fast food or junk food (no pizza, burgers, fries, soda, candy, takeaways) and no American words or customs (no mom, cookies, sidewalk, vacation, recess). Do not include food, eating or mealtimes in the story at all: no meals, snacks, treats, feasts or drinks, and no midnight feast. Sleepovers and adventures do not need food. If one of this week's spelling words is itself a food or eating word, use it in a natural non-food way if you can, otherwise as briefly as possible. Sleepovers are realistic: parents are at home, bedtimes are respected, and nobody is left unsupervised or put in danger. Fantasy is welcome when the idea asks for it (witches, dragons, other worlds), but everyday life stays British and sensible.
 
 If the idea is a mystery or investigation, play fair: plant real clues early, give two or three suspects each with a reason and an alibi, let the friends make a wrong guess, and solve it kindly by reasoning from the clues. Case notes, evidence labels and suspect lists are good things for the characters to write. If the idea is science or building, keep it real and safe: kitchen and garden experiments with an adult nearby, nothing dangerous. Show the steps of a good investigation (a question, a guess, a test, a measurement, a result, trying again), and let a failed test teach something. Lab notebook entries, labels and results tables are good things for the characters to write.
 
@@ -84,13 +84,15 @@ function checkEpisode(ep, words) {
     if (used[2].filter(x => x === w).length !== 1) bad.push('"' + w + '" should be written exactly once in part 3.');
   });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
-  const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc)\b/i;
-  const usHit = texts.map(t => String(t).match(US)).find(Boolean);
-  if (usHit) bad.push('It uses American or fast-food wording ("' + usHit[0] + '"). Use British English and wholesome food, as the instructions say.');
+  const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc|food|foods|eat|eats|eating|ate|eaten|meals?|mealtimes?|breakfast|lunch|lunchtime|dinner|supper|snacks?|feasts?|hungry|starving|drinks?|drinking|juice|squash|milk|tea|coffee|soup|eggs?|fish|chicken|vegetables?|salad|yoghurt|fruits?|apples?|bananas?|bread|sandwiches|sandwich|pasta|rice|potato|potatoes|picnic|bake|baking|baked|cheese|toast|flapjacks?|biscuits?|cakes?|cupcakes?|crisps|sweets|chocolate|ice cream|marshmallows?|fizzy|white bread|midnight feast)\b/ig;
+  const usHit = texts.map(t => [...String(t).matchAll(US)].map(m => m[0].toLowerCase()).filter(w => !words.includes(w))[0]).find(Boolean);
+  if (usHit) bad.push('It mentions food or uses American wording (\"' + usHit + '\"). The family rules say no food in the stories and British English, as the instructions say.');
   return bad;
 }
+const DEFAULT_FAMILY_RULES = 'No food in the stories at all: no meals, snacks, treats, feasts or drinks. (Bella does not like cheese; no white bread, toast, flapjacks, biscuits, cakes or sweets; fruit only at the start of a meal. A list of foods that are fine will be added later.)';
+const familyRules = () => (S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules).trim();
 const castDesc = () => [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return '{g' + (i + 1) + '} is a ' + (m.boy ? 'boy' : 'girl') + (m.trait ? ', ' + m.trait : ''); }).join('; ');
-const storyBrief = extra => '\nCharacters: ' + castDesc() + '.' + (extra && extra.idea ? '\nStory idea from the author: ' + extra.idea : '');
+const storyBrief = extra => '\nCharacters: ' + castDesc() + '.' + (extra && extra.idea ? '\nStory idea from the author: ' + extra.idea : '') + (familyRules() ? '\nFamily rules to follow: ' + familyRules() : '');
 const aiBase = () => (S.aiBase || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 const aiKey = () => S.aiKey || S.orKey;
 async function askAI(wk, problems, model, extra) {
@@ -116,12 +118,12 @@ async function askAI(wk, problems, model, extra) {
 async function draftStory(wk, extra) {
   const words = wk.words.map(x => x.w);
   let problems = [];
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const ep = (await askAI(wk, problems, undefined, extra)).ep;
     problems = checkEpisode(ep, words);
     if (!problems.length) { ep.title = String(ep.title || 'This week\'s story'); ep.words = words; return ep; }
   }
-  throw new Error('Two drafts had problems (' + problems[0] + ') Please try again.');
+  throw new Error('Three drafts had problems (' + problems[0] + ') Please try again.');
 }
 function storyPreview(ep) {
   return `<h3>${esc(ep.title)}</h3>` + ep.parts.map((part, i) => `<p><b>Part ${i + 1}</b></p>` + part.map(b =>
@@ -978,12 +980,13 @@ function adult() {
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
+    <label>Family rules for the stories (added to every story request)</label><textarea id="famRules" style="min-height:110px">${esc(S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules)}</textarea>
     <label>AI model for writing stories</label><input id="orModel" type="text" list="modelList" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}"><datalist id="modelList">${MODEL_SUGGESTIONS.map(m => `<option value="${m}">`).join('')}</datalist>
     <label>Story AI address (leave blank for OpenRouter; any OpenAI-style service works, for example Z.ai)</label><input id="aiBase" type="text" autocomplete="off" placeholder="https://openrouter.ai/api/v1" value="${esc(S.aiBase || '')}">
     <label>Story AI key (leave blank to use the OpenRouter key)</label><input id="aiKey" type="password" autocomplete="off" value="${esc(S.aiKey || '')}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
     <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div>`);
-  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); save(); adult(); });
+  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
     btn.disabled = true; out.innerHTML = '<p class="note">Writing the story. This can take up to a minute.</p>';
