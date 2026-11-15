@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.31'; // bump with every release
+const APP_VER = '2.32'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -68,9 +68,10 @@ Rules:
 5. Reply with the JSON object only.`;
 
 const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}';
-const CHOICE_RULE = '2. Each part has exactly one choice. Put the choice after at least two paragraphs. Both options must lead sensibly into the rest of the part.';
+const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
+const CHOICE_RULE = n => '2. The whole story has exactly ' + n + (n === 1 ? ' choice' : ' choices') + ' in total (not one per part), spread out through the story. Put each choice after at least two paragraphs. Both options must lead sensibly into the rest of the story.';
 const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it straight through, and never use a c beat.';
-const storyRules = () => STORY_RULES.replace('{{CHOICE_FORMAT}}', S.choices ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', S.choices ? CHOICE_RULE : NO_CHOICE_RULE);
+const storyRules = () => STORY_RULES.replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
 const WORDS_PER_PART = 6;
 function partPlan(n) { // how many words in each part: about six to a part, shared evenly
   const parts = Math.max(1, Math.ceil(n / WORDS_PER_PART)), base = Math.floor(n / parts), extra = n % parts;
@@ -92,7 +93,7 @@ function checkEpisode(ep, words) {
   const plan = partPlan(words.length);
   if (!ep || !Array.isArray(ep.parts) || ep.parts.length !== plan.length) return ['It should have ' + plan.length + ' part' + (plan.length === 1 ? '' : 's') + '.'];
   const texts = [String(ep.title || '')];
-  const used = [];
+  const used = []; let totalChoices = 0;
   ep.parts.forEach((part, pi) => {
     if (!Array.isArray(part)) { bad.push('Part ' + (pi + 1) + ' is not a list.'); return; }
     let choices = 0, here = 0;
@@ -105,9 +106,10 @@ function checkEpisode(ep, words) {
         else if (wholeWord(b.word, lastSentence(b.p)) !== 1) bad.push('The last sentence of the paragraph for "' + b.word + '" should contain "' + b.word + '" exactly once as a whole word.');
       } else bad.push('Part ' + (pi + 1) + ' has a beat the app cannot read.');
     });
-    if (S.choices ? choices !== 1 : choices !== 0) bad.push('Part ' + (pi + 1) + (S.choices ? ' should have exactly one choice.' : ' should have no choice.'));
+    totalChoices += choices;
     if (Math.abs(here - plan[pi]) > 1) bad.push('Part ' + (pi + 1) + ' should have about ' + plan[pi] + ' word paragraphs, not ' + here + '.');
   });
+  if (totalChoices !== nChoices()) bad.push('The story should have ' + (nChoices() ? 'exactly ' + nChoices() + (nChoices() === 1 ? ' choice' : ' choices') : 'no choices') + ' in all, not ' + totalChoices + '.');
   words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
   const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc|food|foods|eat|eats|eating|ate|eaten|meals?|mealtimes?|breakfast|lunch|lunchtime|dinner|supper|snacks?|feasts?|hungry|starving|drinks?|drinking|juice|squash|milk|tea|coffee|soup|eggs?|fish|chicken|vegetables?|salad|yoghurt|fruits?|apples?|bananas?|bread|sandwiches|sandwich|pasta|rice|potato|potatoes|picnic|bake|baking|baked|cheese|toast|flapjacks?|biscuits?|cakes?|cupcakes?|crisps|sweets|chocolate|ice cream|marshmallows?|fizzy|white bread|midnight feast)\b/ig;
@@ -584,7 +586,7 @@ function shelf(ep, st, sample) {
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
     h(`<div class="screen"><h1>Choose your story</h1>
       <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, 4).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
-      <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${S.choices ? 'on' : 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
+      <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${nChoices() || 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
@@ -592,7 +594,7 @@ function shelf(ep, st, sample) {
       </div>`);
     on('#own', () => { hush(); res({ kind: 'own' }); });
     on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
-    on('#chtoggle', () => { S.choices = !S.choices; save(); $('#chstate').textContent = S.choices ? 'on' : 'off'; });
+    on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
     STORY_TYPES.forEach((t, i) => on('#t' + i, () => { hush(); res({ kind: 'type', type: t }); }));
     on('#sample', () => { hush(); res({ kind: 'sample' }); });
     on('#again', () => { hush(); res({ kind: 'again' }); });
