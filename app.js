@@ -2,7 +2,9 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.8, 15 November 2026'; // change this with every release
+const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
+const APP_VER = '2.10'; // bump with every release
+const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -277,6 +279,7 @@ const ICONS = {
   check: '<path d="M5 12.5l5 5 9-10"/>',
   del: '<path d="M21 5H9l-6 7 6 7h12z"/><path d="M13 9.5l4 5M17 9.5l-4 5"/>',
   swap: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   star: '<path fill="currentColor" stroke="none" d="M12 2.2l2.95 6.1 6.7.95-4.85 4.7 1.15 6.65L12 17.4l-5.95 3.2 1.15-6.65L2.35 9.25l6.7-.95z"/>'
 };
 const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -570,6 +573,7 @@ function home() {
 
 // ---------- grown-ups ----------
 function adultGate() {
+  if (DEBUG) return adult(); // no PIN while debugging
   const setting = !S.pin;
   h(`<div class="screen adult"><h1>Grown-ups</h1>
     <p>${setting ? 'Choose a four-digit code. You will need it to open this page.' : 'Enter the four-digit code.'}</p>
@@ -736,6 +740,69 @@ function adult() {
   });
 }
 
+// ---------- debug settings: a button on every screen, no PIN. Set DEBUG to false for release. ----------
+async function freshReload() {
+  try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch (e) { }
+  location.reload();
+}
+const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
+function debugUI() {
+  if (!DEBUG) return;
+  const b = document.createElement('button');
+  b.id = 'dbg'; b.className = 'dbgbtn'; b.setAttribute('aria-label', 'Settings (debug)'); b.innerHTML = ico('gear');
+  b.onclick = toggleDebug;
+  document.body.appendChild(b);
+  const v = document.createElement('div');
+  v.id = 'vtag'; v.textContent = 'BellaSpeller v' + APP_VER;
+  document.body.appendChild(v);
+  const check = async () => {
+    try {
+      const t = await (await fetch('app.js?chk=' + Date.now(), { cache: 'no-store' })).text();
+      const m = t.match(/const APP_VER = '([^']+)'/); if (!m) return;
+      const latest = m[1];
+      if (latest === APP_VER) { v.className = 'ok'; v.textContent = 'BellaSpeller v' + APP_VER + ' ✓ latest'; v.onclick = null; }
+      else if (newer(latest, APP_VER)) { v.className = 'new'; v.textContent = 'v' + APP_VER + ' · v' + latest + ' available: tap to update'; v.onclick = freshReload; }
+      else { v.className = 'ok'; v.textContent = 'BellaSpeller v' + APP_VER + ' (ahead of the live site)'; v.onclick = null; }
+    } catch (e) { v.className = ''; v.textContent = 'BellaSpeller v' + APP_VER + ' (offline: cannot check)'; }
+  };
+  check();
+  setInterval(check, 120000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+}
+function toggleDebug() {
+  const old = $('#dbgPanel'); if (old) { old.remove(); return; }
+  const wk = curWeek();
+  const dev = ('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang));
+  const p = document.createElement('div');
+  p.id = 'dbgPanel';
+  p.innerHTML = `<div class="dbgcard adult">
+    <div class="dbghead"><b>Debug settings</b><button id="dbgx" class="btn small" aria-label="Close">Close</button></div>
+    <p class="note">${esc(APP_VERSION)}<br>Week: ${esc(wk.label)} · stars ${S.stars} · answers logged ${S.log.length}</p>
+    <label>Recorded voice</label><select id="dvp"><option value="">None: use this device's voice</option>${PRESETS.map(x => `<option value="${x.id}" ${effVp() === x.id ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
+    <label>Device voice</label><select id="dvs"><option value="">Automatic</option>${dev.map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+    <label>Story model</label><input id="dmodel" type="text" list="dmodels" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}"><datalist id="dmodels">${MODEL_SUGGESTIONS.map(m => `<option value="${m}">`).join('')}</datalist>
+    <div class="dbgrow"><button id="dsample" class="btn small">Hear a sample</button><button id="dhome" class="btn small">Go home</button><button id="dstory" class="btn small">Restart this week's story</button><button id="dclear" class="btn small">Clear stars and answers</button><button id="dreload" class="btn small">Reload fresh copy</button><button id="dfull" class="btn small">Full grown-ups page</button></div>
+    <p id="dmsg" class="note"></p></div>`;
+  document.body.appendChild(p);
+  const msg = t => { $('#dmsg').textContent = t; };
+  const close = () => { const e = $('#dbgPanel'); if (e) e.remove(); };
+  $('#dbgx').onclick = close;
+  p.onclick = e => { if (e.target === p) close(); };
+  $('#dvp').onchange = e => { S.vp = e.target.value; save(); msg('Recorded voice saved.'); };
+  $('#dvs').onchange = e => { S.voiceName = e.target.value; save(); pickVoice(); msg('Device voice saved.'); };
+  $('#dmodel').onchange = e => { S.orModel = e.target.value.trim() || DEFAULT_MODEL; save(); msg('Story model saved.'); };
+  $('#dsample').onclick = () => say(SAMPLE);
+  $('#dhome').onclick = () => { close(); hush(); home(); };
+  $('#dstory').onclick = () => { delete S.story[wk.id]; save(); msg('This week\'s story will start again from part 1.'); };
+  let sure = false;
+  $('#dclear').onclick = () => {
+    if (!sure) { sure = true; $('#dclear').textContent = 'Tap again to confirm'; return; }
+    S.stars = 0; S.log = []; S.story = {}; save(); sure = false; $('#dclear').textContent = 'Clear stars and answers'; msg('Cleared.');
+  };
+  $('#dreload').onclick = () => { msg('Clearing saved copies...'); freshReload(); };
+  $('#dfull').onclick = () => { close(); hush(); adult(); };
+}
+
 // ---------- the sleepover scene behind everything ----------
 function buildScene() {
   const el = document.createElement('div');
@@ -776,6 +843,7 @@ function buildScene() {
   document.body.insertBefore(el, document.body.firstChild);
 }
 buildScene();
+debugUI();
 
 // ---------- start ----------
 // When a new version takes over, reload onto it, but only from the home screen so nobody loses their place.
