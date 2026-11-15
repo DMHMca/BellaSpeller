@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.48'; // bump with every release
+const APP_VER = '2.49'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,7 +21,7 @@ function fresh() {
         { w: 'nice' }, { w: 'nicer' }, { w: 'shiny' }, { w: 'shining' }, { w: 'being' },
         { w: 'every', red: true, say: 'ev-er-y' }, { w: 'everyone', red: true, say: 'ev-er-y-one' }, { w: 'other', red: true }
       ],
-      score: null, ep: 'shiny-shoes'
+      score: null, ep: null
     }],
     cur: 'w1', log: [], stars: 0, story: {}
   };
@@ -205,8 +205,7 @@ function storyPreview(ep) {
   return `<h3>${esc(ep.title)}</h3>` + ep.parts.map((part, i) => `<p class="parthead"><b>Part ${i + 1}</b></p>` + part.map(b =>
     b.n ? `<p>${esc(fill(b.n))}</p>`
       : b.c ? `<p><i>She chooses: ${esc(fill(b.c.q))}</i></p><ul>${b.c.o.map(o => `<li>${esc(fill(o.l))}: ${esc(fill(o.n))}</li>`).join('')}</ul>`
-        : b.p ? `<p>${markWord(fill(b.p), b.word)}</p>`
-          : `<p>${esc(fill(b.w.lead))} “${esc(fill(b.w.before))}<b>[${esc(b.w.word)}]</b>${esc(fill(b.w.after))}”</p>`).join('')).join('');
+        : `<p>${markWord(fill(b.p || ''), b.word || '')}</p>`).join('')).join('');
 }
 
 // ---------- speech ----------
@@ -349,18 +348,13 @@ let sayTimer = null, keepUtt = null, sayTok = 0, audioEl = null, ttsFails = 0, l
 const SAMPLE = 'Hello! Let us spell some words. Every one is a star.';
 // Her own name is never sent to the voice service; those lines use the device voice.
 const sendable = t => !(S.meIn && S.name && t.toLowerCase().includes(S.name.toLowerCase()));
-function partTexts(beats, last, wk) {
+function partTexts(beats, wk) {
   const o = [];
-  if (wk && !last) { if (wk.rule) o.push(wk.rule); o.push(RED_WHY); }
+  if (wk) { if (wk.rule) o.push(wk.rule); o.push(RED_WHY); }
   beats.forEach(b => {
     if (b.n) o.push(fill(b.n));
     else if (b.p) { o.push(fill(b.p)); if (b.word) { o.push(pointLine(b.word)); o.push(b.word); } }
     else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
-    else if (b.w) {
-      const s = fill(b.w.before) + b.w.word + fill(b.w.after);
-      if (!last) o.push(cardSpeech(b.w.word, s));
-      o.push(fill(b.w.lead || '') + ' ' + s + ' ... ' + b.w.word);
-    }
   });
   return o;
 }
@@ -496,12 +490,11 @@ function choose(q, opts) {
     say(q + ' ' + opts.join('. Or. '));
   });
 }
-function learnCard(week, wobj, ctx) {
+function learnCard(week, wobj) {
   return new Promise(res => {
-    const sentence = ctx ? fill(ctx.before) + wobj.w + fill(ctx.after) : '';
     const why = wobj.red ? RED_WHY : (week.rule || '');
     const word = `<span class="grow" id="gw">${esc(wobj.w)}</span>`;
-    const body = ctx ? `<p class="story">${esc(fill(ctx.before))}${word}${esc(fill(ctx.after))}</p>` : `<p class="story solo">${word}</p>`;
+    const body = `<p class="story solo">${word}</p>`;
     const tags = (wobj.red ? `<span class="tag red">Tricky word</span>` : '') + (wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '');
     h(`<div class="screen cardscreen"><div class="page">${body}</div>${tags ? `<div class="row">${tags}</div>` : ''}
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${why ? `<button id="why" class="btn small">${ico('bulb')}<span>Why?</span></button>` : ''}<button id="next" class="btn big">I've said it ${ico('check')}</button></div>
@@ -513,7 +506,7 @@ function learnCard(week, wobj, ctx) {
       const g = $('#gw'); if (g) g.classList.remove('big');
       tm = setTimeout(() => { const g2 = $('#gw'); if (g2) g2.classList.add('big'); }, 1900);
     };
-    const spoken = cardSpeech(wobj.w, sentence);
+    const spoken = cardSpeech(wobj.w, '');
     on('#hear', () => { grow(); say(spoken); });
     on('#why', () => { $('#whybox').innerHTML = `<div class="page small"><p class="story">${esc(why)}</p></div>`; say(why); });
     on('#next', () => { clearTimeout(tm); hush(); res(); });
@@ -526,13 +519,12 @@ function learnCard(week, wobj, ctx) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button>` : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, ctx, noBack, remind) {
+function writeWord(word, noBack, remind) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
-    const sentence = ctx ? fill(ctx.before) + word + fill(ctx.after) : '';
-    const sayIt = () => say(ctx ? fill(ctx.lead || '') + ' ' + sentence + ' ... ' + word : word);
+    const sayIt = () => say(word);
     h(`<div class="screen">
-      ${ctx ? `<div class="page"><p class="lead-in">${esc(fill(ctx.lead || ''))}</p><p class="story">“${esc(fill(ctx.before))}<span class="blank"></span>${esc(fill(ctx.after))}”</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
+      <div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
@@ -710,36 +702,6 @@ function storyWord(week, wobj, rawText, starred) {
   });
 }
 
-// One word, start to finish. Returns true if right first time with no hints.
-async function doWord(week, wobj, mode, ctx, withCard, starred) {
-  const word = wobj.w;
-  let attempts = 0;
-  for (;;) { // Back from the correction or praise screens restarts the word
-    let a;
-    for (;;) {
-      if (withCard && (await learnCard(week, wobj, ctx)) === BACK) return BACK;
-      a = await writeWord(word, ctx);
-      if (a === BACK) { if (withCard) continue; return BACK; }
-      break;
-    }
-    const ok = a.typed === word;
-    // A repeat go after pressing Back is recorded as a redo, and kept out of her results.
-    S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode, typed: a.typed, hints: a.hints, ok, redo: attempts++ > 0 || undefined });
-    save();
-    if (!ok) {
-      if ((await showFix(word, a.typed)) === BACK) continue;
-      const b = await writeWord(word, ctx, false);
-      if (b === BACK) continue;
-      if (b.typed !== word && (await showFix(word, b.typed)) === BACK) continue;
-    }
-    const sk = mode + ':' + word;
-    if (!starred || !starred.has(sk)) { S.stars++; if (starred) starred.add(sk); }
-    save();
-    if ((await praise(word, ok && a.hints === 0)) === BACK) continue;
-    return ok && a.hints === 0 && attempts === 1;
-  }
-}
-
 // ---------- starting a story: shelf, cast, Bella's own idea ----------
 function waiting(msg) {
   h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><p class="subtle">This can take up to a minute.</p></div>`);
@@ -771,7 +733,7 @@ async function tidyIdea(idea) {
     return (typeof c === 'string' ? c : '').trim() || null;
   } catch (e) { return null; }
 }
-function shelf(ep, st, sample) {
+function shelf(ep, st) {
   return new Promise(res => {
     const hasStory = ep && st, done = hasStory && st.part >= ep.parts.length;
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
@@ -785,7 +747,7 @@ function shelf(ep, st, sample) {
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
-      <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}${sample ? card('sample', 'book', 'Sample story', 'The Silver Shoes Sleepover') : ''}</div>
+      <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>
       ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
       </div>`);
       on('#own', () => { hush(); res({ kind: 'own' }); });
@@ -793,7 +755,6 @@ function shelf(ep, st, sample) {
       on('#lentoggle', () => { const k = Object.keys(LENGTHS), n = k[(k.indexOf(S.len in LENGTHS ? S.len : 'standard') + 1) % k.length]; S.len = n; save(); $('#lenstate').textContent = LENGTHS[n].label.toLowerCase() + ' (under ' + LENGTHS[n].max + ' words)'; });
       on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
       all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
-      on('#sample', () => { hush(); res({ kind: 'sample' }); });
       on('#again', () => { hush(); res({ kind: 'again' }); });
       backBtn(res);
     };
@@ -1003,11 +964,10 @@ async function storyStart(wk) {
   for (;;) {
     if (step === 'shelf') {
       if (epOf(wk) && !S.story[wk.id]) { S.story[wk.id] = { part: 0 }; save(); } // a saved story not yet started still shows on the shelf
-      pick = await shelf(epOf(wk), S.story[wk.id], !!findEpisode(wk.words));
+      pick = await shelf(epOf(wk), S.story[wk.id]);
       if (pick === BACK) return false;
       if (pick.kind === 'cast') { await castScreen(); continue; }
       if (pick.kind === 'again') { const e0 = epOf(wk), s0 = S.story[wk.id]; if (e0 && s0 && s0.part >= e0.parts.length) { S.story[wk.id] = { part: 0 }; save(); } return true; }
-      if (pick.kind === 'sample') { wk.ep = findEpisode(wk.words); S.story[wk.id] = { part: 0 }; save(); return true; }
       if (pick.kind === 'type') { final = pick.type.idea; step = 'ready'; } else step = 'outline';
     } else if (step === 'outline') {
       idea = await outlineScreen();
@@ -1061,10 +1021,9 @@ async function storyDay() {
   let ep = epOf(wk), st = S.story[wk.id];
   if (!(await storyStart(wk))) return home();
   ep = epOf(wk); st = S.story[wk.id];
-  const last = ep.parts.length > 1 && st.part === ep.parts.length - 1;
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   const beats = ep.parts[st.part], starred = new Set();
-  await prep(partTexts(beats, last, wk).concat(COMMON), 'Getting the story ready');
+  await prep(partTexts(beats, wk).concat(COMMON), 'Getting the story ready');
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   let i = 0;
   while (i < beats.length) {
@@ -1078,7 +1037,7 @@ async function storyDay() {
         if (k === BACK) { r = BACK; break; }
         if ((await narrate(fill(b.c.o[k].n))) !== BACK) break;
       }
-    } else if (b.w) { const wobj = wk.words.find(x => x.w === b.w.word) || { w: b.w.word }; r = await doWord(wk, wobj, 'story', b.w, !last, starred); }
+    }
     if (r === BACK) { if (i === 0) return home(); i--; } else i++;
   }
   st.part++; save();
@@ -1119,14 +1078,14 @@ async function reviseWord(week, it, sentence, starred) {
   let attempts = 0;
   for (;;) { // Back from the correction or praise screens restarts the word
     if (it.look && (await learnCard(week, it.x, null)) === BACK) return BACK;
-    const a = await writeWord(word, null, false, it.look ? null : remind);
+    const a = await writeWord(word, false, it.look ? null : remind);
     if (a === BACK) { if (it.look) continue; return BACK; }
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
     if (!ok) {
       if ((await showFix(word, a.typed)) === BACK) continue;
-      const b = await writeWord(word, null, false, null);
+      const b = await writeWord(word, false, null);
       if (b === BACK) continue;
       if (b.typed !== word && (await showFix(word, b.typed)) === BACK) continue;
     }
@@ -1230,10 +1189,6 @@ function parseWords(text) {
     w.split(/\s+/).forEach(x => { if (x && !out.find(o => o.w === x)) out.push({ w: x, say: sayRaw && sayRaw.trim() ? sayRaw.trim() : undefined }); });
   });
   return out;
-}
-function findEpisode(words) {
-  const key = words.map(x => x.w).sort().join(',');
-  return Object.keys(window.EPISODES).find(id => window.EPISODES[id].words.slice().sort().join(',') === key) || null;
 }
 function owned() {
   const days = {};
@@ -1392,7 +1347,7 @@ function adult() {
     nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
-    if (changed) { wk.ep = findEpisode(nw); delete S.story[wk.id]; }
+    if (changed) { wk.ep = null; delete S.story[wk.id]; }
     save(); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? ' Write a new story on the Story tab.' : ''); adult();
   });
   on('#read', () => {
@@ -1401,11 +1356,11 @@ function adult() {
     const redFrom = ws.length >= 6 ? ws.length - 3 : ws.length;
     $('#preview').innerHTML = `<p>Nearly done. Tick any red words from the school list, then save.</p>` +
       ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${i >= redFrom ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
-      `<p class="note">${findEpisode(ws) ? 'A story is ready for these words.' : 'No story for these words yet. Revise will work.'}</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
+      `<p class="note">You can write a story for these words on the Story tab. Revise works without one.</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
     on('#saveWeek', () => {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
-      S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: findEpisode(ws) });
+      S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: null });
       S.cur = id; save(); adultTab = 'story'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '. Next: press "Write with all three" below to have stories written for these words.'; adult();
     });
   });
