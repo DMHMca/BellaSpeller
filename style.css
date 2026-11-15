@@ -173,3 +173,5 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .page .story.solo { text-align:center; }
 @media (prefers-reduced-motion:reduce) { .grow { transition:none; } }
 .cardscreen { padding-top:8vh; }
+
+.cmp { border:2px solid var(--paper-edge); border-radius:14px; padding:12px 14px; margin-top:10px; font-size:16px; }

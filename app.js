@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.7, 15 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.8, 15 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -30,8 +30,8 @@ const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.lengt
 const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 
 // ---------- stories written by AI (grown-ups page only) ----------
-const DEFAULT_MODEL = 'openai/gpt-6.1-terra';
-const MODEL_SUGGESTIONS = ['openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5', 'z-ai/glm-5.3'];
+const DEFAULT_MODEL = 'z-ai/glm-5.3';
+const MODEL_SUGGESTIONS = ['z-ai/glm-5.3', 'z-ai/glm-5.3-flashx', 'openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'];
 const STORY_RULES = `You write a short three-part story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens, and she writes the week's spelling words herself, inside things the characters write (a note, an invitation, a diary line, a sign, a list).
 
 Style: real girls with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
@@ -77,28 +77,32 @@ function checkEpisode(ep, words) {
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
   return bad;
 }
-async function askAI(wk, problems) {
+const aiBase = () => (S.aiBase || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+const aiKey = () => S.aiKey || S.orKey;
+async function askAI(wk, problems, model) {
   const words = wk.words.map(x => x.w);
   let ask = 'This week\'s spelling words: ' + words.join(', ') + '.';
   if (problems && problems.length) ask += '\n\nYour last draft had these problems. Write a new story that avoids them:\n- ' + problems.join('\n- ');
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + S.orKey, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' },
-    body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 8000, messages: [{ role: 'system', content: STORY_RULES }, { role: 'user', content: ask }] })
+  const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+  if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+  const t0 = Date.now();
+  const r = await fetch(aiBase() + '/chat/completions', {
+    method: 'POST', headers,
+    body: JSON.stringify({ model: model || S.orModel || DEFAULT_MODEL, max_tokens: 8000, messages: [{ role: 'system', content: STORY_RULES }, { role: 'user', content: ask }] })
   });
   if (!r.ok) throw new Error('The AI service answered ' + r.status + '. ' + (await r.text()).slice(0, 200));
   const j = await r.json();
   const c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
-  const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a < 0 || b <= a) throw new Error('The reply was not a story.');
-  return JSON.parse(t.slice(a, b + 1));
+  const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}');
+  if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a story.');
+  return { ep: JSON.parse(t.slice(i0, i1 + 1)), usage: j.usage || null, ms: Date.now() - t0 };
 }
 async function draftStory(wk) {
   const words = wk.words.map(x => x.w);
   let problems = [];
   for (let i = 0; i < 2; i++) {
-    const ep = await askAI(wk, problems);
+    const ep = (await askAI(wk, problems)).ep;
     problems = checkEpisode(ep, words);
     if (!problems.length) { ep.title = String(ep.title || 'This week\'s story'); ep.words = words; return ep; }
   }
@@ -619,8 +623,12 @@ function adult() {
 
     <h2>Story for this week</h2>
     <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Quick day works without one.'}</p>
-    ${S.orKey ? `<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
+    ${aiKey() ? `<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
+
+    ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
+    <input id="cm1" type="text" value="z-ai/glm-5.3"><input id="cm2" type="text" value="z-ai/glm-5.3-flashx" style="margin-top:8px"><input id="cm3" type="text" value="openai/gpt-6.1-terra" style="margin-top:8px">
+    <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
 
     <h2>Add a new week</h2>
     <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
@@ -645,9 +653,11 @@ function adult() {
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
     <label>AI model for writing stories</label><input id="orModel" type="text" list="modelList" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}"><datalist id="modelList">${MODEL_SUGGESTIONS.map(m => `<option value="${m}">`).join('')}</datalist>
+    <label>Story AI address (leave blank for OpenRouter; any OpenAI-style service works, for example Z.ai)</label><input id="aiBase" type="text" autocomplete="off" placeholder="https://openrouter.ai/api/v1" value="${esc(S.aiBase || '')}">
+    <label>Story AI key (leave blank to use the OpenRouter key)</label><input id="aiKey" type="password" autocomplete="off" value="${esc(S.aiKey || '')}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
     <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div>`);
-  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; save(); adult(); });
+  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); save(); adult(); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
     btn.disabled = true; out.innerHTML = '<p class="note">Writing the story. This can take up to a minute.</p>';
@@ -660,6 +670,23 @@ function adult() {
       });
     } catch (e) { out.innerHTML = `<p class="note">${esc(e.message || 'Something went wrong.')}</p>`; }
     btn.disabled = false; btn.textContent = 'Try another';
+  });
+  on('#compare', async () => {
+    const out = $('#cmpOut'), btn = $('#compare');
+    const models = ['cm1', 'cm2', 'cm3'].map(i => $('#' + i).value.trim()).filter(Boolean);
+    const words = wk.words.map(x => x.w);
+    btn.disabled = true; out.innerHTML = '<p class="note">Writing with ' + models.length + ' models. This can take up to a minute.</p>';
+    const res = await Promise.all(models.map(async m => {
+      try { const r = await askAI(wk, null, m); r.problems = checkEpisode(r.ep, words); r.model = m; return r; }
+      catch (e) { return { model: m, error: e.message }; }
+    }));
+    out.innerHTML = res.map((r, i) => `<div class="cmp"><b>${esc(r.model)}</b>${r.ms ? ' · ' + Math.round(r.ms / 1000) + ' seconds' : ''}${r.usage ? ' · ' + (r.usage.prompt_tokens || '?') + ' in, ' + (r.usage.completion_tokens || '?') + ' out' : ''}<br>${r.error ? esc(r.error) : (r.problems.length ? 'Does not pass: ' + esc(r.problems.slice(0, 3).join(' ')) : 'Passes the checks')}${r.ep ? `<div><button class="btn small" data-v="${i}">Read it</button>${r.problems.length ? '' : ` <button class="btn small" data-u="${i}">Use this story</button>`}</div><div id="cv${i}"></div>` : ''}</div>`).join('');
+    res.forEach((r, i) => {
+      const v = out.querySelector(`[data-v="${i}"]`); if (v) v.onclick = () => { $('#cv' + i).innerHTML = storyPreview(r.ep); };
+      const u = out.querySelector(`[data-u="${i}"]`);
+      if (u) u.onclick = () => { const ep = r.ep; ep.title = String(ep.title || "This week's story"); ep.words = words; const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = ep; wk.ep = id; delete S.story[wk.id]; save(); adult(); };
+    });
+    btn.disabled = false;
   });
   $('#psel').onchange = e => { S.vp = e.target.value; save(); };
   on('#psample', async () => {
@@ -690,7 +717,7 @@ function adult() {
   });
   on('#backup', () => {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.assign({}, S, { orKey: undefined }), null, 1)], { type: 'application/json' }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.assign({}, S, { orKey: undefined, aiKey: undefined }), null, 1)], { type: 'application/json' }));
     a.download = 'bellaspeller-backup-' + today() + '.json'; a.click();
   });
   on('#read', () => {
