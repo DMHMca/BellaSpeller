@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.34'; // bump with every release
+const APP_VER = '2.35'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,8 +56,8 @@ const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.lengt
 const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 
 // ---------- stories written by AI (grown-ups page only) ----------
-const DEFAULT_MODEL = 'openai/gpt-6.1-terra';
-const MODEL_SUGGESTIONS = ['openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'];
+const DEFAULT_MODEL = 'openai/gpt-6.1-sol';
+const MODEL_SUGGESTIONS = ['openai/gpt-6.1-sol', 'openai/gpt-6.1-terra', 'anthropic/claude-sonnet-5.5'];
 const STORY_RULES = `You write a short story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens. The story is told in parts, and each of the week's spelling words is met inside the story's own text, at the end of one paragraph, where the app will point it out to her.
 
 The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
@@ -76,11 +76,13 @@ How to work:
 3. Place each word where it belongs. For each spelling word, choose a paragraph where the word arises naturally from what is happening, and put it in that paragraph's LAST sentence. The last sentence must follow from the sentences before it.
 4. Do not invent a reason for someone to write the word. No notes, signs, lists or diary lines unless the plot truly calls for one.
 5. Do not bend the story to fit a word. If a word will not fit a paragraph, move it to a different paragraph.
-6. Keep each paragraph short: two to four sentences, so the page is not crowded.
+6. Keep each paragraph short: two or three sentences, never more than three, so the page is not crowded.
+7. Use each spelling word in an ordinary, natural way, in a complete sentence that a child would really say or read. Never use a word as a tag on the end of a sentence ("..., really.") or in a half-finished phrase ("she forgot when"), and never turn a sentence back to front to reach the word ("off she went" is fine, "off Ellie went" is not). If a word will not sit naturally in a paragraph, move it to another paragraph.
+8. Keep the whole story short: about 300 to 400 words in all, so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes.
 
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
-{"p": "a paragraph of two to four sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
+{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
 {{CHOICE_FORMAT}}
 
 Rules:
@@ -126,6 +128,7 @@ function checkEpisode(ep, words) {
       else if (b && typeof b.p === 'string' && typeof b.word === 'string') {
         b.word = b.word.toLowerCase(); here++; used.push(b.word); texts.push(b.p);
         if (!words.includes(b.word)) bad.push('"' + b.word + '" is not one of the words.');
+        else if (new RegExp(',\\s*' + b.word + '[.!?]+["”’)]*$', 'i').test(lastSentence(b.p))) bad.push('The word "' + b.word + '" is only tacked on to the end of its sentence. Use it naturally inside a sentence.');
         else if (wholeWord(b.word, lastSentence(b.p)) !== 1) bad.push('The last sentence of the paragraph for "' + b.word + '" should contain "' + b.word + '" exactly once as a whole word.');
       } else bad.push('Part ' + (pi + 1) + ' has a beat the app cannot read.');
     });
@@ -1046,7 +1049,7 @@ function adult() {
     <div id="draftOut"></div>
 
     ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
-    <input id="cm1" type="text" value="openai/gpt-6.1-terra"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="anthropic/claude-sonnet-5.5" style="margin-top:8px">
+    <input id="cm1" type="text" value="openai/gpt-6.1-sol"><input id="cm2" type="text" value="openai/gpt-6.1-terra" style="margin-top:8px"><input id="cm3" type="text" value="anthropic/claude-sonnet-5.5" style="margin-top:8px">
     <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
 
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
