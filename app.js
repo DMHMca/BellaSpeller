@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.23'; // bump with every release
+const APP_VER = '2.24'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1086,7 +1086,7 @@ function adult() {
     const ws = parseWords($('#nw').value);
     if (!ws.length) { $('#preview').innerHTML = '<p class="note">No words found.</p>'; return; }
     const redFrom = ws.length >= 6 ? ws.length - 3 : ws.length;
-    $('#preview').innerHTML = `<p>Check each word. Tick the red words, the ones with no rule.</p>` +
+    $('#preview').innerHTML = `<p>Check each word. Tick the red words on the school list.</p>` +
       ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${i >= redFrom ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
       `<p class="note">${findEpisode(ws) ? 'A story is ready for these words.' : 'No story for these words yet. Revise will work.'}</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
     on('#saveWeek', () => {
