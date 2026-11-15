@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.39'; // bump with every release
+const APP_VER = '2.40'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -79,7 +79,7 @@ How to work:
 5. Do not bend the story to fit a word. If a word will not fit a paragraph, move it to a different paragraph.
 6. Keep each paragraph short: two or three sentences, never more than three, so the page is not crowded.
 7. Use each spelling word in an ordinary, natural way, in a complete sentence that a child would really say or read. Never use a word as a tag on the end of a sentence ("..., really.") or in a half-finished phrase ("she forgot when"), and never turn a sentence back to front to reach the word ("off she went" is fine, "off Ellie went" is not). If a word will not sit naturally in a paragraph, move it to another paragraph.
-8. Keep the whole story short: about 300 to 400 words in all, so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes.
+8. {{LENGTH_RULE}}
 
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
@@ -97,7 +97,9 @@ const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{
 const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
 const CHOICE_RULE = n => '2. The whole story has exactly ' + n + (n === 1 ? ' choice' : ' choices') + ' in total (not one per part), spread out through the story. Put each choice after at least two paragraphs. Both options must lead sensibly into the rest of the story.';
 const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it straight through, and never use a c beat.';
-const storyRules = () => STORY_RULES.replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
+const LENGTHS = { short: { label: 'Short', max: 350, aim: 300 }, standard: { label: 'Standard', max: 500, aim: 400 }, long: { label: 'Long', max: 800, aim: 650 } };
+const curLen = () => LENGTHS[S.len] || LENGTHS.standard;
+const storyRules = () => STORY_RULES.replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Count them: a story over ' + curLen().max + ' words will be rejected.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
 const WORDS_PER_PART = 6;
 function partPlan(n) { // how many words in each part: about six to a part, shared evenly
   const parts = Math.max(1, Math.ceil(n / WORDS_PER_PART)), base = Math.floor(n / parts), extra = n % parts;
@@ -142,6 +144,8 @@ function checkEpisode(ep, words) {
     if (Math.abs(here - plan[pi]) > 1) bad.push('Part ' + (pi + 1) + ' should have about ' + plan[pi] + ' word paragraphs, not ' + here + '.');
   });
   if (totalChoices !== nChoices()) bad.push('The story should have ' + (nChoices() ? 'exactly ' + nChoices() + (nChoices() === 1 ? ' choice' : ' choices') : 'no choices') + ' in all, not ' + totalChoices + '.');
+  const total = texts.slice(1).join(' ').split(/\s+/).filter(Boolean).length;
+  if (total > curLen().max) bad.push('The story is ' + total + ' words, over the limit of ' + curLen().max + '. Shorten it.');
   words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
   const usHit = texts.map(t => [...String(t).matchAll(US)].map(m => m[0].toLowerCase()).filter(w => !words.includes(w))[0]).find(Boolean);
@@ -648,6 +652,7 @@ function shelf(ep, st, sample) {
       h(`<div class="screen"><h1>Choose your story</h1>
       <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, 4).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
       <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${nChoices() || 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
+      <button id="lentoggle" class="caststrip"><span>Story length: <b id="lenstate">${curLen().label.toLowerCase()} (under ${curLen().max} words)</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
@@ -656,6 +661,7 @@ function shelf(ep, st, sample) {
       </div>`);
       on('#own', () => { hush(); res({ kind: 'own' }); });
       on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
+      on('#lentoggle', () => { const k = Object.keys(LENGTHS), n = k[(k.indexOf(S.len in LENGTHS ? S.len : 'standard') + 1) % k.length]; S.len = n; save(); $('#lenstate').textContent = LENGTHS[n].label.toLowerCase() + ' (under ' + LENGTHS[n].max + ' words)'; });
       on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
       all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
       on('#sample', () => { hush(); res({ kind: 'sample' }); });
