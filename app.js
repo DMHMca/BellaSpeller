@@ -3,7 +3,7 @@
 
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
-const APP_VER = '2.11'; // bump with every release
+const APP_VER = '2.12'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -527,13 +527,14 @@ async function tidyIdea(idea) {
 }
 function shelf(ep, st, sample) {
   return new Promise(res => {
-    const done = ep && st && st.part >= ep.parts.length;
+    const hasStory = ep && st, done = hasStory && st.part >= ep.parts.length;
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
     h(`<div class="screen"><h1>Choose your story</h1>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
+      ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       <div class="shelf">${STORY_TYPES.map((t, i) => card('t' + i, t.icon, t.title, t.blurb)).join('')}${sample ? card('sample', 'book', 'Sample story', 'The Silver Shoes Sleepover') : ''}</div>
-      ${done ? card('again', 'book', 'Play again', ep.title, 'wide') : ''}</div>`);
+      </div>`);
     on('#own', () => { hush(); res({ kind: 'own' }); });
     STORY_TYPES.forEach((t, i) => on('#t' + i, () => { hush(); res({ kind: 'type', type: t }); }));
     on('#sample', () => { hush(); res({ kind: 'sample' }); });
@@ -645,7 +646,7 @@ async function storyStart(wk) {
     if (step === 'shelf') {
       pick = await shelf(epOf(wk), S.story[wk.id], !!findEpisode(wk.words));
       if (pick === BACK) return false;
-      if (pick.kind === 'again') { S.story[wk.id] = { part: 0 }; save(); return true; }
+      if (pick.kind === 'again') { const e0 = epOf(wk), s0 = S.story[wk.id]; if (e0 && s0 && s0.part >= e0.parts.length) { S.story[wk.id] = { part: 0 }; save(); } return true; }
       step = 'cast';
     } else if (step === 'cast') {
       if ((await castScreen()) === BACK) { step = 'shelf'; continue; }
@@ -696,7 +697,8 @@ function clubSetup() {
 async function storyDay() {
   const wk = curWeek();
   let ep = epOf(wk), st = S.story[wk.id];
-  if (!ep || !st || st.part >= ep.parts.length) { if (!(await storyStart(wk))) return home(); ep = epOf(wk); st = S.story[wk.id]; }
+  if (!(await storyStart(wk))) return home();
+  ep = epOf(wk); st = S.story[wk.id];
   const last = ep.parts.length > 1 && st.part === ep.parts.length - 1;
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   const beats = ep.parts[st.part], starred = new Set();
