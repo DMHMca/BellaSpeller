@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.50'; // bump with every release
+const APP_VER = '2.51'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -625,7 +625,6 @@ function storyWord(week, wobj, rawText, starred) {
     const stop = () => { clearTimeout(tm); hush(); };
     const toPoint = () => {
       stop(); state = 'point'; typed = ''; hints = 0; render();
-      tm = setTimeout(() => { const e = $('#pwd'); if (e) e.classList.add('big'); }, 450);
       say(pointLine(word));
     };
     const toGap = () => { stop(); state = 'gap'; typed = ''; hints = 0; render(); };
