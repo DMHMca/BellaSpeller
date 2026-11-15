@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.15'; // bump with every release
+const APP_VER = '2.16'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -159,11 +159,11 @@ const PRESETS = [
 ];
 const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind'];
 const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus'];
-const TRAITS = ['', 'funny', 'shy', 'bossy', 'always late', 'worries a lot', 'brave', 'clumsy'];
+const TRAITS = ['', 'funny', 'shy', 'bossy', 'always late', 'worries a lot', 'brave', 'clumsy', 'notices everything', 'loves gadgets', 'asks lots of questions', 'loves experiments'];
 const STORY_TYPES = [
-  { title: 'The detective agency', blurb: 'Clues, suspects and a case to solve', icon: 'search', idea: 'The friends set up their own detective agency and take on their first case: clues, a notebook, a few suspects with reasons, and a fair puzzle that a careful reader could solve.' },
-  { title: 'Science investigators', blurb: 'Test an idea and find out why', icon: 'flask', idea: 'The friends investigate a science question with safe experiments at home, with an adult nearby: they make a guess, test it, measure what happens, and work out why, including when it goes wrong.' },
-  { title: 'Build it and test it', blurb: 'An engineering challenge', icon: 'tool', idea: 'The friends take on an engineering challenge, such as building something clever, testing it, watching it fail in a funny way, and improving it until it works.' },
+  { title: 'The detective agency', blurb: 'Clues, suspects and a case to solve', icon: 'search', idea: 'The friends set up their own detective agency and take on their first case: clues, a notebook, a few suspects with reasons, and a fair puzzle that a careful reader could solve. In the spirit of a children\'s detective TV series: a small team where each member is good at something different, a case file, and a clever reveal at the end.' },
+  { title: 'Science investigators', blurb: 'Test an idea and find out why', icon: 'flask', idea: 'The friends investigate a science question with safe experiments at home, with an adult nearby: they make a guess, test it, measure what happens, and work out why, including when it goes wrong. In the spirit of a popular science-and-engineering video channel: an ambitious idea, funny failures, a big payoff, and a clear explanation of why it worked.' },
+  { title: 'Build it and test it', blurb: 'An engineering challenge', icon: 'tool', idea: 'The friends take on an engineering challenge, such as building something clever, testing it, watching it fail in a funny way, and improving it until it works. In the spirit of a popular engineering video channel: a clever build, funny failures, a big payoff, and a clear explanation of why it worked.' },
   { title: 'Sleepover surprise', blurb: 'Something happens after lights out', icon: 'moon', idea: 'A sleepover where something unexpected and funny happens after lights out.' },
   { title: 'Friends fall out', blurb: 'An argument that must be fixed', icon: 'heart', idea: 'Two close friends fall out over a misunderstanding and have to work out how to make up.' },
   { title: 'The new one', blurb: 'Someone new joins the group', icon: 'users', idea: 'Someone new joins the group, and the others have to decide how to welcome them. It does not go smoothly at first.' },
