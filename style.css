@@ -245,3 +245,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .adult .cmp { line-height: 1.5; }
 .adult .cmp > div { margin-top: 10px; }
 .adult ul { margin: 0 0 14px; padding-left: 22px; }
+
+/* shelf: already-told section */
+.shelfhead { margin: 28px 0 4px; font-size: 22px; opacity: .9; }
+.shelf.told .shelfcard { opacity: .72; }

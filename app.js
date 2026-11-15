@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.38'; // bump with every release
+const APP_VER = '2.39'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -118,6 +118,7 @@ function addSentences(ep) {
   ep.parts.forEach(part => part.forEach(b => { if (b.p && b.word) ep.sentences[b.word] = lastSentence(b.p); }));
 }
 
+const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc|food|foods|eat|eats|eating|ate|eaten|meals?|mealtimes?|breakfast|lunch|lunchtime|dinner|supper|snacks?|feasts?|hungry|starving|drinks?|drinking|juice|squash|milk|tea|coffee|soup|eggs?|fish|chicken|vegetables?|salad|yoghurt|fruits?|apples?|bananas?|bread|sandwiches|sandwich|pasta|rice|potato|potatoes|picnic|bake|baking|baked|cheese|toast|flapjacks?|biscuits?|cakes?|cupcakes?|crisps|sweets|chocolate|ice cream|marshmallows?|fizzy|white bread|midnight feast)\b/ig;
 function checkEpisode(ep, words) {
   const bad = [];
   const plan = partPlan(words.length);
@@ -143,7 +144,6 @@ function checkEpisode(ep, words) {
   if (totalChoices !== nChoices()) bad.push('The story should have ' + (nChoices() ? 'exactly ' + nChoices() + (nChoices() === 1 ? ' choice' : ' choices') : 'no choices') + ' in all, not ' + totalChoices + '.');
   words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
-  const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc|food|foods|eat|eats|eating|ate|eaten|meals?|mealtimes?|breakfast|lunch|lunchtime|dinner|supper|snacks?|feasts?|hungry|starving|drinks?|drinking|juice|squash|milk|tea|coffee|soup|eggs?|fish|chicken|vegetables?|salad|yoghurt|fruits?|apples?|bananas?|bread|sandwiches|sandwich|pasta|rice|potato|potatoes|picnic|bake|baking|baked|cheese|toast|flapjacks?|biscuits?|cakes?|cupcakes?|crisps|sweets|chocolate|ice cream|marshmallows?|fizzy|white bread|midnight feast)\b/ig;
   const usHit = texts.map(t => [...String(t).matchAll(US)].map(m => m[0].toLowerCase()).filter(w => !words.includes(w))[0]).find(Boolean);
   if (usHit) bad.push('It mentions food or uses American wording (\"' + usHit + '\"). The family rules say no food in the stories and British English, as the instructions say.');
   return bad;
@@ -243,6 +243,33 @@ const STORY_TYPES = [
   { title: 'Birthday problem', blurb: 'The party plans go wrong', icon: 'gift', idea: 'Planning a birthday party goes wrong in several funny ways.' },
   { title: 'The secret club', blurb: 'Rules, secrets and a problem', icon: 'star', idea: 'The friends start a secret club with its own rules, and then a problem tests it.' }
 ];
+// ---------- story ideas (the shelf) ----------
+// Built-in ideas first; when few unused ones are left the AI writes a fresh batch. Used ideas move to "Already told".
+const SHELF_SIZE = 6;
+const allIdeas = () => STORY_TYPES.map((t, i) => Object.assign({ id: 'b' + i }, t)).concat(S.ideas || []);
+const isUsed = t => !!(S.used && S.used[t.id]);
+function markUsed(t) { if (!t || !t.id) return; S.used = S.used || {}; S.used[t.id] = Date.now(); save(); }
+let makingIdeas = false;
+async function makeIdeas() {
+  if (makingIdeas || !aiKey()) return false;
+  makingIdeas = true;
+  try {
+    const have = allIdeas().map(t => t.title).join('; ');
+    const sys = 'You suggest story ideas for a nine-year-old girl in England who writes stories with her friends. She loves the Sleepovers books by Jacqueline Wilson, detective and investigation stories, and science and engineering builds. Reply with JSON only: {"ideas": [{"title": "two to four words", "blurb": "under eight words", "idea": "one or two sentences describing the story idea"}]}. Give exactly six ideas, different from each other and from the ones already used. Modern, sensible English family life, British English. Real children with real problems and humour; fantasy is welcome. Nothing frightening or unkind. Never include food, eating, meals or drinks. ' + (familyRules() ? 'Family rules: ' + familyRules() : '');
+    const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+    if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+    const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 2000, messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Ideas already on the shelf, so do not repeat them: ' + have }] }) });
+    if (!r.ok) return false;
+    const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
+    const o = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1));
+    const known = new Set(allIdeas().map(x => x.title.toLowerCase()));
+    const fresh = (o.ideas || []).filter(x => x && typeof x.title === 'string' && typeof x.blurb === 'string' && typeof x.idea === 'string' && x.title.length <= 40 && x.blurb.length <= 70 && !known.has(x.title.toLowerCase()) && ![x.title, x.blurb, x.idea].some(z => [...z.matchAll(US)].length)).slice(0, 6);
+    if (!fresh.length) return false;
+    S.ideas = (S.ideas || []).concat(fresh.map((x, i) => ({ id: 'g' + Date.now() + i, title: x.title, blurb: x.blurb, icon: ['star', 'search', 'flag', 'moon', 'heart', 'gift'][i % 6], idea: x.idea })));
+    save(); return true;
+  } catch (e) { return false; } finally { makingIdeas = false; }
+}
 const WHERE = ['A sleepover', 'At school', 'On holiday', 'At a party', 'In the park', 'At home'];
 const WRONG = ['A secret gets out', 'Something goes missing', 'Two friends argue', 'Someone gets left out', 'A big mistake', 'A silly misunderstanding'];
 const ENDS = ['Friends again', 'A funny disaster', 'A big surprise', 'Everyone learns something'];
@@ -615,22 +642,30 @@ function shelf(ep, st, sample) {
   return new Promise(res => {
     const hasStory = ep && st, done = hasStory && st.part >= ep.parts.length;
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
-    h(`<div class="screen"><h1>Choose your story</h1>
+    const render = () => {
+      const all = allIdeas(), unused = all.filter(t => !isUsed(t)).slice(0, SHELF_SIZE);
+      const told = all.filter(isUsed).sort((x, y) => S.used[y.id] - S.used[x.id]);
+      h(`<div class="screen"><h1>Choose your story</h1>
       <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, 4).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
       <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${nChoices() || 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
-      <div class="shelf">${STORY_TYPES.map((t, i) => card('t' + i, t.icon, t.title, t.blurb)).join('')}${sample ? card('sample', 'book', 'Sample story', 'The Silver Shoes Sleepover') : ''}</div>
+      <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}${sample ? card('sample', 'book', 'Sample story', 'The Silver Shoes Sleepover') : ''}</div>
+      ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
       </div>`);
-    on('#own', () => { hush(); res({ kind: 'own' }); });
-    on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
-    on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
-    STORY_TYPES.forEach((t, i) => on('#t' + i, () => { hush(); res({ kind: 'type', type: t }); }));
-    on('#sample', () => { hush(); res({ kind: 'sample' }); });
-    on('#again', () => { hush(); res({ kind: 'again' }); });
-    backBtn(res);
+      on('#own', () => { hush(); res({ kind: 'own' }); });
+      on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
+      on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
+      all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
+      on('#sample', () => { hush(); res({ kind: 'sample' }); });
+      on('#again', () => { hush(); res({ kind: 'again' }); });
+      backBtn(res);
+    };
+    render();
     say(SCREEN_PROMPTS[0]);
+    // running low on fresh ideas: ask the AI for a new batch, then refresh the shelf if she is still on it
+    if (allIdeas().filter(t => !isUsed(t)).length < SHELF_SIZE) makeIdeas().then(ok => { if (ok && document.getElementById('own') && !document.getElementById('typeOverlay')) render(); });
   });
 }
 function typeText({ title, initial = '', max = 400, names = false }) {
@@ -857,7 +892,7 @@ async function storyStart(wk) {
     } else {
       const made = await writeNewStory(wk, final);
       if (made === BACK) { step = pick.kind === 'own' ? 'outline' : 'shelf'; continue; }
-      const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = made; wk.ep = id; S.story[wk.id] = { part: 0 }; save();
+      const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = made; wk.ep = id; S.story[wk.id] = { part: 0 }; if (pick.kind === 'type') markUsed(pick.type); save();
       return true;
     }
   }
