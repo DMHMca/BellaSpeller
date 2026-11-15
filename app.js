@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.6, 15 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.7, 15 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -30,7 +30,8 @@ const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.lengt
 const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 
 // ---------- stories written by AI (grown-ups page only) ----------
-const DEFAULT_MODEL = 'anthropic/claude-sonnet-5.5';
+const DEFAULT_MODEL = 'openai/gpt-6.1-terra';
+const MODEL_SUGGESTIONS = ['openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5', 'z-ai/glm-5.3'];
 const STORY_RULES = `You write a short three-part story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens, and she writes the week's spelling words herself, inside things the characters write (a note, an invitation, a diary line, a sign, a list).
 
 Style: real girls with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
@@ -83,7 +84,7 @@ async function askAI(wk, problems) {
   const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + S.orKey, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' },
-    body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 4000, messages: [{ role: 'system', content: STORY_RULES }, { role: 'user', content: ask }] })
+    body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 8000, messages: [{ role: 'system', content: STORY_RULES }, { role: 'user', content: ask }] })
   });
   if (!r.ok) throw new Error('The AI service answered ' + r.status + '. ' + (await r.text()).slice(0, 200));
   const j = await r.json();
@@ -643,7 +644,7 @@ function adult() {
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
-    <label>AI model</label><input id="orModel" type="text" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}">
+    <label>AI model for writing stories</label><input id="orModel" type="text" list="modelList" autocomplete="off" value="${esc(S.orModel || DEFAULT_MODEL)}"><datalist id="modelList">${MODEL_SUGGESTIONS.map(m => `<option value="${m}">`).join('')}</datalist>
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
     <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div>`);
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; save(); adult(); });
