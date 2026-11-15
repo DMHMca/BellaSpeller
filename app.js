@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.43'; // bump with every release
+const APP_VER = '2.44'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,9 +56,9 @@ const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.lengt
 const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 
 // ---------- stories written by AI (grown-ups page only) ----------
-const DEFAULT_MODEL = 'openai/gpt-6.1-sol';
+const DEFAULT_MODEL = 'anthropic/claude-sonnet-5.5';
 const modelSelect = id => { const cur = S.orModel || DEFAULT_MODEL, list = MODEL_SUGGESTIONS.includes(cur) ? MODEL_SUGGESTIONS : MODEL_SUGGESTIONS.concat([cur]); return `<select id="${id}">${list.map(m => `<option value="${esc(m)}" ${m === cur ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>`; };
-const MODEL_SUGGESTIONS = ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5', 'google/gemini-4-hydrogen', 'google/gemini-3.8-flash', 'mistralai/mistral-large-4-0', 'openai/gpt-6.1-terra'];
+const MODEL_SUGGESTIONS = ['anthropic/claude-sonnet-5.5', 'openai/gpt-6.1-sol', 'google/gemini-4-hydrogen', 'google/gemini-3.8-flash', 'mistralai/mistral-large-4-0', 'openai/gpt-6.1-terra'];
 const STORY_RULES = `You write a short story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens. The story is told in parts, and each of the week's spelling words is met inside the story's own text, at the end of one paragraph, where the app will point it out to her.
 
 The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
@@ -197,7 +197,7 @@ function markWord(text, word) {
   return esc(text.slice(0, i)) + esc(ls).replace(re, (m, a, w) => esc(a) + '<b>[' + w + ']</b>') + esc(text.slice(i + ls.length));
 }
 function storyPreview(ep) {
-  return `<h3>${esc(ep.title)}</h3>` + ep.parts.map((part, i) => `<p><b>Part ${i + 1}</b></p>` + part.map(b =>
+  return `<h3>${esc(ep.title)}</h3>` + ep.parts.map((part, i) => `<p class="parthead"><b>Part ${i + 1}</b></p>` + part.map(b =>
     b.n ? `<p>${esc(fill(b.n))}</p>`
       : b.c ? `<p><i>She chooses: ${esc(fill(b.c.q))}</i></p><ul>${b.c.o.map(o => `<li>${esc(fill(o.l))}: ${esc(fill(o.n))}</li>`).join('')}</ul>`
         : b.p ? `<p>${markWord(fill(b.p), b.word)}</p>`

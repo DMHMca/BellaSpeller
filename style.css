@@ -241,7 +241,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 /* readable spacing for stories and text on the grown-ups page */
 .adult p { margin: 0 0 14px; line-height: 1.5; }
 .adult h3 { margin: 18px 0 10px; }
-.adult p > b:only-child { display: block; margin-top: 18px; }
+.adult .parthead { margin-top: 18px; }
 .adult .cmp { line-height: 1.5; }
 .adult .cmp > div { margin-top: 10px; }
 .adult ul { margin: 0 0 14px; padding-left: 22px; }
