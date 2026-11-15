@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.33'; // bump with every release
+const APP_VER = '2.34'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1017,6 +1017,17 @@ function adult() {
     <label>Week in use</label><select id="cur">${S.weeks.map(w => `<option value="${w.id}" ${w.id === wk.id ? 'selected' : ''}>${esc(w.label)}</option>`).join('')}</select>
     <div><button id="delWeek" class="btn small">Remove this week</button></div>
 
+    <h2>Words for this week (${wk.words.length})</h2>
+    <p class="note">Tick the red words from the school list.</p>
+    ${wk.words.map((x, i) => `<div class="wl"><input type="checkbox" class="redtick" data-i="${i}" ${x.red ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('')}
+    <div style="margin-top:10px"><button id="chWords" class="btn small">Change the words</button></div>
+    <div id="chBox" hidden>
+      <label>One word per line. To change, add or remove words, edit the list.</label>
+      <textarea id="cw" spellcheck="false">${esc(wk.words.map(x => x.w + (x.say ? ' | ' + x.say : '')).join('\n'))}</textarea>
+      <p class="note">${epOf(wk) ? 'The story for this week was written for the old words, so it will be removed. Her stars and past answers are kept.' : ''}</p>
+      <button id="saveWords" class="btn">Save the new words</button>
+    </div>
+
     <h2>Add a new week</h2>
     <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
     <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
@@ -1125,6 +1136,17 @@ function adult() {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.assign({}, S, { orKey: undefined, aiKey: undefined }), null, 1)], { type: 'application/json' }));
     a.download = 'bellaspeller-backup-' + today() + '.json'; a.click();
+  });
+  document.querySelectorAll('.redtick').forEach(c => { c.onchange = () => { wk.words[+c.dataset.i].red = c.checked || undefined; save(); }; });
+  on('#chWords', () => { $('#chBox').hidden = !$('#chBox').hidden; });
+  on('#saveWords', () => {
+    const nw = parseWords($('#cw').value);
+    if (!nw.length) return;
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; } });
+    const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
+    wk.words = nw;
+    if (changed) { wk.ep = findEpisode(nw); delete S.story[wk.id]; }
+    save(); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? ' Write a new story on the Story tab.' : ''); adult();
   });
   on('#read', () => {
     const ws = parseWords($('#nw').value);
