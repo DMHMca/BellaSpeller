@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.14'; // bump with every release
+const APP_VER = '2.15'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -42,6 +42,8 @@ The story idea in the request comes from the nine-year-old author, so follow it,
 Style: real children with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
 
 Setting and values: the story is set in a modern, sensible English family world, with kind, responsible parents and carers. Use British daily life and British English: school uniform, PE kit, break time, assembly, tea, squash, toast, fruit, sandwiches, soup, pasta, jacket potatoes, flapjacks, wellies, rain, the park, the corner shop. Never include fast food or junk food (no pizza, burgers, fries, soda, candy, takeaways) and no American words or customs (no mom, cookies, sidewalk, vacation, recess). Sleepovers are realistic: parents are at home, bedtimes are respected, and nobody is left unsupervised or put in danger. Fantasy is welcome when the idea asks for it (witches, dragons, other worlds), but everyday life stays British and sensible.
+
+If the idea is a mystery or investigation, play fair: plant real clues early, give two or three suspects each with a reason and an alibi, let the friends make a wrong guess, and solve it kindly by reasoning from the clues. Case notes, evidence labels and suspect lists are good things for the characters to write. If the idea is science or building, keep it real and safe: kitchen and garden experiments with an adult nearby, nothing dangerous. Show the steps of a good investigation (a question, a guess, a test, a measurement, a result, trying again), and let a failed test teach something. Lab notebook entries, labels and results tables are good things for the characters to write.
 
 Characters: exactly four friends, written only as {g1}, {g2}, {g3} and {g4}. The request says whether each is a girl or a boy and gives any trait: use the right pronouns (she and her, he and him) and keep each trait consistent. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
 
@@ -159,6 +161,9 @@ const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Mati
 const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus'];
 const TRAITS = ['', 'funny', 'shy', 'bossy', 'always late', 'worries a lot', 'brave', 'clumsy'];
 const STORY_TYPES = [
+  { title: 'The detective agency', blurb: 'Clues, suspects and a case to solve', icon: 'search', idea: 'The friends set up their own detective agency and take on their first case: clues, a notebook, a few suspects with reasons, and a fair puzzle that a careful reader could solve.' },
+  { title: 'Science investigators', blurb: 'Test an idea and find out why', icon: 'flask', idea: 'The friends investigate a science question with safe experiments at home, with an adult nearby: they make a guess, test it, measure what happens, and work out why, including when it goes wrong.' },
+  { title: 'Build it and test it', blurb: 'An engineering challenge', icon: 'tool', idea: 'The friends take on an engineering challenge, such as building something clever, testing it, watching it fail in a funny way, and improving it until it works.' },
   { title: 'Sleepover surprise', blurb: 'Something happens after lights out', icon: 'moon', idea: 'A sleepover where something unexpected and funny happens after lights out.' },
   { title: 'Friends fall out', blurb: 'An argument that must be fixed', icon: 'heart', idea: 'Two close friends fall out over a misunderstanding and have to work out how to make up.' },
   { title: 'The new one', blurb: 'Someone new joins the group', icon: 'users', idea: 'Someone new joins the group, and the others have to decide how to welcome them. It does not go smoothly at first.' },
@@ -317,6 +322,8 @@ const ICONS = {
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
   users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 15c3 0 5 1.5 5 4"/>',
   muted: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/>',
+  flask: '<path d="M9 3h6M10 3v6L5 19a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-10V3"/>',
+  tool: '<path d="M14.7 6.3a4 4 0 0 0-5 5L3 18l3 3 6.7-6.7a4 4 0 0 0 5-5l-2.4 2.4-2.6-.6-.6-2.6z"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   star: '<path fill="currentColor" stroke="none" d="M12 2.2l2.95 6.1 6.7.95-4.85 4.7 1.15 6.65L12 17.4l-5.95 3.2 1.15-6.65L2.35 9.25l6.7-.95z"/>'
 };
