@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.21'; // bump with every release
+const APP_VER = '2.22'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -35,54 +35,76 @@ const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 // ---------- stories written by AI (grown-ups page only) ----------
 const DEFAULT_MODEL = 'z-ai/glm-5.3';
 const MODEL_SUGGESTIONS = ['z-ai/glm-5.3', 'z-ai/glm-5.3-flashx', 'openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'];
-const STORY_RULES = `You write a short three-part story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens, and she writes the week's spelling words herself, inside things the characters write (a note, an invitation, a diary line, a sign, a list).
+const STORY_RULES = `You write a short story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens. The story is told in parts, and each of the week's spelling words is met inside the story's own text, at the end of one paragraph, where the app will point it out to her.
 
 The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
 
-Style: real children with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
+Style: real children with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
 
 Setting and values: the story is set in a modern, sensible English family world, with kind, responsible parents and carers. Use British daily life and British English: school uniform, PE kit, break time, assembly, wellies, rain, the park, the corner shop, board games, torches, den-building, stargazing, reading under the covers. Never include fast food or junk food (no pizza, burgers, fries, soda, candy, takeaways) and no American words or customs (no mom, cookies, sidewalk, vacation, recess). Do not include food, eating or mealtimes in the story at all: no meals, snacks, treats, feasts or drinks, and no midnight feast. Sleepovers and adventures do not need food. If one of this week's spelling words is itself a food or eating word, use it in a natural non-food way if you can, otherwise as briefly as possible. Sleepovers are realistic: parents are at home, bedtimes are respected, and nobody is left unsupervised or put in danger. Fantasy is welcome when the idea asks for it (witches, dragons, other worlds), but everyday life stays British and sensible.
 
-If the idea is a mystery or investigation, play fair: plant real clues early, give two or three suspects each with a reason and an alibi, let the friends make a wrong guess, and solve it kindly by reasoning from the clues. Case notes, evidence labels and suspect lists are good things for the characters to write. If the idea is science or building, keep it real and safe: kitchen and garden experiments with an adult nearby, nothing dangerous. Show the steps of a good investigation (a question, a guess, a test, a measurement, a result, trying again), and let a failed test teach something. Lab notebook entries, labels and results tables are good things for the characters to write.
+If the idea is a mystery or investigation, play fair: plant real clues early, give two or three suspects each with a reason and an alibi, let the friends make a wrong guess, and solve it kindly by reasoning from the clues. If the idea is science or building, keep it real and safe: garden and indoor experiments with an adult nearby, nothing dangerous. Show the steps of a good investigation (a question, a guess, a test, a measurement, a result, trying again), and let a failed test teach something.
 
 Characters: exactly four friends, written only as {g1}, {g2}, {g3} and {g4}. The request says whether each is a girl or a boy and gives any trait: use the right pronouns (she and her, he and him) and keep each trait consistent. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
 
-Reply with one JSON object: {"title": string, "parts": [part1, part2, part3]}. Each part is a list of beats. A beat is one of:
-{"n": "narration, at most two sentences"}
+How to work:
+1. Plan first. Before writing, set out the plot in a few lines: the problem, what happens, how it ends. Put this in the "plan" field. The app ignores it; it is there so that you think the story through.
+2. Write a story that makes sense on its own. Every paragraph follows from the one before. A reader who ignored the spelling words should find nothing odd.
+3. Place each word where it belongs. For each spelling word, choose a paragraph where the word arises naturally from what is happening, and put it in that paragraph's LAST sentence. The last sentence must follow from the sentences before it.
+4. Do not invent a reason for someone to write the word. No notes, signs, lists or diary lines unless the plot truly calls for one.
+5. Do not bend the story to fit a word. If a word will not fit a paragraph, move it to a different paragraph.
+6. Keep each paragraph short: two to four sentences, so the page is not crowded.
+
+Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
+{"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
+{"p": "a paragraph of two to four sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
 {"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}
-{"w": {"word": "the spelling word", "lead": "one short sentence saying who is writing what", "before": "text before the word", "after": "text after the word"}}
-In a w beat, before + word + after must read as one natural sentence that the character writes. The word is in lower case exactly as given, and is never the first word of the sentence.
 
 Rules:
-1. Parts 1 and 2 together use every spelling word exactly once, split about evenly. Each of these parts has two or three narration beats and exactly one choice, and ends with a narration beat that is a cliffhanger. Both options of a choice must lead sensibly into the rest of the part.
-2. Part 3 opens with one or two narration beats that resolve the cliffhanger. Then it uses every spelling word once more, each in its own w beat, as one shared piece of writing (club rules, a letter, a poster). Then one closing narration beat. Part 3 has no choice.
-3. A spelling word may also appear naturally elsewhere in the story, in the narration and choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
-4. Reply with the JSON object only.`;
+1. Every spelling word is the "word" of exactly one p beat in the whole story, and no other word is. The word is in lower case exactly as given, and appears exactly once, as a whole word, in the last sentence of that paragraph. Do not use a longer form in its place (for "nice" do not write "nicer" there).
+2. Each part has exactly one choice. Put the choice after at least two paragraphs. Both options must lead sensibly into the rest of the part.
+3. Every part except the last ends with a cliffhanger. The last part resolves the story and ends warmly. Do not end by repeating the words.
+4. A spelling word may also appear naturally elsewhere in the story, in narration, in other paragraphs and in choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
+5. Reply with the JSON object only.`;
+
+const WORDS_PER_PART = 6;
+function partPlan(n) { // how many words in each part: about six to a part, shared evenly
+  const parts = Math.max(1, Math.ceil(n / WORDS_PER_PART)), base = Math.floor(n / parts), extra = n % parts;
+  return Array.from({ length: parts }, (_, i) => base + (i < extra ? 1 : 0));
+}
+function lastSentence(t) {
+  const m = String(t).trim().match(/[^.!?]+[.!?]+["”’')]*|[^.!?]+$/g);
+  return m ? m[m.length - 1].trim() : '';
+}
+const wholeWord = (w, t) => (String(t).match(new RegExp('(^|[^A-Za-z\'’])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z]|[\'’][A-Za-z])', 'gi')) || []).length;
+// Stores each word's story sentence (the last sentence of its paragraph) for Revise.
+function addSentences(ep) {
+  ep.sentences = {};
+  ep.parts.forEach(part => part.forEach(b => { if (b.p && b.word) ep.sentences[b.word] = lastSentence(b.p); }));
+}
 
 function checkEpisode(ep, words) {
   const bad = [];
-  if (!ep || !Array.isArray(ep.parts) || ep.parts.length !== 3) return ['It does not have three parts.'];
+  const plan = partPlan(words.length);
+  if (!ep || !Array.isArray(ep.parts) || ep.parts.length !== plan.length) return ['It should have ' + plan.length + ' part' + (plan.length === 1 ? '' : 's') + '.'];
   const texts = [String(ep.title || '')];
-  const used = [[], [], []];
+  const used = [];
   ep.parts.forEach((part, pi) => {
     if (!Array.isArray(part)) { bad.push('Part ' + (pi + 1) + ' is not a list.'); return; }
-    let choices = 0;
+    let choices = 0, here = 0;
     part.forEach(b => {
       if (b && typeof b.n === 'string') texts.push(b.n);
       else if (b && b.c && Array.isArray(b.c.o) && b.c.o.length >= 2) { choices++; texts.push(String(b.c.q)); b.c.o.forEach(o => texts.push(String(o.l), String(o.n))); }
-      else if (b && b.w && typeof b.w.word === 'string') {
-        b.w.word = b.w.word.toLowerCase(); b.w.lead = String(b.w.lead || ''); b.w.before = String(b.w.before || ''); b.w.after = String(b.w.after || '');
-        used[pi].push(b.w.word); texts.push(b.w.lead, b.w.before, b.w.after);
-        if (!words.includes(b.w.word)) bad.push('"' + b.w.word + '" is not one of the words.');
+      else if (b && typeof b.p === 'string' && typeof b.word === 'string') {
+        b.word = b.word.toLowerCase(); here++; used.push(b.word); texts.push(b.p);
+        if (!words.includes(b.word)) bad.push('"' + b.word + '" is not one of the words.');
+        else if (wholeWord(b.word, lastSentence(b.p)) !== 1) bad.push('The last sentence of the paragraph for "' + b.word + '" should contain "' + b.word + '" exactly once as a whole word.');
       } else bad.push('Part ' + (pi + 1) + ' has a beat the app cannot read.');
     });
-    if (pi < 2 && choices !== 1) bad.push('Part ' + (pi + 1) + ' should have exactly one choice.');
+    if (choices !== 1) bad.push('Part ' + (pi + 1) + ' should have exactly one choice.');
+    if (Math.abs(here - plan[pi]) > 1) bad.push('Part ' + (pi + 1) + ' should have about ' + plan[pi] + ' word paragraphs, not ' + here + '.');
   });
-  const first = used[0].concat(used[1]);
-  words.forEach(w => {
-    if (first.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be written exactly once in parts 1 and 2.');
-    if (used[2].filter(x => x === w).length !== 1) bad.push('"' + w + '" should be written exactly once in part 3.');
-  });
+  words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
   const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc|food|foods|eat|eats|eating|ate|eaten|meals?|mealtimes?|breakfast|lunch|lunchtime|dinner|supper|snacks?|feasts?|hungry|starving|drinks?|drinking|juice|squash|milk|tea|coffee|soup|eggs?|fish|chicken|vegetables?|salad|yoghurt|fruits?|apples?|bananas?|bread|sandwiches|sandwich|pasta|rice|potato|potatoes|picnic|bake|baking|baked|cheese|toast|flapjacks?|biscuits?|cakes?|cupcakes?|crisps|sweets|chocolate|ice cream|marshmallows?|fizzy|white bread|midnight feast)\b/ig;
   const usHit = texts.map(t => [...String(t).matchAll(US)].map(m => m[0].toLowerCase()).filter(w => !words.includes(w))[0]).find(Boolean);
@@ -98,6 +120,8 @@ const aiKey = () => S.aiKey || S.orKey;
 async function askAI(wk, problems, model, extra) {
   const words = wk.words.map(x => x.w);
   let ask = 'This week\'s spelling words: ' + words.join(', ') + '.';
+  const plan = partPlan(words.length);
+  ask += '\nWrite ' + plan.length + ' part' + (plan.length === 1 ? '' : 's') + ', with ' + plan.join(', ') + ' word paragraph' + (plan.length === 1 && plan[0] === 1 ? '' : 's') + ' in each (' + words.length + ' words in all).';
   ask += storyBrief(extra);
   if (problems && problems.length) ask += '\n\nYour last draft had these problems. Write a new story that avoids them:\n- ' + problems.join('\n- ');
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
@@ -121,15 +145,22 @@ async function draftStory(wk, extra) {
   for (let i = 0; i < 3; i++) {
     const ep = (await askAI(wk, problems, undefined, extra)).ep;
     problems = checkEpisode(ep, words);
-    if (!problems.length) { ep.title = String(ep.title || 'This week\'s story'); ep.words = words; return ep; }
+    if (!problems.length) { ep.title = String(ep.title || 'This week\'s story'); ep.words = words; addSentences(ep); return ep; }
   }
   throw new Error('Three drafts had problems (' + problems[0] + ') Please try again.');
+}
+// Preview helper: shows the learning word in bold inside its paragraph's last sentence.
+function markWord(text, word) {
+  const ls = lastSentence(text), i = text.lastIndexOf(ls);
+  const re = new RegExp('(^|[^A-Za-z\'’])(' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![A-Za-z])', 'i');
+  return esc(text.slice(0, i)) + esc(ls).replace(re, (m, a, w) => esc(a) + '<b>[' + w + ']</b>') + esc(text.slice(i + ls.length));
 }
 function storyPreview(ep) {
   return `<h3>${esc(ep.title)}</h3>` + ep.parts.map((part, i) => `<p><b>Part ${i + 1}</b></p>` + part.map(b =>
     b.n ? `<p>${esc(fill(b.n))}</p>`
       : b.c ? `<p><i>She chooses: ${esc(fill(b.c.q))}</i></p><ul>${b.c.o.map(o => `<li>${esc(fill(o.l))}: ${esc(fill(o.n))}</li>`).join('')}</ul>`
-        : `<p>${esc(fill(b.w.lead))} “${esc(fill(b.w.before))}<b>[${esc(b.w.word)}]</b>${esc(fill(b.w.after))}”</p>`).join('')).join('');
+        : b.p ? `<p>${markWord(fill(b.p), b.word)}</p>`
+          : `<p>${esc(fill(b.w.lead))} “${esc(fill(b.w.before))}<b>[${esc(b.w.word)}]</b>${esc(fill(b.w.after))}”</p>`).join('')).join('');
 }
 
 // ---------- speech ----------
@@ -250,6 +281,7 @@ function partTexts(beats, last, wk) {
   if (wk && !last) { if (wk.rule) o.push(wk.rule); o.push(RED_WHY); }
   beats.forEach(b => {
     if (b.n) o.push(fill(b.n));
+    else if (b.p) o.push(fill(b.p));
     else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
     else if (b.w) {
       const s = fill(b.w.before) + b.w.word + fill(b.w.after);
@@ -829,6 +861,7 @@ async function storyDay() {
     const b = beats[i];
     let r;
     if (b.n) r = await narrate(fill(b.n));
+    else if (b.p) r = await narrate(fill(b.p)); // temporary until the one-page word screen (build step 2)
     else if (b.c) {
       for (;;) {
         const k = await choose(fill(b.c.q), b.c.o.map(o => fill(o.l)));
@@ -1013,7 +1046,7 @@ function adult() {
     res.forEach((r, i) => {
       const v = out.querySelector(`[data-v="${i}"]`); if (v) v.onclick = () => { $('#cv' + i).innerHTML = storyPreview(r.ep); };
       const u = out.querySelector(`[data-u="${i}"]`);
-      if (u) u.onclick = () => { const ep = r.ep; ep.title = String(ep.title || "This week's story"); ep.words = words; const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = ep; wk.ep = id; delete S.story[wk.id]; save(); adult(); };
+      if (u) u.onclick = () => { const ep = r.ep; ep.title = String(ep.title || "This week's story"); ep.words = words; addSentences(ep); const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = ep; wk.ep = id; delete S.story[wk.id]; save(); adult(); };
     });
     btn.disabled = false;
   });
