@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.18'; // bump with every release
+const APP_VER = '2.19'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -159,7 +159,7 @@ const PRESETS = [
 ];
 const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind', 'Amelia', 'Poppy', 'Isla', 'Ivy', 'Willow', 'Edith', 'Harriet', 'Lottie', 'Elsie', 'Maisie', 'Winnie', 'Georgia', 'Felicity', 'Verity'];
 const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus', 'Oscar', 'Freddie', 'Arthur', 'Theo', 'Rufus', 'Jasper', 'Hector', 'Barney', 'Kit', 'Rory', 'Toby', 'Max', 'Ned', 'Felix', 'Louis', 'Jack', 'Edmund', 'Ralph', 'Humphrey', 'Orlando'];
-const TRAITS = ['', 'funny', 'shy', 'bossy', 'always late', 'worries a lot', 'brave', 'clumsy', 'notices everything', 'loves gadgets', 'asks lots of questions', 'loves experiments'];
+const TRAITS = ['', 'funny', 'shy', 'bossy', 'kind', 'sensible', 'cheeky', 'curious', 'creative', 'brave', 'clumsy', 'forgetful', 'always late', 'worries a lot', 'notices everything', 'loves gadgets', 'asks lots of questions', 'loves experiments', 'loves animals', 'loves football', 'good at maths', 'good at drawing'];
 const STORY_TYPES = [
   { title: 'The detective agency', blurb: 'Clues, suspects and a case to solve', icon: 'search', idea: 'The friends set up their own detective agency and take on their first case: clues, a notebook, a few suspects with reasons, and a fair puzzle that a careful reader could solve. In the spirit of a children\'s detective TV series: a small team where each member is good at something different, a case file, and a clever reveal at the end.' },
   { title: 'Science investigators', blurb: 'Test an idea and find out why', icon: 'flask', idea: 'The friends investigate a science question with safe experiments at home, with an adult nearby: they make a guess, test it, measure what happens, and work out why, including when it goes wrong. In the spirit of a popular science-and-engineering video channel: an ambitious idea, funny failures, a big payoff, and a clear explanation of why it worked.' },
@@ -626,6 +626,21 @@ function pickName(boy, current, used) {
     };
   });
 }
+function pickTrait(current) {
+  return new Promise(res => {
+    const ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'traitPicker';
+    document.body.appendChild(ov);
+    const close = v => { ov.remove(); res(v); };
+    const list = ['None'].concat(TRAITS.filter(Boolean));
+    if (current && !TRAITS.includes(current)) list.splice(1, 0, current);
+    ov.innerHTML = `<div class="pickcard"><div class="dbghead"><b>Pick a trait</b><button class="btn small" id="tr-x">Close</button></div>
+      <div class="namegrid">${list.map(t => `<button class="chip small${(t === 'None' ? !current : t === current) ? ' on' : ''}" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+      <div class="row"><button class="btn small" id="tr-type">${ico('pencil')}<span>Type a trait</span></button></div></div>`;
+    ov.querySelectorAll('[data-v]').forEach(b => { b.onclick = () => close(b.dataset.v === 'None' ? '' : b.dataset.v); });
+    $('#tr-x').onclick = () => close(null);
+    $('#tr-type').onclick = async () => { const t = await typeText({ title: 'Type a trait', initial: '', max: 30 }); if (t && t.trim()) close(t.trim().toLowerCase()); };
+  });
+}
 function castScreen() {
   return new Promise(res => {
     const cast = [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return { name: S.girls[i] || POOL[i], boy: !!m.boy, trait: m.trait || '' }; });
@@ -639,7 +654,7 @@ function castScreen() {
       $('#castlist').innerHTML = cast.map((c, i) => `<div class="castrow2"><div class="seg"><button class="segbtn${c.boy ? '' : ' on'}" data-g="${i}" data-v="0">Girl</button><button class="segbtn${c.boy ? ' on' : ''}" data-g="${i}" data-v="1">Boy</button></div><button class="namebtn" data-n="${i}">${esc(c.name)}</button><button class="chip small" data-t="${i}">${esc(c.trait || '+ trait')}</button></div>`).join('');
       document.querySelectorAll('#castlist [data-g]').forEach(b => { b.onclick = () => { const i = +b.dataset.g, boy = b.dataset.v === '1', c = cast[i]; if (boy !== c.boy) { c.boy = boy; if (!(boy ? BOYS : POOL).includes(c.name)) c.name = (boy ? BOYS : POOL).find(n => !others(i).includes(n)); } draw(); choose_(i); }; });
       document.querySelectorAll('#castlist [data-n]').forEach(b => { b.onclick = () => choose_(+b.dataset.n); });
-      document.querySelectorAll('#castlist [data-t]').forEach(b => { b.onclick = () => { const c = cast[+b.dataset.t]; c.trait = TRAITS[(TRAITS.indexOf(c.trait) + 1) % TRAITS.length]; draw(); }; });
+      document.querySelectorAll('#castlist [data-t]').forEach(b => { b.onclick = async () => { const c = cast[+b.dataset.t]; const t = await pickTrait(c.trait); if (t !== null) { c.trait = t; draw(); } }; });
     };
     draw();
     on('#next', () => {
