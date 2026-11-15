@@ -3,7 +3,7 @@
 
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
-const APP_VER = '2.10'; // bump with every release
+const APP_VER = '2.11'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -36,9 +36,11 @@ const DEFAULT_MODEL = 'z-ai/glm-5.3';
 const MODEL_SUGGESTIONS = ['z-ai/glm-5.3', 'z-ai/glm-5.3-flashx', 'openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'];
 const STORY_RULES = `You write a short three-part story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens, and she writes the week's spelling words herself, inside things the characters write (a note, an invitation, a diary line, a sign, a list).
 
-Style: real girls with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
+The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
 
-Characters: exactly four girls, written only as {g1}, {g2}, {g3} and {g4}. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
+Style: real children with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
+
+Characters: exactly four friends, written only as {g1}, {g2}, {g3} and {g4}. The request says whether each is a girl or a boy and gives any trait: use the right pronouns (she and her, he and him) and keep each trait consistent. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
 
 Reply with one JSON object: {"title": string, "parts": [part1, part2, part3]}. Each part is a list of beats. A beat is one of:
 {"n": "narration, at most two sentences"}
@@ -79,11 +81,14 @@ function checkEpisode(ep, words) {
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
   return bad;
 }
+const castDesc = () => [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return '{g' + (i + 1) + '} is a ' + (m.boy ? 'boy' : 'girl') + (m.trait ? ', ' + m.trait : ''); }).join('; ');
+const storyBrief = extra => '\nCharacters: ' + castDesc() + '.' + (extra && extra.idea ? '\nStory idea from the author: ' + extra.idea : '');
 const aiBase = () => (S.aiBase || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 const aiKey = () => S.aiKey || S.orKey;
-async function askAI(wk, problems, model) {
+async function askAI(wk, problems, model, extra) {
   const words = wk.words.map(x => x.w);
   let ask = 'This week\'s spelling words: ' + words.join(', ') + '.';
+  ask += storyBrief(extra);
   if (problems && problems.length) ask += '\n\nYour last draft had these problems. Write a new story that avoids them:\n- ' + problems.join('\n- ');
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
@@ -100,11 +105,11 @@ async function askAI(wk, problems, model) {
   if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a story.');
   return { ep: JSON.parse(t.slice(i0, i1 + 1)), usage: j.usage || null, ms: Date.now() - t0 };
 }
-async function draftStory(wk) {
+async function draftStory(wk, extra) {
   const words = wk.words.map(x => x.w);
   let problems = [];
   for (let i = 0; i < 2; i++) {
-    const ep = (await askAI(wk, problems)).ep;
+    const ep = (await askAI(wk, problems, undefined, extra)).ep;
     problems = checkEpisode(ep, words);
     if (!problems.length) { ep.title = String(ep.title || 'This week\'s story'); ep.words = words; return ep; }
   }
@@ -145,13 +150,29 @@ const PRESETS = [
   { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' }
 ];
 const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind'];
+const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus'];
+const TRAITS = ['', 'funny', 'shy', 'bossy', 'always late', 'worries a lot', 'brave', 'clumsy'];
+const STORY_TYPES = [
+  { title: 'Sleepover surprise', blurb: 'Something happens after lights out', icon: 'moon', idea: 'A sleepover where something unexpected and funny happens after lights out.' },
+  { title: 'Friends fall out', blurb: 'An argument that must be fixed', icon: 'heart', idea: 'Two close friends fall out over a misunderstanding and have to work out how to make up.' },
+  { title: 'The new one', blurb: 'Someone new joins the group', icon: 'users', idea: 'Someone new joins the group, and the others have to decide how to welcome them. It does not go smoothly at first.' },
+  { title: 'Lost and found', blurb: 'Something has gone missing', icon: 'search', idea: 'Something important goes missing and the friends investigate, with funny wrong guesses.' },
+  { title: 'Trip chaos', blurb: 'A school trip goes wrong', icon: 'flag', idea: 'A school trip goes hilariously wrong because of a mix-up.' },
+  { title: 'Pet trouble', blurb: 'A pet causes chaos', icon: 'paw', idea: 'A pet causes chaos at the worst possible moment.' },
+  { title: 'Birthday problem', blurb: 'The party plans go wrong', icon: 'gift', idea: 'Planning a birthday party goes wrong in several funny ways.' },
+  { title: 'The secret club', blurb: 'Rules, secrets and a problem', icon: 'star', idea: 'The friends start a secret club with its own rules, and then a problem tests it.' }
+];
+const WHERE = ['A sleepover', 'At school', 'On holiday', 'At a party', 'In the park', 'At home'];
+const WRONG = ['A secret gets out', 'Something goes missing', 'Two friends argue', 'Someone gets left out', 'A big mistake', 'A silly misunderstanding'];
+const ENDS = ['Friends again', 'A funny disaster', 'A big surprise', 'Everyone learns something'];
+const SCREEN_PROMPTS = ['Choose a story, or write your own.', 'Who is in your story?', 'Tell me your story idea.', 'Writing your story.'];
 const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantastic!', 'Super spelling!'];
 const FIX_TAIL = ' Have a good look. Then try once more.';
 const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
 const RED_WHY = 'This is a tricky word. It has no rule. You just have to remember it.';
 const cardSpeech = (word, sentence) => (sentence ? sentence + ' ... ' + word + '. Say it out loud.' : word + '. Say it out loud.');
 const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
-const COMMON = [...POOL, ...PRAISE, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
+const COMMON = [...POOL, ...BOYS, ...PRAISE, ...SCREEN_PROMPTS, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
 const effVp = () => (S.vp === undefined ? 'ms-emily' : S.vp); // Emily unless a grown-up chose otherwise
 const preset = () => PRESETS.find(p => p.id === effVp());
 const ttsOn = () => !!(S.orKey && preset());
@@ -279,6 +300,15 @@ const ICONS = {
   check: '<path d="M5 12.5l5 5 9-10"/>',
   del: '<path d="M21 5H9l-6 7 6 7h12z"/><path d="M13 9.5l4 5M17 9.5l-4 5"/>',
   swap: '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  paw: '<circle cx="7" cy="10" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="17" cy="10" r="2"/><path d="M7 17c0-3 3-5 5-5s5 2 5 5-3 3-5 3-5 0-5-3z"/>',
+  gift: '<rect x="4" y="10" width="16" height="10"/><path d="M12 10v10M3 7h18v3H3zM12 7c-2-3-5-3-5-1s3 1 5 1zM12 7c2-3 5-3 5-1s-3 1-5 1z"/>',
+  heart: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
+  pencil: '<path d="M4 20l1-4L16 5l3 3L8 19z"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 15c3 0 5 1.5 5 4"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   star: '<path fill="currentColor" stroke="none" d="M12 2.2l2.95 6.1 6.7.95-4.85 4.7 1.15 6.65L12 17.4l-5.95 3.2 1.15-6.65L2.35 9.25l6.7-.95z"/>'
 };
@@ -464,6 +494,182 @@ async function doWord(week, wobj, mode, ctx, withCard, starred) {
   }
 }
 
+// ---------- starting a story: shelf, cast, Bella's own idea ----------
+function waiting(msg) {
+  h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><p class="subtle">This can take up to a minute.</p></div>`);
+}
+async function transcribe(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  const fmt = /mp4|m4a|aac/.test(blob.type) ? 'mp4' : 'webm';
+  const r = await fetch('https://openrouter.ai/api/v1/audio/transcriptions', {
+    method: 'POST', headers: { 'Authorization': 'Bearer ' + S.orKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'elevenlabs/scribe-v2', input_audio: { data: btoa(bin), format: fmt } })
+  });
+  if (!r.ok) throw new Error('I could not hear that (' + r.status + '). Please type your idea.');
+  return ((await r.json()).text || '').trim();
+}
+async function tidyIdea(idea) {
+  if (!aiKey()) return null;
+  try {
+    const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+    if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+    const r = await fetch(aiBase() + '/chat/completions', {
+      method: 'POST', headers,
+      body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, messages: [
+        { role: 'system', content: 'You help a nine-year-old author in England. Rewrite her story idea as two or three short, clear sentences in friendly British English. Keep all her ideas. Keep it kind and suitable for her age. Reply with only the sentences.' },
+        { role: 'user', content: idea }] })
+    });
+    if (!r.ok) return null;
+    const j = await r.json(); const c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return (typeof c === 'string' ? c : '').trim() || null;
+  } catch (e) { return null; }
+}
+function shelf(ep, st, sample) {
+  return new Promise(res => {
+    const done = ep && st && st.part >= ep.parts.length;
+    const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
+    h(`<div class="screen"><h1>Choose your story</h1>
+      ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
+      ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
+      <div class="shelf">${STORY_TYPES.map((t, i) => card('t' + i, t.icon, t.title, t.blurb)).join('')}${sample ? card('sample', 'book', 'Sample story', 'The Silver Shoes Sleepover') : ''}</div>
+      ${done ? card('again', 'book', 'Play again', ep.title, 'wide') : ''}</div>`);
+    on('#own', () => { hush(); res({ kind: 'own' }); });
+    STORY_TYPES.forEach((t, i) => on('#t' + i, () => { hush(); res({ kind: 'type', type: t }); }));
+    on('#sample', () => { hush(); res({ kind: 'sample' }); });
+    on('#again', () => { hush(); res({ kind: 'again' }); });
+    backBtn(res);
+    say(SCREEN_PROMPTS[0]);
+  });
+}
+function castScreen() {
+  return new Promise(res => {
+    const cast = [0, 1, 2, 3].map(i => Object.assign({ name: S.girls[i] || POOL[i], boy: false, trait: '' }, (S.cast || [])[i] || {}, { name: S.girls[i] || POOL[i] }));
+    const pool = c => (c.boy ? BOYS : POOL);
+    const row = (c, i) => `<div class="castrow"><input class="nameinput" id="n${i}" value="${esc(c.name)}" maxlength="14" autocomplete="off" autocapitalize="words" spellcheck="false" aria-label="Name ${i + 1}"><button class="iconbtn" id="sh${i}" aria-label="Another name">${ico('swap')}</button><button class="chip small" id="g${i}">${c.boy ? 'Boy' : 'Girl'}</button><button class="chip small" id="t${i}">${esc(c.trait || '+ trait')}</button></div>`;
+    h(`<div class="screen"><h1>Who is in your story?</h1><p class="subtle">Type a name, or tap the arrows to swap it. Boy or girl, and a trait, are up to you.</p>
+      <div class="cast">${cast.map(row).join('')}</div>
+      ${S.name ? `<label class="toggle"><input type="checkbox" id="meIn" ${S.meIn ? 'checked' : ''}> Put me in the story as the first one</label>` : ''}
+      <button id="next" class="btn big">Next ${ico('next')}</button></div>`);
+    cast.forEach((c, i) => {
+      $('#sh' + i).onclick = () => { const used = cast.map(x => x.name); let k = pool(c).indexOf(c.name); do { k = (k + 1) % pool(c).length; } while (used.includes(pool(c)[k])); c.name = pool(c)[k]; $('#n' + i).value = c.name; say(c.name); };
+      $('#n' + i).oninput = e => { c.name = e.target.value.replace(/[^A-Za-z' -]/g, '').slice(0, 14); };
+      $('#g' + i).onclick = () => { c.boy = !c.boy; $('#g' + i).textContent = c.boy ? 'Boy' : 'Girl'; };
+      $('#t' + i).onclick = () => { c.trait = TRAITS[(TRAITS.indexOf(c.trait) + 1) % TRAITS.length]; $('#t' + i).textContent = c.trait || '+ trait'; };
+    });
+    on('#next', () => {
+      hush();
+      S.girls = cast.map((c, i) => c.name.trim() || POOL[i]);
+      S.cast = cast.map(c => ({ boy: c.boy, trait: c.trait }));
+      if ($('#meIn')) S.meIn = $('#meIn').checked;
+      save(); res(true);
+    });
+    backBtn(res);
+    say(SCREEN_PROMPTS[1]);
+  });
+}
+function outlineScreen() {
+  return new Promise(res => {
+    const pick = { where: '', wrong: '', end: '' };
+    const chips = (key, arr) => `<div class="chiprow" data-k="${key}">${arr.map(t => `<button class="chip small" data-v="${esc(t)}">${esc(t)}</button>`).join('')}</div>`;
+    h(`<div class="screen"><h1>Your story idea</h1><p class="subtle">Tap ideas, say your idea, or type it. Any mix is fine.</p>
+      <div class="page small"><p class="lead-in">Where is it?</p>${chips('where', WHERE)}<p class="lead-in">What goes wrong?</p>${chips('wrong', WRONG)}<p class="lead-in">How does it end?</p>${chips('end', ENDS)}</div>
+      <textarea id="idea" class="ideabox" rows="3" placeholder="Say it or type it here"></textarea>
+      <div class="row"><button id="mic" class="btn small">${ico('mic')}<span>Tell me</span></button><button id="next" class="btn big">Done ${ico('check')}</button></div><p id="micmsg" class="subtle"></p></div>`);
+    document.querySelectorAll('.chiprow').forEach(row => row.querySelectorAll('.chip').forEach(c => {
+      c.onclick = () => { const k = row.dataset.k, on_ = c.classList.contains('on'); row.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); if (!on_) { c.classList.add('on'); pick[k] = c.dataset.v; } else pick[k] = ''; };
+    }));
+    let rec = null;
+    on('#mic', async () => {
+      const msg = $('#micmsg');
+      if (rec) { rec.stop(); return; }
+      if (!S.orKey) { msg.textContent = 'To use your voice, add the OpenRouter key with the settings gear. You can type instead.'; return; }
+      if (!navigator.mediaDevices || !window.MediaRecorder) { msg.textContent = 'This device cannot record. Please type your idea.'; return; }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const chunks = []; rec = new MediaRecorder(stream);
+        rec.ondataavailable = e => chunks.push(e.data);
+        rec.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(chunks, { type: (rec && rec.mimeType) || 'audio/webm' }); rec = null;
+          const span = $('#mic span'); if (span) span.textContent = 'Tell me';
+          if (msg.isConnected) msg.textContent = 'Listening to what you said...';
+          try { const text = await transcribe(blob); const box = $('#idea'); if (box) { box.value = (box.value ? box.value + ' ' : '') + text; msg.textContent = 'Got it. You can change the words if you like.'; } }
+          catch (e) { if (msg.isConnected) msg.textContent = e.message; }
+        };
+        rec.start(); $('#mic span').textContent = 'Tap to stop'; msg.textContent = 'Listening... tell me your story idea.';
+        setTimeout(() => { if (rec && rec.state === 'recording') rec.stop(); }, 60000);
+      } catch (e) { msg.textContent = 'I could not use the microphone. Please type your idea.'; }
+    });
+    on('#next', () => {
+      const bits = [];
+      if (pick.where) bits.push('Where: ' + pick.where + '.');
+      if (pick.wrong) bits.push('What goes wrong: ' + pick.wrong + '.');
+      if (pick.end) bits.push('How it ends: ' + pick.end + '.');
+      const own = $('#idea').value.trim(); if (own) bits.push('In her own words: ' + own);
+      if (!bits.length) { $('#micmsg').textContent = 'Tap an idea, say it, or type it first.'; return; }
+      if (rec && rec.state === 'recording') rec.stop();
+      hush(); res(bits.join(' '));
+    });
+    backBtn(res);
+    say(SCREEN_PROMPTS[2]);
+  });
+}
+function confirmIdea(text) {
+  return new Promise(res => {
+    h(`<div class="screen"><h1>Is this your story?</h1><div class="page"><p class="story">${esc(text)}</p></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="yes" class="btn big">Yes, write it ${ico('check')}</button></div>
+      <button id="change" class="btn small">Change it</button></div>`);
+    on('#hear', () => say(text)); on('#yes', () => { hush(); res(true); }); on('#change', () => { hush(); res(BACK); });
+    backBtn(res);
+    say('Is this your story? ' + text);
+  });
+}
+function failScreen(msg) {
+  return new Promise(res => {
+    h(`<div class="screen"><h1>That did not work</h1><div class="page small"><p class="story">${esc(msg)}</p></div><button id="retry" class="btn big">Try again</button></div>`);
+    on('#retry', () => res(true)); backBtn(res);
+  });
+}
+async function writeNewStory(wk, idea) {
+  for (;;) {
+    waiting(SCREEN_PROMPTS[3]); say(SCREEN_PROMPTS[3]);
+    try { const ep = await draftStory(wk, { idea }); ep.idea = idea; return ep; }
+    catch (e) { hush(); if ((await failScreen(e.message || 'Something went wrong.')) === BACK) return BACK; }
+  }
+}
+async function storyStart(wk) {
+  // Steps, so Back and "Change it" always go back one screen: shelf, cast, outline, confirm, write.
+  let step = 'shelf', pick = null, idea = null, final = null;
+  for (;;) {
+    if (step === 'shelf') {
+      pick = await shelf(epOf(wk), S.story[wk.id], !!findEpisode(wk.words));
+      if (pick === BACK) return false;
+      if (pick.kind === 'again') { S.story[wk.id] = { part: 0 }; save(); return true; }
+      step = 'cast';
+    } else if (step === 'cast') {
+      if ((await castScreen()) === BACK) { step = 'shelf'; continue; }
+      if (pick.kind === 'sample') { wk.ep = findEpisode(wk.words); S.story[wk.id] = { part: 0 }; save(); return true; }
+      if (pick.kind === 'type') { final = pick.type.idea; step = 'write'; } else step = 'outline';
+    } else if (step === 'outline') {
+      idea = await outlineScreen();
+      if (idea === BACK) { step = 'cast'; continue; }
+      step = 'confirm';
+    } else if (step === 'confirm') {
+      waiting('Tidying your idea'); say('One moment.');
+      const tidy = await tidyIdea(idea);
+      if (!tidy) { final = idea; step = 'write'; continue; }
+      if ((await confirmIdea(tidy)) === BACK) { step = 'outline'; continue; }
+      final = 'Tidied version: ' + tidy + ' Original: ' + idea; step = 'write';
+    } else {
+      const made = await writeNewStory(wk, final);
+      if (made === BACK) { step = pick.kind === 'own' ? 'outline' : 'cast'; continue; }
+      const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = made; wk.ep = id; S.story[wk.id] = { part: 0 }; save();
+      return true;
+    }
+  }
+}
+
 // ---------- the two kinds of day ----------
 function clubSetup() {
   return new Promise(res => {
@@ -488,10 +694,9 @@ function clubSetup() {
   });
 }
 async function storyDay() {
-  const wk = curWeek(), ep = epOf(wk);
-  if (!ep) return home();
-  let st = S.story[wk.id];
-  if (!st || st.part >= ep.parts.length) { if ((await clubSetup()) === BACK) return home(); st = S.story[wk.id] = { part: 0 }; save(); }
+  const wk = curWeek();
+  let ep = epOf(wk), st = S.story[wk.id];
+  if (!ep || !st || st.part >= ep.parts.length) { if (!(await storyStart(wk))) return home(); ep = epOf(wk); st = S.story[wk.id]; }
   const last = ep.parts.length > 1 && st.part === ep.parts.length - 1;
   prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
   const beats = ep.parts[st.part], starred = new Set();
@@ -557,12 +762,9 @@ function home() {
   if (pendingReload) { pendingReload = false; location.reload(); return; }
   prog = '';
   const wk = curWeek(), ep = epOf(wk);
-  let storyBtn = '';
-  if (ep) {
-    const st = S.story[wk.id];
-    const sub = !st ? 'A new story' : st.part >= ep.parts.length ? 'Finished. Tell it again?' : `Part ${st.part + 1} of ${ep.parts.length}`;
-    storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story day</b><small>${esc(sub)}</small></div></button>`;
-  }
+  const stNow = S.story[wk.id];
+  const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : `Part ${stNow.part + 1} of ${ep.parts.length}`;
+  const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story day</b><small>${esc(sub)}</small></div></button>`;
   h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span><button id="lock" class="iconbtn" aria-label="Grown-ups">${ico('lock')}</button></div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}

@@ -8,26 +8,26 @@ window.EPISODES = {
     parts: [
       [
         { n: "{g1} was planning the best sleepover ever. Pizza, a film, and a midnight feast." },
-        { n: "Then {g2} folded her arms. \"If the new girl is coming, I'm not,\" she said. \"{g4} laughed at my new shoes.\"" },
+        { n: "Then {g2} crossed both arms. \"If the new person is coming, I'm not,\" came the answer. \"{g4} laughed at my new shoes.\"" },
         { w: { word: 'nice', lead: "{g1} passed {g2} a note in maths.", before: "Your shoes are really ", after: "." } },
         { c: { q: "What does {g1} do next?", o: [
-          { l: "Ask {g4} why she laughed", n: "{g1} found {g4} by the coat pegs. \"I wasn't laughing at her,\" said {g4}. \"I've got the same shoes at home. Mine are just covered in mud.\"" },
-          { l: "Hide the invitation list", n: "{g1} hid the list in her lunch box, under a banana. By lunchtime the list smelled of banana, and {g3} had read it anyway." }
+          { l: "Ask {g4} about the laughing", n: "{g1} found {g4} by the coat pegs. \"I wasn't laughing at the shoes,\" said {g4}. \"I've got the same shoes at home. Mine are just covered in mud.\"" },
+          { l: "Hide the invitation list", n: "{g1} hid the list in a lunch box, under a banana. By lunchtime the list smelled of banana, and {g3} had read it anyway." }
         ] } },
-        { w: { word: 'shiny', lead: "That night {g2} wrote in her diary.", before: "My shoes are silver and ", after: " and I love them." } },
+        { w: { word: 'shiny', lead: "That night {g2} wrote in the diary.", before: "My shoes are silver and ", after: " and I love them." } },
         { w: { word: 'every', lead: "{g1} wrote the invitation.", before: "Sleepover at mine! Bring a pillow and ", after: " snack you can carry." } },
-        { w: { word: 'other', lead: "The next day, a note came from {g4}.", before: "Sorry about the shoes. Can I sit with you and the ", after: " girls at lunch?" } },
-        { n: "{g2} read the note twice. Then she picked up her pen. What she wrote back would change the whole sleepover..." }
+        { w: { word: 'other', lead: "The next day, a note came from {g4}.", before: "Sorry about the shoes. Can I sit with you and the ", after: " kids at lunch?" } },
+        { n: "{g2} read the note twice. Then {g2} picked up a pen. What was written back would change the whole sleepover..." }
       ],
       [
-        { n: "Saturday came. {g4} did come to the sleepover. She brought her own silver shoes, and they were covered in mud." },
+        { n: "Saturday came. {g4} did come to the sleepover, with silver shoes that were covered in mud." },
         { w: { word: 'nicer', lead: "{g3} wrote in the club notebook.", before: "{g4} is much ", after: " than we thought." } },
         { c: { q: "It is nearly midnight. What happens?", o: [
-          { l: "Ghost stories with a torch", n: "{g3} held the torch under her chin. It made her nose look enormous. {g2} laughed so much she got hiccups." },
-          { l: "A shoe-cleaning competition", n: "{g4} scrubbed her muddy shoes with a toothbrush. It was {g1}'s dad's toothbrush. Nobody told {g1}'s dad." }
+          { l: "Ghost stories with a torch", n: "{g3} held the torch under {g3}'s chin and the shadows looked enormous. {g2} laughed so much that the hiccups started." },
+          { l: "A shoe-cleaning competition", n: "{g4} scrubbed the muddy shoes with a toothbrush. It was {g1}'s dad's toothbrush. Nobody told {g1}'s dad." }
         ] } },
         { w: { word: 'shining', lead: "{g1} wrote the next line in the notebook.", before: "At midnight something silver was ", after: " in the dark." } },
-        { w: { word: 'being', lead: "{g2} got out her diary.", before: "I am sorry for ", after: " grumpy about my shoes." } },
+        { w: { word: 'being', lead: "{g2} got out the diary.", before: "I am sorry for ", after: " grumpy about my shoes." } },
         { w: { word: 'everyone', lead: "{g4} made a sign for the bedroom door.", before: "This club is for ", after: "." } },
         { n: "Then they heard footsteps on the stairs. It was half past midnight. And the footsteps were getting closer..." }
       ],
