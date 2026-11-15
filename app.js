@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.41'; // bump with every release
+const APP_VER = '2.42'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -58,7 +58,7 @@ const epOf = wk => (S.eps && S.eps[wk.ep]) || window.EPISODES[wk.ep];
 // ---------- stories written by AI (grown-ups page only) ----------
 const DEFAULT_MODEL = 'openai/gpt-6.1-sol';
 const modelSelect = id => { const cur = S.orModel || DEFAULT_MODEL, list = MODEL_SUGGESTIONS.includes(cur) ? MODEL_SUGGESTIONS : MODEL_SUGGESTIONS.concat([cur]); return `<select id="${id}">${list.map(m => `<option value="${esc(m)}" ${m === cur ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>`; };
-const MODEL_SUGGESTIONS = ['openai/gpt-6.1-sol', 'openai/gpt-6.1-terra', 'anthropic/claude-sonnet-5.5'];
+const MODEL_SUGGESTIONS = ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5', 'google/gemini-4-hydrogen', 'google/gemini-3.8-flash', 'mistralai/mistral-large-4-0', 'openai/gpt-6.1-terra'];
 const STORY_RULES = `You write a short story for a spelling app used at home by a nine-year-old girl in England. She is the author: she chooses what happens. The story is told in parts, and each of the week's spelling words is met inside the story's own text, at the end of one paragraph, where the app will point it out to her.
 
 The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
@@ -1095,8 +1095,8 @@ function adult() {
     <div id="draftOut"></div>
 
     ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
-    <input id="cm1" type="text" value="openai/gpt-6.1-sol"><input id="cm2" type="text" value="openai/gpt-6.1-terra" style="margin-top:8px"><input id="cm3" type="text" value="anthropic/claude-sonnet-5.5" style="margin-top:8px">
-    <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
+    <input id="cm1" type="text" value="anthropic/claude-sonnet-5.5"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="google/gemini-4-hydrogen" style="margin-top:8px"><input id="cm4" type="text" value="google/gemini-3.8-flash" style="margin-top:8px">
+    <button id="compare" class="btn">Write with all four</button><div id="cmpOut"></div>` : ''}
 
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
@@ -1140,7 +1140,7 @@ function adult() {
   });
   on('#compare', async () => {
     const out = $('#cmpOut'), btn = $('#compare');
-    const models = ['cm1', 'cm2', 'cm3'].map(i => $('#' + i).value.trim()).filter(Boolean);
+    const models = ['cm1', 'cm2', 'cm3', 'cm4'].map(i => $('#' + i).value.trim()).filter(Boolean);
     const words = wk.words.map(x => x.w);
     btn.disabled = true; out.innerHTML = '<p class="note">Writing with ' + models.length + ' models. This can take up to a minute.</p>';
     const res = await Promise.all(models.map(async m => {
