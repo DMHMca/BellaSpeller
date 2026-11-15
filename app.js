@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.24'; // bump with every release
+const APP_VER = '2.25'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -964,6 +964,8 @@ function owned() {
   S.log.forEach(l => { if (l.ok && !l.hints && !l.redo) (days[l.w] = days[l.w] || new Set()).add(l.d); });
   return Object.keys(days).filter(w => days[w].size >= 2);
 }
+let adultTab = 'words', adultFlash = '';
+const ADULT_TABS = [['words', 'Words'], ['story', 'Story'], ['progress', 'Progress'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -977,12 +979,14 @@ function adult() {
     return `<tr><td>${esc(x.w)}${x.red ? ' (red)' : ''}</td><td>${logs.length}</td><td>${logs.filter(l => l.ok && !l.hints).length}</td><td>${logs.reduce((a, l) => a + l.hints, 0)}</td><td>${wrong}</td><td>${own.includes(x.w) ? 'yes' : ''}</td></tr>`;
   }).join('');
   h(`<div class="adult"><h1>Grown-ups</h1>
-    <h2>This week</h2>
+    <div class="tabs">${ADULT_TABS.map(t => `<button class="tab${t[0] === adultTab ? ' on' : ''}" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>
+    ${adultFlash ? `<p class="flash">${esc(adultFlash)}</p>` : ''}
+    <div class="tabpane" data-tab="words"><h2>This week</h2>
     <label>Week in use</label><select id="cur">${S.weeks.map(w => `<option value="${w.id}" ${w.id === wk.id ? 'selected' : ''}>${esc(w.label)}</option>`).join('')}</select>
     <label>School test score for this week, out of ${wk.words.length}</label><input id="score" type="number" min="0" max="${wk.words.length}" value="${wk.score == null ? '' : wk.score}" style="max-width:120px">
     <div><button id="saveScore" class="btn">Save score</button> <button id="delWeek" class="btn small">Remove this week</button></div>
 
-    <h2>Story for this week</h2>
+    </div><div class="tabpane" data-tab="story"><h2>Story for this week</h2>
     <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revise works without one.'}</p>
     ${aiKey() ? `<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
@@ -991,7 +995,7 @@ function adult() {
     <input id="cm1" type="text" value="z-ai/glm-5.3"><input id="cm2" type="text" value="z-ai/glm-5.3-flashx" style="margin-top:8px"><input id="cm3" type="text" value="openai/gpt-6.1-terra" style="margin-top:8px">
     <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
 
-    <h2>Add a new week</h2>
+    </div><div class="tabpane" data-tab="words"><h2>Add a new week</h2>
     <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
     <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
     <label>Paste the words here, one per line or separated by commas</label><textarea id="nw" spellcheck="false"></textarea>
@@ -999,13 +1003,13 @@ function adult() {
     <button id="read" class="btn">Read the words</button>
     <div id="preview"></div>
 
-    <h2>Progress</h2>
+    </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Usual school score before the app: 5 or 6 out of 8. Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
 
-    <h2>Settings</h2>
+    </div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
@@ -1018,7 +1022,11 @@ function adult() {
     <label>Story AI address (leave blank for OpenRouter; any OpenAI-style service works, for example Z.ai)</label><input id="aiBase" type="text" autocomplete="off" placeholder="https://openrouter.ai/api/v1" value="${esc(S.aiBase || '')}">
     <label>Story AI key (leave blank to use the OpenRouter key)</label><input id="aiKey" type="password" autocomplete="off" value="${esc(S.aiKey || '')}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
-    <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div>`);
+    <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div></div>`);
+  adultFlash = '';
+  const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
+  document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
+  showTab(adultTab);
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModel').value.trim() || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
@@ -1093,7 +1101,7 @@ function adult() {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
       S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: findEpisode(ws) });
-      S.cur = id; save(); adult();
+      S.cur = id; save(); adultTab = 'story'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '. Next: press "Write with all three" below to have stories written for these words.'; adult();
     });
   });
 }
