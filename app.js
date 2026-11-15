@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.29'; // bump with every release
+const APP_VER = '2.30'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -793,6 +793,7 @@ async function storyStart(wk) {
   let step = 'shelf', pick = null, idea = null, final = null;
   for (;;) {
     if (step === 'shelf') {
+      if (epOf(wk) && !S.story[wk.id]) { S.story[wk.id] = { part: 0 }; save(); } // a saved story not yet started still shows on the shelf
       pick = await shelf(epOf(wk), S.story[wk.id], !!findEpisode(wk.words));
       if (pick === BACK) return false;
       if (pick.kind === 'cast') { await castScreen(); continue; }
