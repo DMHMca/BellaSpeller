@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.25'; // bump with every release
+const APP_VER = '2.26'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -965,7 +965,7 @@ function owned() {
   return Object.keys(days).filter(w => days[w].size >= 2);
 }
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'Words'], ['story', 'Story'], ['progress', 'Progress'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['progress', 'Progress'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -983,9 +983,20 @@ function adult() {
     ${adultFlash ? `<p class="flash">${esc(adultFlash)}</p>` : ''}
     <div class="tabpane" data-tab="words"><h2>This week</h2>
     <label>Week in use</label><select id="cur">${S.weeks.map(w => `<option value="${w.id}" ${w.id === wk.id ? 'selected' : ''}>${esc(w.label)}</option>`).join('')}</select>
-    <label>School test score for this week, out of ${wk.words.length}</label><input id="score" type="number" min="0" max="${wk.words.length}" value="${wk.score == null ? '' : wk.score}" style="max-width:120px">
-    <div><button id="saveScore" class="btn">Save score</button> <button id="delWeek" class="btn small">Remove this week</button></div>
+    <div><button id="delWeek" class="btn small">Remove this week</button></div>
 
+    <h2>Add a new week</h2>
+    <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
+    <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
+    <label>Paste the words here, one per line or separated by commas</label><textarea id="nw" spellcheck="false"></textarea>
+    <p class="note">To add a spelling voice for a tricky word, write it after a bar, like this: every | ev-er-y</p>
+    <button id="read" class="btn">Read the words</button>
+    <div id="preview"></div>
+
+    <h2>School test score</h2>
+    <p class="note">Enter this at the end of the week, when the marked test is back.</p>
+    <label>Score for ${esc(wk.label)}, out of ${wk.words.length}</label><input id="score" type="number" min="0" max="${wk.words.length}" value="${wk.score == null ? '' : wk.score}" style="max-width:120px">
+    <div><button id="saveScore" class="btn">Save score</button></div>
     </div><div class="tabpane" data-tab="story"><h2>Story for this week</h2>
     <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revise works without one.'}</p>
     ${aiKey() ? `<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
@@ -995,16 +1006,8 @@ function adult() {
     <input id="cm1" type="text" value="z-ai/glm-5.3"><input id="cm2" type="text" value="z-ai/glm-5.3-flashx" style="margin-top:8px"><input id="cm3" type="text" value="openai/gpt-6.1-terra" style="margin-top:8px">
     <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
 
-    </div><div class="tabpane" data-tab="words"><h2>Add a new week</h2>
-    <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
-    <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
-    <label>Paste the words here, one per line or separated by commas</label><textarea id="nw" spellcheck="false"></textarea>
-    <p class="note">To add a spelling voice for a tricky word, write it after a bar, like this: every | ev-er-y</p>
-    <button id="read" class="btn">Read the words</button>
-    <div id="preview"></div>
-
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
-    <p>Usual school score before the app: 5 or 6 out of 8. Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
+    <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
