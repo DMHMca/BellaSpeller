@@ -3,7 +3,8 @@
 
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
-const APP_VER = '2.13'; // bump with every release
+function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
+const APP_VER = '2.14'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -212,7 +213,7 @@ async function fetchClip(t) {
 }
 // Makes sure the clips exist. Shows a short "getting ready" screen, which Bella can skip.
 async function prep(texts, msg) {
-  if (!ttsOn()) return null;
+  if (!ttsOn() || !soundOn()) return null;
   const need = [];
   for (const t of new Set(texts)) { if (t && sendable(t) && !(await getClipUrl(t))) need.push(t); }
   if (!need.length) return null;
@@ -259,6 +260,7 @@ function stopAll() {
 function say(t) {
   const tok = ++sayTok;
   stopAll();
+  if (!soundOn()) return;
   if (!ttsOn()) return builtinSay(t);
   getClipUrl(t).then(url => {
     if (tok !== sayTok) return;
@@ -314,6 +316,7 @@ const ICONS = {
   pencil: '<path d="M4 20l1-4L16 5l3 3L8 19z"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
   users: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 15c3 0 5 1.5 5 4"/>',
+  muted: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
   star: '<path fill="currentColor" stroke="none" d="M12 2.2l2.95 6.1 6.7.95-4.85 4.7 1.15 6.65L12 17.4l-5.95 3.2 1.15-6.65L2.35 9.25l6.7-.95z"/>'
 };
@@ -961,6 +964,12 @@ function debugUI() {
   b.id = 'dbg'; b.className = 'dbgbtn'; b.setAttribute('aria-label', 'Settings (debug)'); b.innerHTML = ico('gear');
   b.onclick = toggleDebug;
   document.body.appendChild(b);
+  const sb = document.createElement('button');
+  sb.id = 'snd'; sb.className = 'dbgbtn snd';
+  const paint = () => { sb.innerHTML = ico(soundOn() ? 'speaker' : 'muted'); sb.setAttribute('aria-label', soundOn() ? 'Sound on' : 'Sound off'); sb.title = soundOn() ? 'Sound on' : 'Sound off'; sb.classList.toggle('off', !soundOn()); };
+  sb.onclick = () => { S.sound = !soundOn(); save(); if (!soundOn()) hush(); paint(); };
+  paint();
+  document.body.appendChild(sb);
   const v = document.createElement('div');
   v.id = 'vtag'; v.textContent = 'BellaSpeller v' + APP_VER;
   document.body.appendChild(v);
