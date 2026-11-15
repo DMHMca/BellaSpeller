@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.22'; // bump with every release
+const APP_VER = '2.23'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -919,11 +919,11 @@ function home() {
   const wk = curWeek(), ep = epOf(wk);
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : `Part ${stNow.part + 1} of ${ep.parts.length}`;
-  const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story day</b><small>${esc(sub)}</small></div></button>`;
+  const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>Story</b><small>${esc(sub)}</small></div></button>`;
   h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span><button id="lock" class="iconbtn" aria-label="Grown-ups">${ico('lock')}</button></div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}
-    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>Quick day</b><small>Just the ${wk.words.length} words</small></div></button>
+    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>Revise</b><small>Just the ${wk.words.length} words</small></div></button>
     <button id="sky" class="tile t-sky"><span class="ticon">${ico('star')}</span><div class="tt"><b>My stars</b><small>${S.stars} ${S.stars === 1 ? 'star' : 'stars'}</small></div></button></div></div>`, { noTop: true });
   on('#story', storyDay); on('#quick', quickDay); on('#sky', () => ceiling().then(home)); on('#lock', adultGate);
 }
@@ -983,7 +983,7 @@ function adult() {
     <div><button id="saveScore" class="btn">Save score</button> <button id="delWeek" class="btn small">Remove this week</button></div>
 
     <h2>Story for this week</h2>
-    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Quick day works without one.'}</p>
+    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revise works without one.'}</p>
     ${aiKey() ? `<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
 
@@ -1088,7 +1088,7 @@ function adult() {
     const redFrom = ws.length >= 6 ? ws.length - 3 : ws.length;
     $('#preview').innerHTML = `<p>Check each word. Tick the red words, the ones with no rule.</p>` +
       ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${i >= redFrom ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
-      `<p class="note">${findEpisode(ws) ? 'A story is ready for these words.' : 'No story for these words yet. Quick day will work.'}</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
+      `<p class="note">${findEpisode(ws) ? 'A story is ready for these words.' : 'No story for these words yet. Revise will work.'}</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
     on('#saveWeek', () => {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
