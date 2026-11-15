@@ -7,7 +7,7 @@ window.EPISODES = {
     words: ['nice', 'nicer', 'shiny', 'shining', 'being', 'every', 'everyone', 'other'],
     parts: [
       [
-        { n: "{g1} was planning the best sleepover ever. Pizza, a film, and a midnight feast." },
+        { n: "{g1} was planning the best sleepover ever. Cheese on toast, a film, and a midnight feast of fruit and flapjacks." },
         { n: "Then {g2} crossed both arms. \"If the new person is coming, I'm not,\" came the answer. \"{g4} laughed at my new shoes.\"" },
         { w: { word: 'nice', lead: "{g1} passed {g2} a note in maths.", before: "Your shoes are really ", after: "." } },
         { c: { q: "What does {g1} do next?", o: [

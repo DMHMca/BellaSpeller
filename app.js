@@ -3,7 +3,7 @@
 
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
-const APP_VER = '2.12'; // bump with every release
+const APP_VER = '2.13'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -39,6 +39,8 @@ const STORY_RULES = `You write a short three-part story for a spelling app used 
 The story idea in the request comes from the nine-year-old author, so follow it, keep it suitable for her age, and be kind about it.
 
 Style: real children with ordinary problems (friendship, school, family, sleepovers), warm and funny, in British English. Short, plain sentences that sound good read aloud. No fantasy, no romance, nothing frightening or unkind. Nobody is ever teased about reading, spelling or being clever.
+
+Setting and values: the story is set in a modern, sensible English family world, with kind, responsible parents and carers. Use British daily life and British English: school uniform, PE kit, break time, assembly, tea, squash, toast, fruit, sandwiches, soup, pasta, jacket potatoes, flapjacks, wellies, rain, the park, the corner shop. Never include fast food or junk food (no pizza, burgers, fries, soda, candy, takeaways) and no American words or customs (no mom, cookies, sidewalk, vacation, recess). Sleepovers are realistic: parents are at home, bedtimes are respected, and nobody is left unsupervised or put in danger. Fantasy is welcome when the idea asks for it (witches, dragons, other worlds), but everyday life stays British and sensible.
 
 Characters: exactly four friends, written only as {g1}, {g2}, {g3} and {g4}. The request says whether each is a girl or a boy and gives any trait: use the right pronouns (she and her, he and him) and keep each trait consistent. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
 
@@ -79,6 +81,9 @@ function checkEpisode(ep, words) {
     if (used[2].filter(x => x === w).length !== 1) bad.push('"' + w + '" should be written exactly once in part 3.');
   });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
+  const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc)\b/i;
+  const usHit = texts.map(t => String(t).match(US)).find(Boolean);
+  if (usHit) bad.push('It uses American or fast-food wording ("' + usHit[0] + '"). Use British English and wholesome food, as the instructions say.');
   return bad;
 }
 const castDesc = () => [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return '{g' + (i + 1) + '} is a ' + (m.boy ? 'boy' : 'girl') + (m.trait ? ', ' + m.trait : ''); }).join('; ');
@@ -517,7 +522,7 @@ async function tidyIdea(idea) {
     const r = await fetch(aiBase() + '/chat/completions', {
       method: 'POST', headers,
       body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, messages: [
-        { role: 'system', content: 'You help a nine-year-old author in England. Rewrite her story idea as two or three short, clear sentences in friendly British English. Keep all her ideas. Keep it kind and suitable for her age. Reply with only the sentences.' },
+        { role: 'system', content: 'You help a nine-year-old author in England. Rewrite her story idea as two or three short, clear sentences in friendly British English. Keep all her ideas. Keep it kind and suitable for her age, in a sensible modern English family world: no fast food, junk food or American words. Reply with only the sentences.' },
         { role: 'user', content: idea }] })
     });
     if (!r.ok) return null;
