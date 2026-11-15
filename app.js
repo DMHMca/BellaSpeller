@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.5, 15 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.6, 15 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -46,7 +46,7 @@ In a w beat, before + word + after must read as one natural sentence that the ch
 Rules:
 1. Parts 1 and 2 together use every spelling word exactly once, split about evenly. Each of these parts has two or three narration beats and exactly one choice, and ends with a narration beat that is a cliffhanger. Both options of a choice must lead sensibly into the rest of the part.
 2. Part 3 opens with one or two narration beats that resolve the cliffhanger. Then it uses every spelling word once more, each in its own w beat, as one shared piece of writing (club rules, a letter, a poster). Then one closing narration beat. Part 3 has no choice.
-3. Most important: a spelling word must never appear anywhere except as the "word" of its own w beat. Not in the title, the narration, the choices, the leads, or the before and after text of any beat. Choose a different word.
+3. A spelling word may also appear naturally elsewhere in the story, in the narration and choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
 4. Reply with the JSON object only.`;
 
 function checkEpisode(ep, words) {
@@ -72,8 +72,6 @@ function checkEpisode(ep, words) {
   words.forEach(w => {
     if (first.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be written exactly once in parts 1 and 2.');
     if (used[2].filter(x => x === w).length !== 1) bad.push('"' + w + '" should be written exactly once in part 3.');
-    const re = new RegExp('(^|[^a-z])' + w.replace(/[^a-z]/g, '.') + '($|[^a-z])', 'i');
-    if (texts.some(t => re.test(t))) bad.push('"' + w + '" is shown in the story text, which gives the spelling away.');
   });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
   return bad;
