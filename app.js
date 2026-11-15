@@ -2,7 +2,7 @@
 // BellaSpeller, version 1. Everything is stored on this device only.
 
 const KEY = 'star-speller-1';
-const APP_VERSION = 'version 2.4, 14 November 2026'; // change this with every release
+const APP_VERSION = 'version 2.5, 15 November 2026'; // change this with every release
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -10,7 +10,7 @@ const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.f
 
 function fresh() {
   return {
-    pin: null, name: '', girls: ['Priya', 'Maya', 'Jess', 'Tilly'], meIn: false,
+    pin: null, name: '', girls: ['Imogen', 'Persephone', 'Florence', 'Tabitha'], meIn: false,
     weeks: [{
       id: 'w1', label: 'Try-out week',
       rule: 'Adding -ing or -er to words ending in e with a consonant before it',
@@ -23,7 +23,7 @@ function fresh() {
     cur: 'w1', log: [], stars: 0, story: {}
   };
 }
-function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) return s; } catch (e) { } return fresh(); }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return s; } } catch (e) { } return fresh(); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } }
 let S = load();
 const curWeek = () => S.weeks.find(w => w.id === S.cur) || S.weeks[S.weeks.length - 1];
@@ -139,7 +139,7 @@ const PRESETS = [
   { id: 'el-lily', label: 'Lily (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'lily' },
   { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' }
 ];
-const POOL = ['Priya', 'Maya', 'Jess', 'Tilly', 'Zara', 'Ellie', 'Ruby', 'Amber', 'Daisy', 'Freya', 'Lola', 'Poppy', 'Isla', 'Hana', 'Skye', 'Rosie'];
+const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind'];
 const PRAISE = ['Brilliant!', 'Well done!', 'Spot on!', 'You got it!', 'Fantastic!', 'Super spelling!'];
 const FIX_TAIL = ' Have a good look. Then try once more.';
 const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
