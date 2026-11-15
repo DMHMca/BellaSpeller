@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.17'; // bump with every release
+const APP_VER = '2.18'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -711,6 +711,20 @@ function confirmIdea(text) {
     say('Is this your story? ' + text);
   });
 }
+function readyScreen(title) {
+  return new Promise(res => {
+    const names = S.girls.slice(0, 4);
+    const list = names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+    h(`<div class="screen"><h1>Ready?</h1><p class="subtle">${esc(title)}</p>
+      <div class="page small"><p class="lead-in">In your story</p><p class="story">${esc(list)}</p></div>
+      <button id="go" class="btn big">Start the story ${ico('next')}</button>
+      <button id="chg" class="btn small">${ico('swap')}<span>Change characters</span></button></div>`);
+    on('#go', () => { hush(); res('start'); });
+    on('#chg', () => { hush(); res('cast'); });
+    keyHandler = e => { if (e.key === 'Enter') { hush(); res('start'); } };
+    backBtn(res);
+  });
+}
 function failScreen(msg) {
   return new Promise(res => {
     h(`<div class="screen"><h1>That did not work</h1><div class="page small"><p class="story">${esc(msg)}</p></div><button id="retry" class="btn big">Try again</button></div>`);
@@ -726,7 +740,7 @@ async function writeNewStory(wk, idea) {
 }
 async function storyStart(wk) {
   // Quick route: pick a story and it starts. Characters are optional (the Change strip on the shelf).
-  // Steps: shelf, outline (own story only), confirm, write. Back goes one step back.
+  // Steps: shelf, outline (own story only), confirm, ready (start or change characters), write. Back goes one step back.
   let step = 'shelf', pick = null, idea = null, final = null;
   for (;;) {
     if (step === 'shelf') {
@@ -735,7 +749,7 @@ async function storyStart(wk) {
       if (pick.kind === 'cast') { await castScreen(); continue; }
       if (pick.kind === 'again') { const e0 = epOf(wk), s0 = S.story[wk.id]; if (e0 && s0 && s0.part >= e0.parts.length) { S.story[wk.id] = { part: 0 }; save(); } return true; }
       if (pick.kind === 'sample') { wk.ep = findEpisode(wk.words); S.story[wk.id] = { part: 0 }; save(); return true; }
-      if (pick.kind === 'type') { final = pick.type.idea; step = 'write'; } else step = 'outline';
+      if (pick.kind === 'type') { final = pick.type.idea; step = 'ready'; } else step = 'outline';
     } else if (step === 'outline') {
       idea = await outlineScreen();
       if (idea === BACK) { step = 'shelf'; continue; }
@@ -743,9 +757,14 @@ async function storyStart(wk) {
     } else if (step === 'confirm') {
       waiting('Tidying your idea'); say('One moment.');
       const tidy = await tidyIdea(idea);
-      if (!tidy) { final = idea; step = 'write'; continue; }
+      if (!tidy) { final = idea; step = 'ready'; continue; }
       if ((await confirmIdea(tidy)) === BACK) { step = 'outline'; continue; }
-      final = 'Tidied version: ' + tidy + ' Original: ' + idea; step = 'write';
+      final = 'Tidied version: ' + tidy + ' Original: ' + idea; step = 'ready';
+    } else if (step === 'ready') {
+      const r = await readyScreen(pick.kind === 'type' ? pick.type.title : 'Your own story');
+      if (r === BACK) { step = pick.kind === 'own' ? 'outline' : 'shelf'; continue; }
+      if (r === 'cast') { await castScreen(); continue; }
+      step = 'write';
     } else {
       const made = await writeNewStory(wk, final);
       if (made === BACK) { step = pick.kind === 'own' ? 'outline' : 'shelf'; continue; }
