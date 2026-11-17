@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.70'; // bump with every release
+const APP_VER = '2.73'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -273,6 +273,7 @@ const TOOLS = [
   { id: 'parts', label: 'Word parts', note: 'The word split into parts, such as side + ways. Word parts are among the better-supported teaching content.' },
   { id: 'trace', label: 'Trace, copy, then write', note: 'Trace it, copy it, wait a moment, then write it from memory. Small case studies only.' },
   { id: 'letters', label: 'Say the letters while writing', note: 'She says each letter as she writes it. Evidence is mixed.' },
+  { id: 'nextletter', label: 'Next letter', note: 'Gives her the next correct letter when she is stuck. It counts as help.' },
   { id: 'sure', label: 'Are you sure?', note: 'A gentle nudge, once per word, when a letter does not look right. It never says which letter. It counts as help.' },
   { id: 'choice', label: 'Pick the right spelling', note: 'She picks the right spelling from several, instead of writing it. This is recognition, not recall. Research found recall gives bigger memory benefits, so this is here to try, not because it is proven.' }
 ];
@@ -280,7 +281,8 @@ const toolOn = id => !!(S.tools && S.tools[id]);
 // A tool is only offered for a word when it is switched on and the word has what the tool needs.
 const toolHas = (id, x) => toolOn(id) && (id === 'mnem' ? !!x.mnem : id === 'hard' ? !!x.hard : id === 'voice' ? !!x.say : id === 'parts' ? !!x.parts && x.parts.includes('|') : true);
 const toolsFor = x => TOOLS.filter(t => toolHas(t.id, x)).map(t => t.id);
-const REVEALS = ['mnem', 'hard', 'parts', 'voice', 'sure'];
+const REVEALS = ['mnem', 'hard', 'parts', 'voice', 'sure', 'nextletter'];
+const TOOL_SHORT = { mnem: 'Memory trick', hard: 'Hard part', voice: 'Spelling voice', parts: 'Word parts', trace: 'Trace & copy', letters: 'Say the letters', sure: 'Are you sure?', choice: 'Pick the spelling', nextletter: 'Next letter' };
 const SURE_MSG = 'Are you sure?';
 function hardHtml(x) { const i = x.hard ? x.w.indexOf(x.hard) : -1; return i < 0 ? esc(x.w) : esc(x.w.slice(0, i)) + '<u>' + esc(x.hard) + '</u>' + esc(x.w.slice(i + x.hard.length)); }
 // What the switched-on tools show for a word. stage 'look': the word is on screen. stage 'write': it is hidden, so anything shown is help.
@@ -294,18 +296,17 @@ function toolContent(x, stage) {
   return { html, shown };
 }
 function toolsPanel() {
-  return `<div class="toolsbar"><button class="btn small" id="toolsbtn">${ico('bulb')}<span>Tools</span></button>
-    <div id="toolchips" class="chiprow" ${S.toolsOpen ? '' : 'hidden'}>${TOOLS.map(t => `<button class="chip small${toolOn(t.id) ? ' on' : ''}" data-tool="${t.id}" aria-pressed="${toolOn(t.id)}">${esc(t.label)}</button>`).join('')}</div>
+  return `<div class="toolsbar"><div class="toolcap">Tap a help to use it:</div>
+    <div id="toolchips" class="chiprow">${TOOLS.map(t => `<button class="chip small${toolOn(t.id) ? ' on' : ''}" data-tool="${t.id}" aria-pressed="${toolOn(t.id)}">${esc(TOOL_SHORT[t.id] || t.label)}</button>`).join('')}</div>
     <div id="toolbody"></div></div>`;
 }
-// Wires the Tools button and chips. Calls after(content) now and after every change.
+// Wires the help switches. Calls after(content) now and after every change.
 function wireTools(x, stage, after) {
   const body = () => {
     const c = toolContent(x, stage); $('#toolbody').innerHTML = c.html;
     const m = $('#mymnem'); if (m) m.onclick = async () => { const t = await typeText({ title: 'Your memory trick for this word', initial: '', max: 140 }); if (t && t.trim()) { x.mnem = t.trim(); x.mnemBy = 'bella'; save(); body(); } };
     if (after) after(c);
   };
-  on('#toolsbtn', () => { S.toolsOpen = !S.toolsOpen; save(); $('#toolchips').hidden = !S.toolsOpen; });
   document.querySelectorAll('.chip[data-tool]').forEach(c => { c.onclick = () => { S.tools = S.tools || {}; const id = c.dataset.tool; S.tools[id] = !toolOn(id); save(); c.classList.toggle('on', toolOn(id)); c.setAttribute('aria-pressed', String(toolOn(id))); body(); }; });
   body();
 }
@@ -498,7 +499,9 @@ function partTexts(beats, wk) {
   });
   return o;
 }
+let speechUntil = 0; // physical-keyboard input is ignored while the app speaks and for a moment after (voice typing can hear it)
 function stopAll() {
+  speechUntil = Date.now() + 1500;
   clearTimeout(sayTimer);
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (audioEl) { audioEl.onended = audioEl.onerror = null; audioEl.pause(); audioEl = null; }
@@ -507,11 +510,13 @@ function say(t) {
   const tok = ++sayTok;
   stopAll();
   if (!soundOn()) return;
+  speechUntil = Date.now() + 120000;
   if (!ttsOn()) return builtinSay(t);
   getClipUrl(t).then(url => {
     if (tok !== sayTok) return;
     if (url) {
       audioEl = new Audio(url);
+      audioEl.onended = () => { speechUntil = Date.now() + 2500; };
       audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
       audioEl.play().catch(() => { if (tok === sayTok) builtinSay(t); });
     } else {
@@ -532,6 +537,7 @@ function builtinSay(t) {
     if (voice) u.voice = voice;
     u.lang = voice ? voice.lang : 'en-GB';
     u.rate = 0.9;
+    u.onend = u.onerror = () => { speechUntil = Date.now() + 2500; };
     keepUtt = u; // stops the browser discarding it before it has finished
     speechSynthesis.speak(u);
   }, 120);
@@ -735,25 +741,31 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
       const okk = document.querySelector('.key[data-k="ok"]'); if (okk) okk.disabled = !typed;
       const sb = $('#surebox'); if (sb && sb.textContent && word.startsWith(typed)) sb.textContent = ''; // she has put it right herself
     };
-    let sureShown = false;
+    let sureShown = false, armed = false;
+    setTimeout(() => { armed = true; }, 700); // taps from the screen before can land here; ignore input for the first moments
     // The word is finished as soon as it is spelled right; for anything else she taps the tick.
-    const add = c => { if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && toolOn('sure') && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
+    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && toolOn('sure') && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
     const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
       let i = 0;
       while (i < typed.length && i < word.length && typed[i] === word[i]) i++;
-      if (i < word.length) { typed = word.slice(0, i + 1); hints++; draw(); }
+      if (i < word.length) { typed = word.slice(0, i + 1); hints++; used.add('nextletter'); draw(); }
     };
-    document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; k === 'del' ? del() : k === 'ok' ? finish() : add(k); }; });
+    document.querySelectorAll('.key').forEach(b => { b.onclick = () => { if (!armed) return; const k = b.dataset.k; k === 'del' ? del() : k === 'ok' ? finish() : add(k); }; });
+    // Physical keyboard: each key waits a moment to see whether more follow right behind it. Dictation software types in a burst, and a burst is ignored.
+    let pendingKey = null, burstUntil = 0;
     keyHandler = e => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === 'Backspace') { del(); e.preventDefault(); }
-      else if (e.key === 'Enter') { finish(); e.preventDefault(); }
-      else if (/^[a-zA-Z'-]$/.test(e.key)) { add(e.key.toLowerCase()); e.preventDefault(); }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !armed) return;
+      const now = Date.now(), k = e.key;
+      if (!(k === 'Backspace' || k === 'Enter' || /^[a-zA-Z'-]$/.test(k))) return;
+      e.preventDefault();
+      if (now < burstUntil || now < speechUntil) return; // a burst just happened, or the app is speaking
+      if (pendingKey) { clearTimeout(pendingKey); pendingKey = null; burstUntil = now + 500; return; }
+      pendingKey = setTimeout(() => { pendingKey = null; if (k === 'Backspace') del(); else if (k === 'Enter') finish(); else add(k.toLowerCase()); }, 35);
     };
     on('#hear', sayIt); on('#hint', hint);
-    if (wobj) wireTools(wobj, 'write', c => c.shown.forEach(id => used.add(id)));
+    if (wobj) wireTools(wobj, 'write', c => { c.shown.forEach(id => used.add(id)); const hb = $('#hint'); if (hb) hb.style.display = toolOn('nextletter') ? '' : 'none'; });
     if (wobj && (force || toolOn('choice'))) {
       used.add('choice');
       const opts = shuffle([word].concat(misspellings(wobj, (curWeek().words || []).map(q => q.w))));
@@ -1208,8 +1220,9 @@ function traceFlow(word) {
       let typed = '';
       h(`<div class="screen"><p class="msg">Now copy it</p><div class="wordtile small">${esc(word)}</div><div id="slots" class="slots"></div><p id="cmsg" class="subtle"></p>${kbHtml()}</div>`);
       const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; const okk = document.querySelector('.key[data-k="ok"]'); if (okk) okk.disabled = !typed; };
-      const submit = () => { if (typed === word) r('ok'); else if (typed) { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } };
-      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; if (k === 'ok') return submit(); if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); if (typed === word) setTimeout(() => { if (typed === word) submit(); }, 350); }; });
+      let armed = false; setTimeout(() => { armed = true; }, 700);
+      const submit = () => { if (!armed) return; if (typed === word) r('ok'); else if (typed) { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } };
+      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { if (!armed) return; const k = b.dataset.k; if (k === 'ok') return submit(); if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); if (typed === word) setTimeout(() => { if (typed === word) submit(); }, 350); }; });
       backBtn(() => r(BACK)); draw();
     });
     if (s2 === BACK) return res(BACK);
