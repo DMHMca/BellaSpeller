@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.61'; // bump with every release
+const APP_VER = '2.62'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -77,7 +77,7 @@ How to work:
 3. Place each word where it belongs. For each spelling word, choose a paragraph where the word arises naturally from what is happening, and put it in that paragraph's LAST sentence. The last sentence must follow from the sentences before it.
 4. Do not invent a reason for someone to write the word. No notes, signs, lists or diary lines unless the plot truly calls for one.
 5. Do not bend the story to fit a word. If a word will not fit a paragraph, move it to a different paragraph.
-6. Keep each paragraph short: two sentences, three at most, about 35 words, so the page is not crowded. Write exactly one paragraph for each spelling word, plus at most two short extra paragraphs (an opening and a closing). Keep the plan under 60 words.
+6. Keep each paragraph short: two sentences, three at most, about 35 words, so the page is not crowded. Write exactly one paragraph for each spelling word, plus at most two short extra paragraphs (an opening and a closing). Spread the spelling words evenly, so that a word turns up in almost every paragraph and the words come one after another at a steady pace, while the story still hangs together. Keep the plan under 60 words.
 7. Use each spelling word in an ordinary, natural way, in a complete sentence that a child would really say or read. Never use a word as a tag on the end of a sentence ("..., really.") or in a half-finished phrase ("she forgot when"), and never turn a sentence back to front to reach the word ("off she went" is fine, "off Ellie went" is not). If a word will not sit naturally in a paragraph, move it to another paragraph.
 8. {{LENGTH_RULE}}
 
@@ -622,7 +622,8 @@ function narrate(text, label, hl) {
 function narratePage(paras) {
   const text = paras.map(q => q.t).join(' ');
   return new Promise(res => {
-    h(`<div class="screen"><div class="page">${paras.map(q => `<p class="story">${q.w ? hlHtml(q.t, q.w) : esc(q.t)}</p>`).join('')}</div>
+    const dense = text.split(/\s+/).length > 70;
+    h(`<div class="screen"><div class="page${dense ? ' dense' : ''}">${paras.map(q => `<p class="story">${q.w ? hlHtml(q.t, q.w) : esc(q.t)}</p>`).join('')}</div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div></div>`);
     on('#hear', () => say(text));
     on('#next', () => { hush(); res(); });
@@ -631,7 +632,8 @@ function narratePage(paras) {
     say(text);
   });
 }
-const PAGE_WORDS = 70;
+const PAGE_WORDS = 90;
+const STORY_INTRO = 'Watch for the words with a yellow highlight. They are your test words. You will spell them at the end.';
 function packPages(beats) {
   const steps = [], wc = t => t.split(/\s+/).filter(Boolean).length;
   let cur = [];
@@ -1100,8 +1102,9 @@ async function storyDay() {
   const order = beats.filter(b => b.p && b.word).map(b => b.word);
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
   const steps = packPages(beats);
-  await prep(steps.filter(x => x.page).map(x => x.page.map(q => q.t).join(' ')).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk)), 'Getting the story ready');
+  await prep(steps.filter(x => x.page).map(x => x.page.map(q => q.t).join(' ')).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Getting the story ready');
   prog = ep.title;
+  if ((await gentle('Watch for the highlighted words.', 'They are your test words. You will spell them at the end.', 'Start the story', STORY_INTRO)) === BACK) return home();
   let i = 0;
   while (i < steps.length) {
     const st0 = steps[i];
