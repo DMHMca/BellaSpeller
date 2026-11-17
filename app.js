@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.84'; // bump with every release
+const APP_VER = '2.85'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -325,7 +325,7 @@ function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
   if (id === 'family' && (x.rule || x.family)) return { html: (x.rule ? L('The rule:', esc(x.rule)) : '') + (x.family && x.family.length ? L('Words like it:', x.family.slice(0, 3).map(esc).join(', ')) : '') + '<button class="btn small" id="hearsay">Hear it</button>', say: familyText(x) };
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
-  if (id === 'parts' && x.parts) return { html: L('Word parts. One box for each letter:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
+  if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
   if (id === 'letters') return { html: L('', 'Say each letter out loud as you type it.') };
   if (id === 'sure') return { html: L('', 'I will tell you if a letter does not look right.') };
