@@ -323,5 +323,6 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .optchip { padding:6px 14px; border:2px dashed rgba(255,255,255,.35); border-radius:999px; background:rgba(255,255,255,.08); color:#fff; font:inherit; font-size:15px; cursor:pointer; }
 .optchip b { color:var(--amber); }
 
-.againrow { display:flex; gap:10px; align-items:center; width:100%; }
-.againrow .shelfcard { flex:1; }
+.againrow { position:relative; width:100%; }
+.againrow .shelfcard { width:100%; padding-right:140px; }
+.againrow .optchip { position:absolute; right:16px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.2); border-style:solid; }
