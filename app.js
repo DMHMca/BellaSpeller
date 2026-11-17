@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.85'; // bump with every release
+const APP_VER = '2.86'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -305,7 +305,7 @@ function helpsFor(x) {
   // Only helps that make her work for the spelling. None of them shows the word.
   const out = ['sure', 'letters'];
   if (x.say) out.push('voice');
-  if ((x.family && x.family.length) || x.rule) out.push('family');
+  { const f = famOf(x); if (f.rule || f.family.length) out.push('family'); }
   if (x.hard) out.push('hard');
   if (x.parts && x.parts.includes('|')) out.push('parts');
   out.push('choice');
@@ -319,11 +319,42 @@ function boxesHtml(x, marks, groups) {
   if (groups) { let off = 0; return groups.map(g => { const t = `<span class="bxg">${cells(g.length, off)}</span>`; off += g.length; return t; }).join('<span class="bxplus">+</span>'); }
   return `<span class="bxg">${cells(w.length, 0)}</span>`;
 }
+// Basic English spelling patterns, used to give the rule for a word. Checked in this order: the first that fits wins.
+// [pattern, where it must be ('start', 'end', 'any'), example words]. No food words, no American spellings.
+const PHONICS = [
+  ['th', 'start', ['this', 'that', 'those', 'then', 'them']], ['sh', 'start', ['ship', 'shop', 'shell', 'shut']], ['ch', 'start', ['chat', 'chain', 'chop', 'chair']],
+  ['wh', 'start', ['what', 'when', 'where', 'why', 'which']], ['kn', 'start', ['knee', 'knit', 'knock', 'know']], ['wr', 'start', ['write', 'wrong', 'wrap', 'wrist']], ['qu', 'start', ['queen', 'quick', 'quiet', 'quite']],
+  ['ould', 'end', ['could', 'would', 'should']], ['ight', 'any', ['night', 'light', 'right', 'sight', 'might']], ['ough', 'any', ['though', 'through', 'thought', 'rough', 'enough']],
+  ['tion', 'end', ['nation', 'action', 'station', 'motion']], ['ture', 'end', ['picture', 'nature', 'future', 'creature']], ['tch', 'end', ['catch', 'match', 'watch', 'witch']], ['dge', 'end', ['bridge', 'edge', 'badge', 'judge']],
+  ['ck', 'end', ['back', 'pack', 'duck', 'kick']], ['ful', 'end', ['careful', 'helpful', 'playful', 'cheerful']], ['ous', 'end', ['famous', 'nervous', 'serious', 'curious']], ['ly', 'end', ['slowly', 'quickly', 'gladly', 'kindly']],
+  ['ing', 'end', ['going', 'playing', 'jumping', 'singing']], ['ed', 'end', ['jumped', 'played', 'wanted', 'helped']], ['le', 'end', ['little', 'table', 'bubble', 'puzzle']],
+  ['ph', 'any', ['phone', 'photo', 'graph', 'elephant']], ['ea', 'any', ['read', 'beat', 'team', 'speak', 'seat']], ['ee', 'any', ['tree', 'green', 'sleep', 'need']], ['oa', 'any', ['boat', 'road', 'coat', 'soap']],
+  ['ai', 'any', ['rain', 'train', 'wait', 'paint']], ['ay', 'any', ['day', 'play', 'stay', 'way']], ['oo', 'any', ['moon', 'room', 'school', 'cool']], ['ie', 'any', ['field', 'piece', 'chief', 'brief']], ['ei', 'any', ['ceiling', 'receive', 'neighbour', 'eight']],
+  ['ou', 'any', ['house', 'cloud', 'mouth', 'round']], ['ow', 'any', ['down', 'town', 'flower', 'brown']], ['oy', 'any', ['boy', 'toy', 'enjoy', 'royal']], ['oi', 'any', ['coin', 'noise', 'point', 'voice']],
+  ['au', 'any', ['because', 'haunt', 'launch', 'author']], ['aw', 'any', ['saw', 'draw', 'claw', 'paw']], ['ar', 'any', ['car', 'star', 'park', 'farm']], ['or', 'any', ['for', 'sport', 'short', 'storm']],
+  ['er', 'any', ['her', 'water', 'sister', 'letter']], ['ir', 'any', ['girl', 'first', 'third', 'bird']], ['ur', 'any', ['turn', 'hurt', 'burst', 'nurse']], ['ss', 'any', ['dress', 'glass', 'class', 'mess']],
+  ['ll', 'any', ['bell', 'tall', 'small', 'hill']], ['ff', 'any', ['off', 'cliff', 'puff', 'sniff']]
+];
+const listOf = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
+function phonicsRule(w) {
+  for (const [pat, where, ex] of PHONICS) {
+    const hit = where === 'start' ? w.startsWith(pat) : where === 'end' ? w.endsWith(pat) && w.length > pat.length : w.includes(pat);
+    if (!hit) continue;
+    const family = ex.filter(e => e !== w).slice(0, 3);
+    if (family.length < 2) continue;
+    const place = where === 'start' ? 'It starts with ' + pat : where === 'end' ? 'It ends with ' + pat : 'It has ' + pat + ' in it';
+    return { rule: place + ', like ' + listOf(family) + '.', family };
+  }
+  if (/[aeiou][^aeiouwy]e$/.test(w)) { const family = ['make', 'time', 'hope', 'cube'].filter(e => e !== w).slice(0, 3); return { rule: 'It has a magic e on the end, like ' + listOf(family) + '.', family }; }
+  return null;
+}
+// The rule and words like it for a word: from the built-in spelling patterns first, then from the AI's suggestion.
+const famOf = x => { const ph = phonicsRule(x.w); return ph || { rule: x.rule || '', family: x.family || [] }; };
 // What is said aloud for Words like it: the rule and the similar words, never the word itself.
-const familyText = x => (x.rule ? x.rule + ' ' : '') + (x.family && x.family.length ? 'Other words spelled like it are ' + x.family.slice(0, 3).join(', ') + '.' : '');
+const familyText = x => { const f = famOf(x); return (f.rule ? f.rule : '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'family' && (x.rule || x.family)) return { html: (x.rule ? L('The rule:', esc(x.rule)) : '') + (x.family && x.family.length ? L('Words like it:', x.family.slice(0, 3).map(esc).join(', ')) : '') + '<button class="btn small" id="hearsay">Hear it</button>', say: familyText(x) };
+  if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: (f.rule ? L('The rule:', esc(f.rule)) : L('Words like it:', f.family.slice(0, 3).map(esc).join(', '))) + '<button class="btn small" id="hearsay">Hear it</button>', say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
@@ -776,7 +807,7 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button><button class="key wide ok" data-k="ok" aria-label="Done">${ico('check')}</button>` : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, noBack, remind, wobj, force, cue, help) {
+function writeWord(word, noBack, remind, wobj, force, cue, help, ask) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
@@ -789,7 +820,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help) {
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
       ${kbHtml()}</div>`);
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
@@ -820,6 +851,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help) {
       pendingKey = setTimeout(() => { pendingKey = null; if (k === 'Backspace') del(); else if (k === 'Enter') finish(); else add(k.toLowerCase()); }, 35);
     };
     on('#hear', sayIt); on('#hint', hint);
+    on('#helpfirst', () => { if (done) return; done = true; hush(); res({ askHelp: true, typed: '', hints: 0, reminded: false, tools: [], aided: true }); });
     if (wobj && help) { const hc = helpContent(wobj, help); $('#helpbox').innerHTML = hc.html; const hs = $('#hearsay'); if (hs) hs.onclick = () => say(hc.say); }
     if (wobj && (force || help === 'choice')) {
       used.add('choice');
@@ -1297,8 +1329,12 @@ async function reviseWord(week, it, sentence, starred) {
     if (it.look && (await learnCard(week, it.x, null)) === BACK) return BACK;
     const traced = false;
     const cue = it.context && sentence ? sentence : null;
-    const a = await writeWord(word, false, it.look || it.context ? null : remind, it.x, false, cue);
+    let a = await writeWord(word, false, it.look || it.context ? null : remind, it.x, false, cue, null, true);
     if (a === BACK) { if (it.look) continue; return BACK; }
+    if (a.askHelp) { // she asked for help before trying
+      const id = await helpMenu(it.x); if (id === BACK) continue;
+      a = await writeWord(word, false, null, it.x, false, cue, id); if (a === BACK) continue;
+    }
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
@@ -1343,6 +1379,13 @@ function showAnswer(word) {
 }
 // She got it wrong. She is asked whether she wants another go or some help, and if help, which one. One help at a time.
 // Returns 'again', 'show', {help: id}, or BACK.
+function helpMenu(x) {
+  return new Promise(r => {
+    h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}</div></div>`);
+    document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
+    backBtn(() => r(BACK)); say(HELP_MENU);
+  });
+}
 function helpChoice(x) {
   return new Promise(async res => {
     for (;;) {
@@ -1463,7 +1506,7 @@ function reviseEnd(wk, firsts, sound) {
 // Everything the spelling steps need spoken, fetched ahead so nothing waits.
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
-  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); if (x.rule || (x.family && x.family.length)) texts.push(familyText(x)); texts.push(hintText(x)); });
+  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); if (familyText(x)) texts.push(familyText(x)); texts.push(hintText(x)); });
   OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
