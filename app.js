@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.98'; // bump with every release
+const APP_VER = '2.99'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -84,7 +84,7 @@ How to work:
 
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
-{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
+{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word", "scene": "one sentence an illustrator could draw"}
 {{CHOICE_FORMAT}}
 
 Rules:
@@ -92,7 +92,8 @@ Rules:
 {{CHOICE_RULE}}
 3. Every part except the last ends with a cliffhanger. The last part resolves the story and ends warmly. Do not end by repeating the words.
 4. A spelling word may also appear naturally elsewhere in the story, in narration, in other paragraphs and in choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
-5. Reply with the JSON object only.`;
+5. The "scene" of each p beat is one sentence for an illustrator, describing the picture that goes with that paragraph: where it is, who is there (always written as {g1}, {g2} and so on, never as names), what they are doing, and the main objects, for example the paper bridge or the torch. It must show what is really happening in that paragraph, not something abstract. Nothing frightening, no food or drink, and no writing or signs in the picture.
+6. Reply with the JSON object only.`;
 
 const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}';
 const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
@@ -142,7 +143,8 @@ function checkEpisode(ep, words) {
       if (b && typeof b.n === 'string') texts.push(b.n);
       else if (b && b.c && Array.isArray(b.c.o) && b.c.o.length >= 2) { choices++; texts.push(String(b.c.q)); b.c.o.forEach(o => texts.push(String(o.l), String(o.n))); }
       else if (b && typeof b.p === 'string' && typeof b.word === 'string') {
-        b.word = b.word.toLowerCase(); here++; used.push(b.word); texts.push(b.p); b.pic = cleanPic(b.pic);
+        b.word = b.word.toLowerCase(); here++; used.push(b.word); texts.push(b.p); delete b.pic;
+        if (typeof b.scene !== 'string' || b.scene.length > 280 || /\{(?!g[1-4]\})/.test(b.scene) || [...b.scene.matchAll(US)].length) delete b.scene; // a scene that does not pass is dropped and the paragraph is drawn instead
         if (!words.includes(b.word)) bad.push('"' + b.word + '" is not one of the words.');
         else if (new RegExp(',\\s*' + b.word + '[.!?]+["”’)]*$', 'i').test(lastSentence(b.p))) bad.push('The word "' + b.word + '" is only tacked on to the end of its sentence. Use it naturally inside a sentence.');
         else if (wholeWord(b.word, lastSentence(b.p)) !== 1) bad.push('The last sentence of the paragraph for "' + b.word + '" should contain "' + b.word + '" exactly once as a whole word.');
@@ -532,6 +534,78 @@ const idb = new Promise(res => {
 });
 async function idbGet(k) { const db = await idb; if (!db) return null; return new Promise(res => { try { const q = db.transaction('clips').objectStore('clips').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); } }); }
 async function idbPut(k, v) { const db = await idb; if (!db) return; return new Promise(res => { try { const tx = db.transaction('clips', 'readwrite'); tx.objectStore('clips').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => res(); } catch (e) { res(); } }); }
+// ---------- story pictures: drawn by an image model, one for each word paragraph, kept on this device ----------
+const IMG_MODELS = ['qwen/qwen-image-3', 'bytedance-seed/seedream-5-0-lite', 'google/gemini-3.1-flash-lite-image', 'recraft/recraft-v4.1-flash', 'black-forest-labs/flux-3-image-klein'];
+const imgModel = () => S.imgModel || IMG_MODELS[0];
+const picsOn = () => S.pics !== false && !!(S.orKey || aiKey());
+const PIC_STYLE = "Children's picture-book illustration in soft watercolour, warm friendly colours, gentle and cheerful, a simple clear scene with the main object easy to see, suitable for a nine-year-old.";
+const LOOKS = {
+  girl: ['a girl with long dark hair and a red jumper', 'a girl with curly ginger hair and a yellow raincoat', 'a girl with brown skin, black braids and a green cardigan', 'a girl with a blonde ponytail and a blue hoodie'],
+  boy: ['a boy with short brown hair and a blue jumper', 'a boy with curly black hair and a yellow t-shirt', 'a boy with short ginger hair and a green coat', 'a boy with sandy hair and a red hoodie']
+};
+const castLooks = () => [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return LOOKS[m.boy ? 'boy' : 'girl'][i % 4]; });
+// The picture prompt never contains a name: characters are described by how they look.
+function picPrompt(scene) {
+  const looks = castLooks();
+  const txt = String(scene).replace(/\{g([1-4])\}/g, (m, k) => looks[+k - 1]);
+  return PIC_STYLE + ' ' + txt + ' Cosy, kind, nothing frightening. No text, no letters, no words, no signs, no food or drink in the picture.';
+}
+let picErr = '';
+async function genImage(model, prompt) {
+  const key = S.orKey || aiKey();
+  if (!key) throw new Error('No OpenRouter key.');
+  const first = /^(google|openai)\//.test(model) ? ['image', 'text'] : ['image'];
+  let last = '';
+  for (const modalities of [first, first.length === 2 ? ['image'] : ['image', 'text']]) {
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' }, body: JSON.stringify({ model, modalities, messages: [{ role: 'user', content: prompt }] }) });
+    const txt = await r.text();
+    if (!r.ok) { last = r.status + ' ' + txt.slice(0, 160); if (r.status === 400) continue; throw new Error(last); }
+    let j; try { j = JSON.parse(txt); } catch (e) { throw new Error('The picture service sent something unreadable.'); }
+    const msg = j.choices && j.choices[0] && j.choices[0].message; let url = '';
+    if (msg && Array.isArray(msg.images) && msg.images[0]) url = (msg.images[0].image_url || {}).url || msg.images[0].url || '';
+    if (!url && msg && Array.isArray(msg.content)) { const p = msg.content.find(c => c && (c.image_url || c.type === 'image_url' || c.type === 'output_image')); if (p) url = (p.image_url && p.image_url.url) || p.url || ''; }
+    if (!url && msg && typeof msg.content === 'string') { const m = msg.content.match(/data:image\/[a-z]+;base64,[A-Za-z0-9+\/=]+/); if (m) url = m[0]; }
+    if (!url) { last = 'No picture came back from ' + model + '.'; continue; }
+    const blob = await (await fetch(url)).blob();
+    if (!blob || blob.size < 1000) throw new Error('The picture was empty.');
+    return blob;
+  }
+  throw new Error(last || 'No picture came back.');
+}
+const picUrls = new Map(), picState = {};
+const picKey = (epId, w) => 'pic|' + epId + '|' + w;
+async function loadPics(wk) {
+  const ep = epOf(wk); if (!ep || !wk.ep) return;
+  for (const part of ep.parts || []) for (const b of part) if (b.p && b.word) {
+    const k = picKey(wk.ep, b.word); if (picUrls.has(k)) continue;
+    const blob = await idbGet(k); if (blob) picUrls.set(k, URL.createObjectURL(blob));
+  }
+}
+const picUrl = w => picUrls.get(picKey(curWeek().ep, w)) || '';
+const picHtml = w => { const u = picUrl(w); return u ? `<img class="cuepic" alt="" src="${u}">` : ''; };
+// Draws the pictures for a story in the background, three at a time. A failure is kept for the grown-ups page and never stops the story.
+async function startPictures(epId, force) {
+  if (!picsOn() || picState[epId] === 'running') return;
+  const ep = S.eps && S.eps[epId]; if (!ep) return;
+  const jobs = []; for (const part of ep.parts || []) for (const b of part) if (b.p && b.word) jobs.push(b);
+  picState[epId] = 'running'; picErr = ''; let done = 0;
+  let i = 0;
+  const worker = async () => {
+    while (i < jobs.length) {
+      const b = jobs[i++], k = picKey(epId, b.word);
+      if (!force && (picUrls.has(k) || await idbGet(k))) { done++; continue; }
+      const prompt = picPrompt(b.scene || b.p);
+      for (let tryN = 0; tryN < 2; tryN++) {
+        try { const blob = await genImage(imgModel(), prompt); await idbPut(k, blob); picUrls.set(k, URL.createObjectURL(blob)); done++; break; }
+        catch (e) { picErr = e.message; }
+      }
+      const st = document.getElementById('picStat'); if (st) st.textContent = done + ' of ' + jobs.length + ' pictures drawn' + (picErr ? '. Last problem: ' + picErr : '');
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  picState[epId] = 'done';
+  const st = document.getElementById('picStat'); if (st) st.textContent = done + ' of ' + jobs.length + ' pictures drawn' + (picErr ? '. Last problem: ' + picErr : '.');
+}
 const urlCache = new Map();
 const clipKey = t => effVp() + '|' + t;
 async function getClipUrl(t) {
@@ -776,8 +850,22 @@ const chunkText = c => c.map(q => q.t).join(' ');
 function storyScroll(items) {
   const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen storyscreen"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}">${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div>
+    h(`<div class="screen storyscreen"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div>
+      <div class="storypic" id="spic"></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Read it to me again">${ico('speaker')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
+    // The picture under the box follows the story: the latest word paragraph the voice (or her scrolling) has reached.
+    let shownPic = '';
+    const showPic = () => {
+      const sp = $('#sp'), box = $('#spic'); if (!sp || !box) return;
+      const cs = [...sp.querySelectorAll('.chunk[data-pw]')]; if (!cs.length) return;
+      const edge = sp.getBoundingClientRect().top + sp.clientHeight * 0.75;
+      let pick = cs[0]; cs.forEach(c => { if (c.getBoundingClientRect().top <= edge) pick = c; });
+      const w = pick.dataset.pw, u = picUrl(w);
+      if (u && u !== shownPic) { shownPic = u; box.innerHTML = `<img class="storyimg" alt="" src="${u}">`; }
+    };
+    loadPics(curWeek()).then(showPic);
+    const picTimer = setInterval(() => { if (!$('#spic')) return clearInterval(picTimer); loadPics(curWeek()).then(showPic); }, 2000);
+    $('#sp').addEventListener('scroll', showPic);
     let run = 0;
     const play = async () => {
       const my = ++run; hush();
@@ -860,8 +948,8 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const sayIt = () => say(help === 'family' && wobj && familyText(wobj) ? familyText(wobj) : sp ? cueSpoken(cue, word) : word);
     if (help) used.add(help);
     h(`<div class="screen writescreen">
-      ${wobj ? sceneBar(word) : ''}${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
-      ${note ? `<p class="msg smallmsg">${esc(note)}</p>` : ''}<div id="helpbox" class="helpbox"></div>
+      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
+      ${wobj ? picHtml(word) : ''}${note ? `<p class="msg smallmsg">${esc(note)}</p>` : ''}<div id="helpbox" class="helpbox"></div>
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
@@ -1272,7 +1360,7 @@ async function storyStart(wk) {
     } else {
       const made = await writeNewStory(wk, final);
       if (made === BACK) { step = pick.kind === 'own' ? 'outline' : 'shelf'; continue; }
-      const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = made; wk.ep = id; S.story[wk.id] = { part: 0 }; if (pick.kind === 'type') markUsed(pick.type); save();
+      const id = 'ai' + Date.now(); S.eps = S.eps || {}; S.eps[id] = made; wk.ep = id; S.story[wk.id] = { part: 0 }; if (pick.kind === 'type') markUsed(pick.type); save(); startPictures(id);
       return true;
     }
   }
@@ -1339,6 +1427,7 @@ async function storyDay() {
   // The story is over. Now each word is said in its sentence, in the order it came, and she spells it.
   const go = await gentle('That was the story!', 'Now let us see which of the yellow words you remember. I will say each one, and you can have a go at spelling it.', 'Ready', SPELL_INTRO);
   if (go === BACK) return home();
+  await loadPics(wk);
   const queue = order.map(w => wk.words.find(q => q.w === w)).filter(Boolean).map(x => ({ x, look: false, counts: true, mode: 'story', context: true }));
   const firsts = await runWords(wk, queue, new Set());
   if (!firsts) return home();
@@ -1371,7 +1460,7 @@ function praiseSentence(word, sentence, clean, n, N) {
     const text = n && N ? celebrateText(n, N, clean) : (clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!');
     const sp = sentence && sentenceParts(sentence, word);
     const page = sp ? `<div class="page small"><p class="story">${esc(sp.pre)}<span class="pw set">${esc(word)}</span>${esc(sp.post)}</p></div>` : `<div class="wordtile small">${esc(word)}</div>`;
-    h(`<div class="screen wordpage cheer">${confettiHtml()}${sceneBar(word)}${page}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(text)}</p>${n && N ? progressStars(n, N) : ''}
+    h(`<div class="screen wordpage cheer">${confettiHtml()}${page}${picHtml(word)}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(text)}</p>${n && N ? progressStars(n, N) : ''}
       <button id="next" class="btn big">${n && N && n >= N ? 'See how I did' : 'Next word'} ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
@@ -1508,7 +1597,7 @@ const trickyWords = wk => {
 function trickScreen(x) {
   return new Promise(res => {
     const msg = 'Let us remember this word.';
-    h(`<div class="screen"><p class="msg">${msg}</p>${sceneBar(x.w)}<div class="wordtile">${esc(x.w)}</div>
+    h(`<div class="screen"><p class="msg">${msg}</p><div class="wordtile">${esc(x.w)}</div>${picHtml(x.w)}
       ${x.mnem ? `<div class="helpline"><b>Memory trick:</b> ${esc(x.mnem)}</div>` : '<p class="subtle">Make up a trick to help you remember it.</p>'}
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mk" class="btn">${x.mnem ? 'Change my trick' : 'Make my own trick'}</button><button id="next" class="btn big">Now trace it ${ico('next')}</button></div></div>`);
     const sayAll = () => say(msg + ' ' + x.w + '. ' + (x.mnem || ''));
@@ -1523,6 +1612,7 @@ async function remember() {
     await gentle('No tricky words yet.', 'Do the story or the practice first. Any word that hides will come here.', 'Back home', 'No tricky words yet. Do the story or the practice first. Any word that hides will come here.');
     return home();
   }
+  await loadPics(wk);
   await prep(list.map(x => x.w).concat(list.filter(x => x.mnem).map(x => 'Let us remember this word. ' + x.w + '. ' + x.mnem), ['Let us remember this word.']), 'Getting your tricky words ready');
   let i = 0; const starred = new Set();
   while (i < list.length) {
@@ -1634,6 +1724,7 @@ async function revise() {
   const queue = shuffle(wk.words.slice()).sort((p, q) => (due.includes(q.w) ? 1 : 0) - (due.includes(p.w) ? 1 : 0)).map(x => ({ x, look: !sound || !met(x.w), counts: true, mode: 'revise' }));
   ensureTools(wk);
   await prep(spellTexts(wk), 'Getting the words ready');
+  await loadPics(wk);
   const firsts = await runWords(wk, queue, new Set());
   if (!firsts) return home();
   await finishSitting(wk, firsts, sound, 'revision');
@@ -1755,6 +1846,11 @@ function adult() {
     <input id="cm1" type="text" value="anthropic/claude-sonnet-5.5"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="google/gemini-4-hydrogen" style="margin-top:8px">
     <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
 
+    ${aiKey() || S.orKey ? `<h2>Story pictures</h2><p class="note">Each story gets one picture for each word, drawn by an image model, shown under the story and again when she spells the word. They are drawn in the background after the story is written and kept on this device. An image costs a fraction of a penny.</p>
+    <label><input type="checkbox" id="picsOn" ${S.pics !== false ? 'checked' : ''}> Draw pictures for stories</label>
+    <label>Picture model</label><select id="imgSel">${IMG_MODELS.map(m => `<option value="${m}" ${imgModel() === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
+    <div><button id="imgTry" class="btn small">Try a sample with every model</button> <button id="drawPics" class="btn small">${epOf(wk) ? 'Draw pictures for this story' : 'No story yet'}</button></div>
+    <p id="picStat" class="note"></p><div id="imgOut"></div>` : ''}
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
@@ -1785,6 +1881,23 @@ function adult() {
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
+  if ($('#picsOn')) $('#picsOn').onchange = e => { S.pics = e.target.checked; save(); };
+  if ($('#imgSel')) $('#imgSel').onchange = e => { S.imgModel = e.target.value; save(); };
+  if ($('#drawPics')) $('#drawPics').onclick = async () => {
+    if (!epOf(wk)) return;
+    const st = $('#picStat'); st.textContent = 'Drawing...'; $('#drawPics').disabled = true;
+    await startPictures(wk.ep, true);
+    $('#drawPics').disabled = false;
+  };
+  if ($('#imgTry')) $('#imgTry').onclick = async () => {
+    const out = $('#imgOut'), btn = $('#imgTry'); btn.disabled = true;
+    const scene = 'Two friends ' + '{g1} and {g2}' + ' kneel at a living-room table building a bridge from folded paper that spans the gap between two stacks of books, with a pile of paper clips on the bridge.';
+    out.innerHTML = '<p class="note">Drawing the same scene with ' + IMG_MODELS.length + ' models. This can take up to a minute.</p>';
+    const res = await Promise.all(IMG_MODELS.map(async m => { const t0 = Date.now(); try { const b = await genImage(m, picPrompt(scene)); return { m, url: URL.createObjectURL(b), secs: ((Date.now() - t0) / 1000).toFixed(1) }; } catch (e) { return { m, err: e.message }; } }));
+    out.innerHTML = res.map(r => `<div class="cmp"><b>${esc(r.m)}</b>${r.secs ? ' · ' + r.secs + ' seconds' : ''}<br>${r.err ? esc(r.err) : `<img class="sampleimg" src="${r.url}" alt=""><div><button class="btn small" data-use="${esc(r.m)}">Use this one</button></div>`}</div>`).join('');
+    out.querySelectorAll('[data-use]').forEach(b => { b.onclick = () => { S.imgModel = b.dataset.use; save(); $('#imgSel').value = S.imgModel; $('#picStat').textContent = 'Now using ' + S.imgModel + '.'; }; });
+    btn.disabled = false;
+  };
   on('#readStory', () => { $('#draftOut').innerHTML = storyPreview(epOf(wk)); });
   on('#draft', async () => {
     const out = $('#draftOut'), btn = $('#draft');
@@ -1794,7 +1907,7 @@ function adult() {
       out.innerHTML = `<p class="note">Please read it through before she sees it.</p>${storyPreview(ep)}<button id="useStory" class="btn">Use this story</button>`;
       on('#useStory', () => {
         const id = 'ai' + Date.now();
-        S.eps = S.eps || {}; S.eps[id] = ep; wk.ep = id; delete S.story[wk.id]; save(); adult();
+        S.eps = S.eps || {}; S.eps[id] = ep; wk.ep = id; delete S.story[wk.id]; save(); startPictures(id); adult();
       });
     } catch (e) { out.innerHTML = `<p class="note">${esc(e.message || 'Something went wrong.')}</p>`; }
     btn.disabled = false; btn.textContent = 'Try another';
