@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.58'; // bump with every release
+const APP_VER = '2.60'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -77,7 +77,7 @@ How to work:
 3. Place each word where it belongs. For each spelling word, choose a paragraph where the word arises naturally from what is happening, and put it in that paragraph's LAST sentence. The last sentence must follow from the sentences before it.
 4. Do not invent a reason for someone to write the word. No notes, signs, lists or diary lines unless the plot truly calls for one.
 5. Do not bend the story to fit a word. If a word will not fit a paragraph, move it to a different paragraph.
-6. Keep each paragraph short: two or three sentences, never more than three, so the page is not crowded.
+6. Keep each paragraph short: two sentences, three at most, about 35 words, so the page is not crowded. Write exactly one paragraph for each spelling word, plus at most two short extra paragraphs (an opening and a closing). Keep the plan under 60 words.
 7. Use each spelling word in an ordinary, natural way, in a complete sentence that a child would really say or read. Never use a word as a tag on the end of a sentence ("..., really.") or in a half-finished phrase ("she forgot when"), and never turn a sentence back to front to reach the word ("off she went" is fine, "off Ellie went" is not). If a word will not sit naturally in a paragraph, move it to another paragraph.
 8. {{LENGTH_RULE}}
 
@@ -97,9 +97,9 @@ const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{
 const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
 const CHOICE_RULE = n => '2. The whole story has exactly ' + n + (n === 1 ? ' choice' : ' choices') + ' in total (not one per part), spread out through the story. Put each choice after at least two paragraphs. Both options must lead sensibly into the rest of the story.';
 const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it straight through, and never use a c beat.';
-const LENGTHS = { short: { label: 'Short', max: 350, aim: 300 }, standard: { label: 'Standard', max: 500, aim: 400 }, long: { label: 'Long', max: 800, aim: 650 } };
+const LENGTHS = { short: { label: 'Short', max: 350, aim: 250 }, standard: { label: 'Standard', max: 500, aim: 330 }, long: { label: 'Long', max: 800, aim: 550 } };
 const curLen = () => LENGTHS[S.len] || LENGTHS.standard;
-const storyRules = () => STORY_RULES.replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Count them: a story over ' + curLen().max + ' words will be rejected.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
+const storyRules = () => STORY_RULES.replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Add up the words before you answer: a story over ' + curLen().max + ' words is rejected and has to be rewritten, which wastes time.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
 function partPlan(n) { return [Math.max(1, n)]; } // one story, one part, every word in it
 function lastSentence(t) {
   // A sentence ends at . ! or ? (and any closing quote) when the next word starts with a capital or an opening quote.
@@ -183,13 +183,25 @@ async function askAI(wk, problems, model, extra) {
 }
 async function draftStory(wk, extra) {
   const words = wk.words.map(x => x.w);
+  // Two models write at the same time and the first draft that passes the checks is used. That is faster than waiting for one model and rewriting.
+  const models = [...new Set([S.orModel || DEFAULT_MODEL, 'openai/gpt-6.1-terra'])];
   let problems = [];
-  for (let i = 0; i < 3; i++) {
-    const ep = (await askAI(wk, problems, undefined, extra)).ep;
-    problems = checkEpisode(ep, words);
-    if (!problems.length) { ep.title = String(ep.title || 'This week\'s story'); ep.words = words; addSentences(ep); return ep; }
+  for (let round = 0; round < 2; round++) {
+    const tries = models.map(async m => {
+      const r = await askAI(wk, problems, m, extra), pr = checkEpisode(r.ep, words);
+      if (pr.length) { const e = new Error(pr[0]); e.problems = pr; throw e; }
+      return r.ep;
+    });
+    try {
+      const ep = await Promise.any(tries);
+      ep.title = String(ep.title || "This week's story"); ep.words = words; addSentences(ep); return ep;
+    } catch (e) {
+      const first = (e.errors || []).find(x => x && x.problems);
+      if (first) problems = first.problems;
+      else if (round === 1) throw new Error((e.errors && e.errors[0] && e.errors[0].message) || e.message || 'Could not write the story.');
+    }
   }
-  throw new Error('Three drafts had problems (' + problems[0] + ') Please try again.');
+  throw new Error('The drafts had problems (' + (problems[0] || 'they did not pass the checks') + '). Please try again.');
 }
 // Preview helper: shows the learning word in bold inside its paragraph's last sentence.
 function markWord(text, word) {
@@ -589,6 +601,7 @@ function fill(t) {
 }
 
 // ---------- small screens ----------
+const storyWordCount = ep => [].concat(...ep.parts).reduce((n, b) => n + (b.n ? b.n : b.p ? b.p : b.c ? [b.c.q].concat(b.c.o.map(o => o.l + ' ' + o.n)).join(' ') : '').split(/\s+/).filter(Boolean).length, 0);
 function hlHtml(text, word) {
   const ls = lastSentence(text), cut = text.lastIndexOf(ls), sp = sentenceParts(ls, word);
   if (!sp) return esc(text);
@@ -663,7 +676,7 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
       $('#done').disabled = !typed;
     };
-    const add = c => { if (typed.length < 24) { typed += c; draw(); } };
+    const add = c => { if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
     const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
@@ -1076,7 +1089,7 @@ async function storyDay() {
     if (r === BACK) { if (i === 0) return home(); i--; } else i++;
   }
   // The story is over. Now each word is said in its sentence, in the order it came, and she spells it.
-  const go = await gentle('The story is finished. Now it is your turn.', 'I will say each word from the story. Spell it for me.', 'Ready', 'The story is finished. Now it is your turn. I will say each word from the story. Spell it for me.');
+  const go = await gentle('The story is finished. Now it is your turn.', 'I will say each word from the story. Spell it for me.', 'Ready', SPELL_INTRO);
   if (go === BACK) return home();
   const queue = order.map(w => wk.words.find(q => q.w === w)).filter(Boolean).map(x => ({ x, look: false, counts: true, mode: 'story', context: true }));
   const firsts = await runWords(wk, queue, new Set());
@@ -1129,7 +1142,7 @@ function traceFlow(word) {
       let typed = '';
       h(`<div class="screen"><p class="msg">Now copy it</p><div class="wordtile small">${esc(word)}</div><div id="slots" class="slots"></div><p id="cmsg" class="subtle"></p>${kbHtml()}<button id="cdone" class="btn big">Done ${ico('check')}</button></div>`);
       const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; $('#cdone').disabled = !typed; };
-      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < 24) typed += k; draw(); }; });
+      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); }; });
       on('#cdone', () => { if (typed === word) r('ok'); else { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } });
       backBtn(() => r(BACK)); draw();
     });
@@ -1165,7 +1178,7 @@ async function reviseWord(week, it, sentence, starred) {
   }
 }
 const OOPS = ['Oops, nearly!', 'Crumbs, so close!', 'Not quite, but nearly!', 'Ooh, nearly there!'];
-const CLUE = 'Here is a clue.', ANSWER_MSG = 'Here it is. Have a good look.';
+const CLUE = 'Here is a clue.', ANSWER_MSG = 'Here it is. Have a good look.', SPELL_INTRO = 'The story is finished. Now it is your turn. I will say each word from the story. Spell it for me.';
 function hintText(x) {
   const fam = (x.family || []).slice(0, 3);
   if (fam.length) return 'Here are some words spelled in the same way: ' + fam.join(', ') + '. Have another go.';
@@ -1223,7 +1236,7 @@ function reviseEnd(wk, firsts, sound) {
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
   wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(s0 + ' ... ' + x.w); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
-  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.');
+  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
 // Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.
@@ -1369,7 +1382,7 @@ function adult() {
     <label>Score for ${esc(wk.label)}, out of ${wk.words.length}</label><input id="score" type="number" min="0" max="${wk.words.length}" value="${wk.score == null ? '' : wk.score}" style="max-width:120px">
     <div><button id="saveScore" class="btn">Save score</button></div>
     </div><div class="tabpane" data-tab="story"><h2>Story for this week</h2>
-    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '".' : 'No story yet. Revision works without one.'}</p>
+    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '" (' + storyWordCount(epOf(wk)) + ' words).' + (storyWordCount(epOf(wk)) > curLen().max ? ' <b>This is over the ' + curLen().max + '-word limit. Press Write a different story.</b>' : '') : 'No story yet. Revision works without one.'}</p>
     ${aiKey() ? `${epOf(wk) ? '<button id="readStory" class="btn">Read this story</button> ' : ''}<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
 
