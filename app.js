@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.55'; // bump with every release
+const APP_VER = '2.56'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -259,7 +259,8 @@ const TOOLS = [
   { id: 'voice', label: 'Spelling voice', note: 'The word said the way it is spelled, such as w-hen. Some support: one controlled study, and her phonics scheme teaches it.' },
   { id: 'parts', label: 'Word parts', note: 'The word split into parts, such as side + ways. Word parts are among the better-supported teaching content.' },
   { id: 'trace', label: 'Trace, copy, then write', note: 'Trace it, copy it, wait a moment, then write it from memory. Small case studies only.' },
-  { id: 'letters', label: 'Say the letters while writing', note: 'She says each letter as she writes it. Evidence is mixed.' }
+  { id: 'letters', label: 'Say the letters while writing', note: 'She says each letter as she writes it. Evidence is mixed.' },
+  { id: 'choice', label: 'Pick the right spelling', note: 'She picks the right spelling from several, instead of writing it. This is recognition, not recall. Research found recall gives bigger memory benefits, so this is here to try, not because it is proven.' }
 ];
 const toolOn = id => !!(S.tools && S.tools[id]);
 // A tool is only offered for a word when it is switched on and the word has what the tool needs.
@@ -307,7 +308,7 @@ async function aiJSON(sys, user, maxTokens) {
 // Asks the AI to suggest tool data for each word, keeps only suggestions that pass checks, never overwrites what a grown-up or Bella typed.
 async function suggestTools(wk) {
   const words = wk.words.map(x => x.w);
-  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "..."}]}.';
+  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine); "wrong": two or three misspellings that children commonly write for this word, each a made-up string and not a real English word (for example freind for friend). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "...", "wrong": ["...", "..."]}]}.';
   const o = await aiJSON(sys, 'Spelling words: ' + words.join(', '), 3000);
   let added = 0;
   (o.words || []).forEach(sg => {
@@ -316,6 +317,7 @@ async function suggestTools(wk) {
     if (!x.hard && ok(sg.hard) && w.includes(sg.hard.toLowerCase().trim()) && sg.hard.trim().length < w.length) { x.hard = sg.hard.toLowerCase().trim(); added++; }
     if (!x.say && ok(sg.say) && sg.say.replace(/-/g, '').toLowerCase() === w && sg.say.includes('-')) { x.say = sg.say.toLowerCase().trim(); added++; }
     if (!x.parts && ok(sg.parts) && sg.parts.replace(/\|/g, '').toLowerCase() === w && sg.parts.includes('|')) { x.parts = sg.parts.toLowerCase().trim(); added++; }
+    if (!x.wrong && Array.isArray(sg.wrong)) { const good = sg.wrong.map(t => String(t).toLowerCase().trim()).filter(t => /^[a-z'-]+$/.test(t) && t !== w && Math.abs(t.length - w.length) <= 3 && !words.includes(t)).slice(0, 4); if (good.length) { x.wrong = good; added++; } }
     if (!x.mnem && ok(sg.mnem) && sg.mnem.length <= 140 && ![...sg.mnem.matchAll(US)].some(m => !words.includes(m[0].toLowerCase()))) { x.mnem = sg.mnem.trim(); x.mnemBy = 'ai'; added++; }
   });
   save();
@@ -328,18 +330,34 @@ function toolsProgress() {
   const rows = rowFor('No tool', l => !(l.tools && l.tools.length)) + TOOLS.map(t => rowFor(t.label, l => (l.tools || []).includes(t.id))).join('');
   return `<table><tr><th>Tool</th><th>Words tried</th><th>Right first time, no help</th></tr>${rows}</table><p class="note">A hint, not a finding. Bella chooses the tools herself, so a tool can look good or bad for other reasons. A word can appear in more than one row.</p>`;
 }
+function misspellings(x, weekWords) {
+  const w = x.w, seen = new Set([w]), out = [];
+  const add = t => { t = String(t || '').toLowerCase().trim(); if (!t || seen.has(t) || !/^[a-z'-]+$/.test(t) || Math.abs(t.length - w.length) > 3 || t.length < Math.min(4, w.length) || (weekWords || []).includes(t)) return false; seen.add(t); out.push(t); return true; };
+  S.log.slice().reverse().filter(l => l.w === w && !l.ok && l.typed).forEach(l => { if (out.length < 3) add(l.typed); });
+  shuffle((x.wrong || []).slice()).forEach(t => { if (out.length < 3) add(t); });
+  const SW = [['ea', 'ee'], ['ee', 'ea'], ['ai', 'ay'], ['ay', 'ai'], ['oa', 'ow'], ['ow', 'oa'], ['ou', 'ow'], ['ow', 'ou'], ['oo', 'u'], ['ie', 'ei'], ['ei', 'ie'], ['au', 'aw'], ['aw', 'au'], ['er', 'ur'], ['ur', 'er'], ['ir', 'er'], ['or', 'ar'], ['igh', 'ie'], ['ough', 'uff'], ['ough', 'ow'], ['ph', 'f'], ['ck', 'k'], ['tion', 'shun'], ['cial', 'shul'], ['ge', 'dge'], ['dge', 'ge'], ['c', 's'], ['s', 'c'], ['i', 'y'], ['y', 'i'], ['e', 'a'], ['a', 'e'], ['o', 'u'], ['u', 'o'], ['kn', 'n'], ['wr', 'r'], ['wh', 'w'], ['gh', ''], ['ss', 's'], ['s', 'ss'], ['ll', 'l'], ['l', 'll'], ['tt', 't'], ['t', 'tt'], ['nn', 'n'], ['n', 'nn'], ['rr', 'r'], ['r', 'rr']];
+  const cands = [];
+  SW.forEach(([a, b]) => { let i = w.indexOf(a); while (i >= 0) { cands.push(w.slice(0, i) + b + w.slice(i + a.length)); i = w.indexOf(a, i + 1); } });
+  cands.push(w.endsWith('e') ? w.slice(0, -1) : w + 'e');
+  for (let i = 1; i < w.length - 1; i++) cands.push(w.slice(0, i) + w[i + 1] + w[i] + w.slice(i + 2));
+  shuffle(cands).forEach(t => { if (out.length < 3) add(t); });
+  for (let i = 1; i < w.length && out.length < 3; i++) add(w.slice(0, i) + w[i] + w.slice(i));
+  for (let i = 1; i < w.length && out.length < 3; i++) add(w.slice(0, i) + w.slice(i + 1));
+  return out.slice(0, 3);
+}
 function toolsPane(wk) {
   const rows = wk.words.map((x, i) => `<tr><td><b>${esc(x.w)}</b></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="hard" value="${esc(x.hard || '')}" placeholder="hard letters" autocomplete="off"></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="parts" value="${esc(x.parts || '')}" placeholder="side|ways" autocomplete="off"></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="say" value="${esc(x.say || '')}" placeholder="w-hen" autocomplete="off"></td>
+    <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a memory trick" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
   return `<h2>Support tools</h2>
     <p class="note">Bella chooses which tools to use, with the Tools button on the revision pages. Each use is recorded, so the Progress tab can show what she tries. This page sets what each tool shows for each word. The evidence for every tool is a bet, not a finding.</p>
     ${TOOLS.map(t => `<div class="wl"><div><b>${esc(t.label)}.</b> <span class="note">${esc(t.note)}</span></div></div>`).join('')}
     <h2>Tool details for this week's words</h2>
-    <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word.</p>
-    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Memory trick</th></tr>${rows}</table>
+    <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word. Common wrong spellings are used by Pick the right spelling, after her own past mistakes.</p>
+    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Common wrong spellings</th><th>Memory trick</th></tr>${rows}</table>
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }
@@ -647,6 +665,17 @@ function writeWord(word, noBack, remind, wobj) {
     };
     on('#hear', sayIt); on('#hint', hint); on('#done', finish);
     if (wobj) wireTools(wobj, 'write', c => c.shown.forEach(id => used.add(id)));
+    if (wobj && toolOn('choice')) {
+      used.add('choice');
+      const opts = shuffle([word].concat(misspellings(wobj, (curWeek().words || []).map(q => q.w))));
+      const cue = document.querySelector('.cue span'); if (cue) cue.textContent = soundOn() ? 'Listen, then pick the right spelling' : 'Pick the right spelling';
+      ['#slots', '.kb', '#done', '#hint'].forEach(q => { const e = document.querySelector(q); if (e) e.style.display = 'none'; });
+      const box = document.createElement('div'); box.className = 'choices mcbox';
+      box.innerHTML = opts.map(o => `<button class="choice" data-o="${esc(o)}">${esc(o)}</button>`).join('');
+      const anchor = document.querySelector('.kb'); anchor.parentNode.insertBefore(box, anchor);
+      keyHandler = null;
+      box.querySelectorAll('.choice').forEach(b => { b.onclick = () => { if (done) return; done = true; hush(); const tl = [...used]; res({ typed: b.dataset.o, hints: 0, reminded, tools: tl, aided: true }); }; });
+    }
     on('#remind', () => { reminded = true; $('#remindbox').innerHTML = `<div class="page small"><p class="story">${remind.html}</p></div>`; say(remind.spoken); });
     if (!noBack) backBtn(res);
     draw(); sayIt();
@@ -1212,7 +1241,7 @@ async function reviseWord(week, it, sentence, starred) {
     save();
     if (!ok) {
       if ((await showFix(word, a.typed)) === BACK) continue;
-      const b = await writeWord(word, false, null);
+      const b = await writeWord(word, false, null, it.x);
       if (b === BACK) continue;
       if (b.typed !== word && (await showFix(word, b.typed)) === BACK) continue;
     }
@@ -1474,6 +1503,7 @@ function adult() {
   on('#tsave', () => {
     document.querySelectorAll('.tf').forEach(f => { const x = wk.words[+f.dataset.i], v = f.value.trim().toLowerCase(); const k = f.dataset.f;
       const bad = (k === 'hard' && v && !x.w.includes(v)) || (k === 'parts' && v && v.replace(/\|/g, '') !== x.w) || (k === 'say' && v && v.replace(/-/g, '') !== x.w);
+      if (k === 'wrong') { const list = f.value.split(',').map(t => t.trim().toLowerCase()).filter(t => /^[a-z'-]+$/.test(t) && t !== x.w).slice(0, 6); x.wrong = list.length ? list : undefined; return; }
       if (k === 'mnem') { const t = f.value.trim(); if (t !== (x.mnem || '')) { x.mnem = t || undefined; x.mnemBy = t ? 'grown-up' : undefined; } return; }
       x[k] = bad ? x[k] : (v || undefined); });
     save(); adultTab = 'tools'; adultFlash = 'Saved. A box that does not match its word (for example hard letters that are not in the word) is ignored.'; adult();
@@ -1488,7 +1518,7 @@ function adult() {
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy'].forEach(k => { x[k] = old[k]; }); } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy', 'wrong'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
