@@ -116,7 +116,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .hello { text-align:left; width:100%; padding:6px 4px 0; }
 .hello p { color:var(--sky-soft); font-size:22px; margin-top:6px; }
 .tiles { width:100%; display:grid; grid-template-columns:1fr; gap:16px; }
-@media (min-width:700px) { .tiles { grid-template-columns:repeat(3,1fr); } }
+@media (min-width:700px) { .tiles { grid-template-columns:repeat(2,1fr); } }
 .tile { position:relative; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:4px; min-height:200px; border:0; border-radius:30px; padding:22px; color:#fff; text-align:left; cursor:pointer; overflow:hidden; box-shadow:var(--shadow); }
 .tile:active { transform:scale(.985); }
 .tile b { font-size:30px; line-height:1.1; }
@@ -341,3 +341,4 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .bx { width:30px; height:38px; border:3px solid #6b5fa8; border-radius:8px; background:#fff; }
 .bx.hardbx { background:#ffd54a; border-color:#f5a623; }
 .bxplus { font-weight:700; font-size:24px; }
+.tile.t-rem { background:linear-gradient(150deg,#e0873a,#a8541a); }

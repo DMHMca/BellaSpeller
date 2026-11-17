@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.83'; // bump with every release
+const APP_VER = '2.84'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1303,7 +1303,7 @@ async function reviseWord(week, it, sentence, starred) {
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
-    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null)) === BACK) continue; await memoryTrickStep(week, it.x); }
+    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null)) === BACK) continue; }
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
@@ -1365,6 +1365,54 @@ function helpChoice(x) {
   });
 }
 // A memory trick helps hold a spelling she now knows. It is offered only when a word keeps going wrong over several sittings, and only after she has the right spelling.
+// ---------- Revision: remembering the words that hide, after the story and the practice ----------
+// For each tricky word: a memory trick to hold on to, then trace it, copy it, wait, and write it from memory.
+const trickyWords = wk => {
+  const miss = {};
+  S.log.filter(l => l.wk === wk.id && !l.redo && !l.ok).forEach(l => { miss[l.w] = (miss[l.w] || 0) + 1; });
+  ((S.due && S.due[wk.id]) || []).forEach(w => { miss[w] = (miss[w] || 0) + 1; });
+  return wk.words.filter(x => miss[x.w]).sort((a, b) => miss[b.w] - miss[a.w]);
+};
+function trickScreen(x) {
+  return new Promise(res => {
+    const msg = 'Let us remember this word.';
+    h(`<div class="screen"><p class="msg">${msg}</p><div class="wordtile">${esc(x.w)}</div>
+      ${x.mnem ? `<div class="helpline"><b>Memory trick:</b> ${esc(x.mnem)}</div>` : '<p class="subtle">Make up a trick to help you remember it.</p>'}
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mk" class="btn">${x.mnem ? 'Change my trick' : 'Make my own trick'}</button><button id="next" class="btn big">Now trace it ${ico('next')}</button></div></div>`);
+    const sayAll = () => say(msg + ' ' + x.w + '. ' + (x.mnem || ''));
+    on('#hear', sayAll); on('#next', () => { hush(); res(); });
+    on('#mk', async () => { const t = await typeText({ title: 'Your memory trick for ' + x.w, initial: '', max: 140 }); if (t && t.trim()) { x.mnem = t.trim(); x.mnemBy = 'bella'; save(); trickScreen(x).then(res); } });
+    backBtn(res); sayAll();
+  });
+}
+async function remember() {
+  const wk = curWeek(), list = trickyWords(wk);
+  if (!list.length) {
+    await gentle('No tricky words yet.', 'Do the story or the practice first. Any word that hides will come here.', 'Back home', 'No tricky words yet. Do the story or the practice first. Any word that hides will come here.');
+    return home();
+  }
+  await prep(list.map(x => x.w).concat(list.filter(x => x.mnem).map(x => 'Let us remember this word. ' + x.w + '. ' + x.mnem), ['Let us remember this word.']), 'Getting your tricky words ready');
+  let i = 0; const starred = new Set();
+  while (i < list.length) {
+    const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
+    let ok = false, tries = 0;
+    while (!ok && tries < 3) {
+      tries++;
+      await trickScreen(x);
+      const t = await traceFlow(x.w); if (t === BACK) { if (i === 0 && tries === 1) return home(); continue; }
+      const a = await writeWord(x.w, false, null, x);
+      if (a === BACK) continue;
+      S.log.push({ t: Date.now(), d: today(), wk: wk.id, w: x.w, mode: 'remember', typed: a.typed, hints: 0, ok: a.typed === x.w, redo: true }); save();
+      ok = a.typed === x.w;
+    }
+    if (!starred.has(x.w)) { S.stars++; starred.add(x.w); save(); }
+    if ((await praise(x.w, ok)) === BACK) continue;
+    i++;
+  }
+  prog = '';
+  await gentle('All done!', 'The more you do this, the easier those words get.', 'Home', 'All done! The more you do this, the easier those words get.');
+  home();
+}
 const MNEM_AFTER = 3;
 async function memoryTrickStep(week, x) {
   const misses = S.log.filter(l => l.w === x.w && !l.redo && !l.ok).length;
@@ -1388,7 +1436,7 @@ async function hintLadder(week, x, mode, sentence) {
     const c = n >= 3 ? 'show' : await helpChoice(x);
     if (c === BACK) return BACK;
     if (c === 'show') {
-      if ((await traceFlow(word)) === BACK) { n = 0; continue; } // last resort: she sees it, traces it, copies it, waits, then writes it from memory
+      if ((await showAnswer(word)) === BACK) { n = 0; continue; } // last resort: she sees the word, then writes it from memory
       const a = await writeWord(word, false, null, x, false, sentence); if (a === BACK) continue; tryLog(a, null, ++n);
       return true;
     }
@@ -1480,9 +1528,10 @@ function home() {
   h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span></div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}
-    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Just the ${wk.words.length} words</small></div></button>
+    <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s practice" : "My practice"}</b><small>Just the ${wk.words.length} words</small></div></button>
+    <button id="remember" class="tile t-rem"><span class="ticon">${ico('bulb')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Remember the tricky words</small></div></button>
     <button id="grown" class="tile t-grown"><span class="ticon">${ico('users')}</span><div class="tt"><b>Grown-ups</b><small>This week's words and story</small></div></button></div></div>`, { noTop: true });
-  on('#story', storyDay); on('#quick', revise); on('#grown', adultGate);
+  on('#story', storyDay); on('#quick', revise); on('#remember', remember); on('#grown', adultGate);
 }
 
 // ---------- grown-ups ----------
