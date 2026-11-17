@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.62'; // bump with every release
+const APP_VER = '2.63'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -622,8 +622,8 @@ function narrate(text, label, hl) {
 function narratePage(paras) {
   const text = paras.map(q => q.t).join(' ');
   return new Promise(res => {
-    const dense = text.split(/\s+/).length > 70;
-    h(`<div class="screen"><div class="page${dense ? ' dense' : ''}">${paras.map(q => `<p class="story">${q.w ? hlHtml(q.t, q.w) : esc(q.t)}</p>`).join('')}</div>
+    const nw = text.split(/\s+/).length, dense = nw > 110 ? ' dense dense2' : nw > 70 ? ' dense' : '';
+    h(`<div class="screen"><div class="page${dense}">${paras.map(q => `<p class="story">${q.w ? hlHtml(q.t, q.w) : esc(q.t)}</p>`).join('')}</div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div></div>`);
     on('#hear', () => say(text));
     on('#next', () => { hush(); res(); });
@@ -637,11 +637,13 @@ const STORY_INTRO = 'Watch for the words with a yellow highlight. They are your 
 function packPages(beats) {
   const steps = [], wc = t => t.split(/\s+/).filter(Boolean).length;
   let cur = [];
+  // About four pages whatever the length: the page size follows the story, so long paragraphs are not left one to a page.
+  const all = beats.reduce((a, b) => a + (b.n || b.p ? wc(fill(b.n || b.p)) : 0), 0), limit = Math.max(PAGE_WORDS, Math.ceil(all / 4) + 25);
   const flush = () => { if (cur.length) { steps.push({ page: cur }); cur = []; } };
   beats.forEach(b => {
     if (b.n || b.p) {
       const t = fill(b.n || b.p), total = cur.reduce((a, q) => a + wc(q.t), 0);
-      if (cur.length && total + wc(t) > PAGE_WORDS) flush();
+      if (cur.length && total + wc(t) > limit) flush();
       cur.push({ t, w: b.p ? b.word : null });
     } else if (b.c) { flush(); steps.push({ choice: b.c }); }
   });
