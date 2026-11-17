@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.67'; // bump with every release
+const APP_VER = '2.69'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -633,7 +633,7 @@ function splitSentences(t) {
 // The whole story in one scrolling window: all she has to do is read. With sound on it is read aloud and the window follows the voice.
 function chunkItems(items) { // groups of sentences of about 40 words, for the voice
   const out = []; let cur = [], n = 0;
-  items.forEach(q => { const w = q.t.split(/\s+/).length; if (cur.length && n + w > 40) { out.push(cur); cur = []; n = 0; } cur.push(q); n += w; });
+  items.forEach(q => { const w = q.t.split(/\s+/).length; if (cur.length && n + w > 26) { out.push(cur); cur = []; n = 0; } cur.push(q); n += w; });
   if (cur.length) out.push(cur);
   return out;
 }
@@ -650,7 +650,8 @@ function storyScroll(items) {
       for (let i = 0; i < chunks.length; i++) {
         if (my !== run) return;
         const el = document.querySelector(`.chunk[data-i="${i}"]`), sp = $('#sp');
-        if (el && sp) sp.scrollTo({ top: Math.max(0, el.offsetTop - 24), behavior: 'smooth' });
+        document.querySelectorAll('.chunk.now').forEach(x => x.classList.remove('now'));
+        if (el && sp) { el.classList.add('now'); sp.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop - 16), behavior: 'smooth' }); }
         const ok = await sayDone(chunkText(chunks[i]));
         if (!ok || my !== run) return;
       }
@@ -712,26 +713,26 @@ function learnCard(week, wobj) {
 
 // ---------- keyboard and writing ----------
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
-const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button>` : ''}</div>`).join('')}</div>`;
+const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button><button class="key wide ok" data-k="ok" aria-label="Done">${ico('check')}</button>` : ''}</div>`).join('')}</div>`;
 
 function writeWord(word, noBack, remind, wobj, force, cue) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
     const sayIt = () => say(cue || word);
-    h(`<div class="screen">
+    h(`<div class="screen writescreen">
       <div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>
       ${wobj ? toolsPanel() : ''}
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
-      ${kbHtml()}
-      <button id="done" class="btn big">Done ${ico('check')}</button></div>`);
+      ${kbHtml()}</div>`);
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
-      $('#done').disabled = !typed;
+      const okk = document.querySelector('.key[data-k="ok"]'); if (okk) okk.disabled = !typed;
     };
-    const add = c => { if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); } };
+    // The word is finished as soon as it is spelled right; for anything else she taps the tick.
+    const add = c => { if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
     const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
@@ -739,14 +740,14 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
       while (i < typed.length && i < word.length && typed[i] === word[i]) i++;
       if (i < word.length) { typed = word.slice(0, i + 1); hints++; draw(); }
     };
-    document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; k === 'del' ? del() : add(k); }; });
+    document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; k === 'del' ? del() : k === 'ok' ? finish() : add(k); }; });
     keyHandler = e => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Backspace') { del(); e.preventDefault(); }
       else if (e.key === 'Enter') { finish(); e.preventDefault(); }
       else if (/^[a-zA-Z'-]$/.test(e.key)) { add(e.key.toLowerCase()); e.preventDefault(); }
     };
-    on('#hear', sayIt); on('#hint', hint); on('#done', finish);
+    on('#hear', sayIt); on('#hint', hint);
     if (wobj) wireTools(wobj, 'write', c => c.shown.forEach(id => used.add(id)));
     if (wobj && (force || toolOn('choice'))) {
       used.add('choice');
@@ -1200,10 +1201,10 @@ function traceFlow(word) {
     if (s1 === BACK) return res(BACK);
     const s2 = await new Promise(r => {
       let typed = '';
-      h(`<div class="screen"><p class="msg">Now copy it</p><div class="wordtile small">${esc(word)}</div><div id="slots" class="slots"></div><p id="cmsg" class="subtle"></p>${kbHtml()}<button id="cdone" class="btn big">Done ${ico('check')}</button></div>`);
-      const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; $('#cdone').disabled = !typed; };
-      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); }; });
-      on('#cdone', () => { if (typed === word) r('ok'); else { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } });
+      h(`<div class="screen"><p class="msg">Now copy it</p><div class="wordtile small">${esc(word)}</div><div id="slots" class="slots"></div><p id="cmsg" class="subtle"></p>${kbHtml()}</div>`);
+      const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; const okk = document.querySelector('.key[data-k="ok"]'); if (okk) okk.disabled = !typed; };
+      const submit = () => { if (typed === word) r('ok'); else if (typed) { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } };
+      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; if (k === 'ok') return submit(); if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); if (typed === word) setTimeout(() => { if (typed === word) submit(); }, 350); }; });
       backBtn(() => r(BACK)); draw();
     });
     if (s2 === BACK) return res(BACK);
