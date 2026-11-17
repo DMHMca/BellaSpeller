@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.94'; // bump with every release
+const APP_VER = '2.95'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -549,9 +549,12 @@ async function fetchClip(t) {
   return u;
 }
 // Something to look at while she waits: a dancing row of stars and a silly line that changes every few seconds.
-const WAIT_LINES = ['Sharpening the pencils...', 'Asking the characters what they would like to do...', 'Teaching the dragons to queue...', 'Untangling the wellies...', 'Finding a very good hiding place for the plot...', 'Checking nobody has hidden the full stops...', 'Polishing the adjectives...', 'Waking the story up gently...', 'Counting the stars. There are quite a lot...', 'Lending the hero a torch...', 'Persuading the cat to hold still...', 'Looking for the last page...', 'Making sure the dragon is friendly...'];
+const WAIT_LINES = ['A dragon is knitting a very, very long scarf...', 'The penguins have lost their wellies AGAIN!', 'Quick! Somebody tell the moon to stop giggling!', 'A hedgehog has stolen all the full stops. Chasing it now...', 'The octopus is putting on eight socks...', 'Teaching a goat to read the word "goat"...', 'The clouds are having a very serious meeting...', 'A wizard sneezed and all the adjectives fell out!', 'Waking up the sleepy sloth who types the plot...', 'A llama is sitting on the spare commas. Please move, llama!', 'Counting backwards from a million... lost count. Starting again!', 'Tickling the story until it gives in...', 'A squirrel in a tiny hard hat is building chapter one...', 'Sharpening 400 pencils. They keep running away!', 'Asking the moon for ideas. The moon says "OOOOH!"', 'Teaching a dragon to say please...', 'A flamingo is thinking very hard on one leg...', 'Borrowing a rainbow. Promise to give it back!', 'The characters are arguing about who gets the torch...', 'Shaking the story tree to see what falls out...', 'A tiny robot is typing with enormous gloves...', 'Reminding the owl that it is NOT a clock...', 'Polishing the stars. They are very ticklish!', 'The yeti has found the comfy chair. Nobody can move him...', 'Untangling a unicorn from the tinsel...'];
+const WAIT_PARADE = ['\u{1F409}', '\u{1F984}', '\u{1F419}', '\u{1F989}', '\u{1F427}', '\u{1F680}', '\u{1F994}', '\u{1F438}', '\u{1F995}', '\u{1F9A9}'];
 function waitBlock() {
-  return '<div class="dance" aria-hidden="true"><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span></div><p class="subtle waitline" id="funline">' + esc(WAIT_LINES[Math.floor(Math.random() * WAIT_LINES.length)]) + '</p>';
+  const pick = WAIT_PARADE.slice().sort(() => Math.random() - .5).slice(0, 5);
+  return '<div class="parade" aria-hidden="true">' + pick.map((e, i) => `<span style="top:${(i % 3) * 22}px;animation-duration:${5 + i * 1.7}s;animation-delay:-${i * 1.9}s">${e}</span>`).join('') + '</div>'
+    + '<div class="dance" aria-hidden="true"><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span></div><p class="waitline" id="funline">' + esc(WAIT_LINES[Math.floor(Math.random() * WAIT_LINES.length)]) + '</p>';
 }
 function startWaitLines() {
   let k = Math.floor(Math.random() * WAIT_LINES.length);
@@ -560,7 +563,7 @@ function startWaitLines() {
     if (!el) return clearInterval(iv); // she has moved on
     el.classList.add('fade');
     setTimeout(() => { k = (k + 1) % WAIT_LINES.length; el.textContent = WAIT_LINES[k]; el.classList.remove('fade'); }, 400);
-  }, 3500);
+  }, 4200);
 }
 // Makes sure the clips exist. Shows a short "getting ready" screen, which Bella can skip.
 async function prep(texts, msg) {
