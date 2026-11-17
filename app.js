@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.73'; // bump with every release
+const APP_VER = '2.74'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -80,6 +80,7 @@ How to work:
 6. Write in short, simple sentences, about 8 to 14 words each and never more than 22, that carry the reader along from one to the next. The story is shown as one run of sentences, not as paragraphs, so every sentence must follow from the one before it. Keep each paragraph short: two or three sentences, so the page is not crowded. Write exactly one paragraph for each spelling word, plus at most two short extra paragraphs (an opening and a closing). Spread the spelling words evenly, so that a word turns up in almost every paragraph and the words come one after another at a steady pace, while the story still hangs together. Keep the plan under 60 words.
 7. Use each spelling word in an ordinary, natural way, in a complete sentence that a child would really say or read. Never use a word as a tag on the end of a sentence ("..., really.") or in a half-finished phrase ("she forgot when"), and never turn a sentence back to front to reach the word ("off she went" is fine, "off Ellie went" is not). If a word will not sit naturally in a paragraph, move it to another paragraph.
 8. {{LENGTH_RULE}}
+9. The story must be easy to follow for a nine-year-old who knows nothing about its topic. The first time anything unusual or technical appears (an object, a tool, a game, an experiment, a place), say in plain words what it is and why the characters are using it, before the story depends on it. Never mention an object as if the reader already knew it. For example, if paper clips will hold a bridge down or be used as weights, say so when the clips first appear. Say what each character wants early, and keep cause and effect clear: this happened, so that happened. Avoid jargon and lists of facts.
 
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
@@ -271,6 +272,7 @@ const TOOLS = [
   { id: 'hard', label: 'Underline the hard part', note: 'The tricky letters are underlined. No controlled study; she does this with her pen herself.' },
   { id: 'voice', label: 'Spelling voice', note: 'The word said the way it is spelled, such as w-hen. Some support: one controlled study, and her phonics scheme teaches it.' },
   { id: 'parts', label: 'Word parts', note: 'The word split into parts, such as side + ways. Word parts are among the better-supported teaching content.' },
+  { id: 'family', label: 'Words like it', note: 'Words spelled with the same pattern, such as what, where, why for when. Made by the AI and checked by the app.' },
   { id: 'trace', label: 'Trace, copy, then write', note: 'Trace it, copy it, wait a moment, then write it from memory. Small case studies only.' },
   { id: 'letters', label: 'Say the letters while writing', note: 'She says each letter as she writes it. Evidence is mixed.' },
   { id: 'nextletter', label: 'Next letter', note: 'Gives her the next correct letter when she is stuck. It counts as help.' },
@@ -282,7 +284,7 @@ const toolOn = id => !!(S.tools && S.tools[id]);
 const toolHas = (id, x) => toolOn(id) && (id === 'mnem' ? !!x.mnem : id === 'hard' ? !!x.hard : id === 'voice' ? !!x.say : id === 'parts' ? !!x.parts && x.parts.includes('|') : true);
 const toolsFor = x => TOOLS.filter(t => toolHas(t.id, x)).map(t => t.id);
 const REVEALS = ['mnem', 'hard', 'parts', 'voice', 'sure', 'nextletter'];
-const TOOL_SHORT = { mnem: 'Memory trick', hard: 'Hard part', voice: 'Spelling voice', parts: 'Word parts', trace: 'Trace & copy', letters: 'Say the letters', sure: 'Are you sure?', choice: 'Pick the spelling', nextletter: 'Next letter' };
+const TOOL_SHORT = { family: 'Words like it', mnem: 'Memory trick', hard: 'Hard part', voice: 'Spelling voice', parts: 'Word parts', trace: 'Trace & copy', letters: 'Say the letters', sure: 'Are you sure?', choice: 'Pick the spelling', nextletter: 'Next letter' };
 const SURE_MSG = 'Are you sure?';
 function hardHtml(x) { const i = x.hard ? x.w.indexOf(x.hard) : -1; return i < 0 ? esc(x.w) : esc(x.w.slice(0, i)) + '<u>' + esc(x.hard) + '</u>' + esc(x.w.slice(i + x.hard.length)); }
 // What the switched-on tools show for a word. stage 'look': the word is on screen. stage 'write': it is hidden, so anything shown is help.
@@ -294,6 +296,32 @@ function toolContent(x, stage) {
   if (toolOn('mnem')) { if (x.mnem) { shown.push('mnem'); html += `<div class="toolline"><b>Memory trick:</b> ${esc(x.mnem)}</div>`; } else html += `<div class="toolline"><button class="btn small" id="mymnem">Make my own memory trick</button></div>`; }
   if (toolOn('letters') && stage === 'write') { shown.push('letters'); html += '<div class="toolline">Say each letter out loud as you type it.</div>'; }
   return { html, shown };
+}
+// ---- help she asks for after a word did not go right: one at a time ----
+const cueSpoken = (sentence, word) => sentence + ' ... So the word I would like you to try to spell is ' + word + '.';
+const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
+const HELP_MENU = 'Which help would you like?';
+function helpsFor(x) {
+  const out = [];
+  if (x.mnem) out.push('mnem'); else out.push('mymnem');
+  if (x.family && x.family.length) out.push('family');
+  if (x.say) out.push('voice');
+  if (x.parts && x.parts.includes('|')) out.push('parts');
+  if (x.hard) out.push('hard');
+  out.push('trace', 'nextletter', 'choice', 'sure');
+  return out;
+}
+const HELP_LABEL = { mnem: 'A memory trick', mymnem: 'Make my own memory trick', family: 'Words like it', voice: 'Say it the spelling way', parts: 'Word parts', hard: 'The tricky part', trace: 'Trace it and copy it', nextletter: 'Give me the next letter', choice: 'Pick from some spellings', sure: 'Tell me if a letter looks wrong' };
+function helpContent(x, id) {
+  const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
+  if (id === 'mnem' && x.mnem) return { html: L('Memory trick:', esc(x.mnem)) };
+  if (id === 'family' && x.family) return { html: L('Words like it:', x.family.slice(0, 3).map(esc).join(', ')) };
+  if (id === 'voice' && x.say) return { html: L('Say it the spelling way:', esc(x.say) + ' <button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
+  if (id === 'parts' && x.parts) return { html: L('Word parts:', x.parts.split('|').map(esc).join(' + ')) };
+  if (id === 'hard' && x.hard) return { html: L('The tricky letters are:', '<u>' + esc(x.hard) + '</u>') };
+  if (id === 'nextletter') return { html: L('', 'Tap Next letter if you get stuck.') };
+  if (id === 'sure') return { html: L('', 'I will tell you if a letter does not look right.') };
+  return { html: '' };
 }
 function toolsPanel() {
   return `<div class="toolsbar"><div class="toolcap">Tap a help to use it:</div>
@@ -353,11 +381,11 @@ async function ensureTools(wk) {
   try { await suggestTools(wk); } catch (e) { } finally { suggesting = false; }
 }
 function toolsProgress() {
-  const logs = S.log.filter(l => l.mode === 'revise' && !l.redo);
+  const logs = S.log.filter(l => (l.mode === 'revise' || l.mode === 'story') && l.typed !== undefined);
   if (!logs.length) return '<p class="note">None yet.</p>';
-  const rowFor = (label, f) => { const g = logs.filter(f); return g.length ? `<tr><td>${esc(label)}</td><td>${g.length}</td><td>${g.filter(l => l.ok && !l.hints && !l.remind).length}</td></tr>` : ''; };
-  const rows = rowFor('No tool', l => !(l.tools && l.tools.length)) + TOOLS.map(t => rowFor(t.label, l => (l.tools || []).includes(t.id))).join('');
-  return `<table><tr><th>Tool</th><th>Words tried</th><th>Right first time, no help</th></tr>${rows}</table><p class="note">A hint, not a finding. Bella chooses the tools herself, so a tool can look good or bad for other reasons. A word can appear in more than one row.</p>`;
+  const rowFor = (label, f) => { const g = logs.filter(f); return g.length ? `<tr><td>${esc(label)}</td><td>${g.length}</td><td>${g.filter(l => l.ok).length}</td></tr>` : ''; };
+  const rows = rowFor('First go, no help', l => !l.rung && !(l.tools && l.tools.length) && !l.hints && !l.remind) + rowFor('Another go, no help', l => l.rung && !(l.tools && l.tools.length)) + TOOLS.map(t => rowFor(t.label, l => (l.tools || []).includes(t.id))).join('');
+  return `<table><tr><th>Help</th><th>Tries</th><th>Right</th></tr>${rows}</table><p class="note">A hint, not a finding. Bella chooses the help herself, after a word has gone wrong, so a help can look good or bad for other reasons.</p>`;
 }
 function misspellings(x, weekWords) {
   const w = x.w, seen = new Set([w]), out = [];
@@ -662,6 +690,8 @@ function storyScroll(items) {
         if (el && sp) { el.classList.add('now'); sp.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop - 16), behavior: 'smooth' }); }
         const ok = await sayDone(chunkText(chunks[i]));
         if (!ok || my !== run) return;
+        await new Promise(r => setTimeout(r, 900)); // a breath between pieces, so it is not rushed
+        if (my !== run) return;
       }
     };
     on('#hear', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: 0 }); play(); });
@@ -723,18 +753,20 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button><button class="key wide ok" data-k="ok" aria-label="Done">${ico('check')}</button>` : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, noBack, remind, wobj, force, cue) {
+function writeWord(word, noBack, remind, wobj, force, cue, help) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
-    const sayIt = () => say(cue || word);
+    const sp = cue && sentenceParts(cue, word);
+    const sayIt = () => say(sp ? cueSpoken(cue, word) : word);
+    if (help) used.add(help);
     h(`<div class="screen writescreen">
-      <div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>
-      ${wobj ? toolsPanel() : ''}
+      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
+      <div id="helpbox" class="helpbox"></div>
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
       ${kbHtml()}</div>`);
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
@@ -744,9 +776,9 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
     let sureShown = false, armed = false;
     setTimeout(() => { armed = true; }, 700); // taps from the screen before can land here; ignore input for the first moments
     // The word is finished as soon as it is spelled right; for anything else she taps the tick.
-    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && toolOn('sure') && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
+    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && help === 'sure' && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
-    const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: tl.some(id => REVEALS.includes(id)) }); } };
+    const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: !!help || tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
       let i = 0;
       while (i < typed.length && i < word.length && typed[i] === word[i]) i++;
@@ -765,11 +797,11 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
       pendingKey = setTimeout(() => { pendingKey = null; if (k === 'Backspace') del(); else if (k === 'Enter') finish(); else add(k.toLowerCase()); }, 35);
     };
     on('#hear', sayIt); on('#hint', hint);
-    if (wobj) wireTools(wobj, 'write', c => { c.shown.forEach(id => used.add(id)); const hb = $('#hint'); if (hb) hb.style.display = toolOn('nextletter') ? '' : 'none'; });
-    if (wobj && (force || toolOn('choice'))) {
+    if (wobj && help) { const hc = helpContent(wobj, help); $('#helpbox').innerHTML = hc.html; const hs = $('#hearsay'); if (hs) hs.onclick = () => say(hc.say); }
+    if (wobj && (force || help === 'choice')) {
       used.add('choice');
       const opts = shuffle([word].concat(misspellings(wobj, (curWeek().words || []).map(q => q.w))));
-      const cue = document.querySelector('.cue span'); if (cue) cue.textContent = soundOn() ? 'Listen, then pick the right spelling' : 'Pick the right spelling';
+      const cueEl = document.querySelector('.cue span'); if (cueEl) cueEl.textContent = soundOn() ? 'Listen, then pick the right spelling' : 'Pick the right spelling';
       ['#slots', '.kb', '#done', '#hint'].forEach(q => { const e = document.querySelector(q); if (e) e.style.display = 'none'; });
       const box = document.createElement('div'); box.className = 'choices mcbox';
       box.innerHTML = opts.map(o => `<button class="choice" data-o="${esc(o)}">${esc(o)}</button>`).join('');
@@ -1238,16 +1270,15 @@ async function reviseWord(week, it, sentence, starred) {
   let attempts = 0;
   for (;;) { // Back from the correction or praise screens restarts the word
     if (it.look && (await learnCard(week, it.x, null)) === BACK) return BACK;
-    let traced = false;
-    if (toolOn('trace')) { const tr = await traceFlow(word); if (tr === BACK) { if (it.look) continue; return BACK; } traced = true; }
-    const cue = it.context && sentence ? sentence + ' ... ' + word : null;
+    const traced = false;
+    const cue = it.context && sentence ? sentence : null;
     const a = await writeWord(word, false, it.look || it.context ? null : remind, it.x, false, cue);
     if (a === BACK) { if (it.look) continue; return BACK; }
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
-    if (!ok) { if ((await hintLadder(week, it.x, it.mode)) === BACK) continue; }
+    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null)) === BACK) continue; }
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
@@ -1285,19 +1316,54 @@ function showAnswer(word) {
     say(ANSWER_MSG + ' ' + word);
   });
 }
-// She got it wrong. She is not given the answer straight away: she is helped to find it, step by step,
-// and always ends by writing it right (or seeing it and writing it). Returns true or BACK.
-async function hintLadder(week, x, mode) {
+// She got it wrong. She is asked whether she wants another go or some help, and if help, which one. One help at a time.
+// Returns 'again', 'show', {help: id}, or BACK.
+function helpChoice(x) {
+  return new Promise(async res => {
+    for (;;) {
+      const c = await new Promise(r => {
+        h(`<div class="screen"><p class="msg">Not quite right.</p><p class="subtle">Would you like some help to spell this, or another go?</p>
+          <div class="choices"><button class="choice" id="h-help">I'd like some help</button><button class="choice" id="h-again">Have another go</button></div></div>`);
+        on('#h-help', () => { hush(); r('help'); }); on('#h-again', () => { hush(); r('again'); });
+        backBtn(() => r(BACK)); say(HELP_Q);
+      });
+      if (c === BACK) return res(BACK);
+      if (c === 'again') return res('again');
+      const m = await new Promise(r => {
+        h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}<button class="choice" data-h="show">Show me the word</button></div></div>`);
+        document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
+        backBtn(() => r(BACK)); say(HELP_MENU);
+      });
+      if (m === BACK) continue;
+      if (m === 'show') return res('show');
+      if (m === 'mymnem') {
+        const t = await typeText({ title: 'Your memory trick for this word', initial: '', max: 140 });
+        if (t && t.trim()) { x.mnem = t.trim(); x.mnemBy = 'bella'; save(); return res({ help: 'mnem' }); }
+        continue;
+      }
+      return res({ help: m });
+    }
+  });
+}
+async function hintLadder(week, x, mode, sentence) {
   const word = x.w;
-  const tryLog = (typed, rung) => { S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed, hints: 0, ok: typed === word, rung, redo: true }); save(); };
-  if ((await gentle(OOPS[Math.floor(Math.random() * OOPS.length)], 'Have another go.')) === BACK) return BACK;
-  let a = await writeWord(word, false, null, x); if (a === BACK) return BACK; tryLog(a.typed, 1); if (a.typed === word) return true;
-  if ((await gentle(CLUE, hintText(x), 'Try again', hintText(x))) === BACK) return BACK;
-  a = await writeWord(word, false, null, x); if (a === BACK) return BACK; tryLog(a.typed, 2); if (a.typed === word) return true;
-  a = await writeWord(word, false, null, x, true); if (a === BACK) return BACK; tryLog(a.typed, 3); if (a.typed === word) return true;
-  if ((await showAnswer(word)) === BACK) return BACK;
-  a = await writeWord(word, false, null, x); if (a === BACK) return BACK; tryLog(a.typed, 4);
-  return true;
+  const tryLog = (a, help, n) => { S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
+  let n = 0;
+  for (;;) {
+    const c = n >= 3 ? 'show' : await helpChoice(x);
+    if (c === BACK) return BACK;
+    if (c === 'show') {
+      if ((await showAnswer(word)) === BACK) { n = 0; continue; }
+      const a = await writeWord(word, false, null, x, false, sentence); if (a === BACK) continue; tryLog(a, null, ++n);
+      return true;
+    }
+    const help = c === 'again' ? null : c.help;
+    if (help === 'trace') { const t = await traceFlow(word); if (t === BACK) continue; }
+    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help);
+    if (a === BACK) continue;
+    tryLog(a, help, ++n);
+    if (a.typed === word) return true;
+  }
 }
 function reviseEnd(wk, firsts, sound) {
   return new Promise(res => {
@@ -1314,8 +1380,8 @@ function reviseEnd(wk, firsts, sound) {
 // Everything the spelling steps need spoken, fetched ahead so nothing waits.
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
-  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(s0 + ' ... ' + x.w); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
-  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
+  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
+  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
 // Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.

@@ -307,3 +307,13 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .toolsbar .chiprow { gap: 6px; }
 .toolsbar .chip.small { padding: 5px 11px; font-size: 15px; }
 .writescreen .key { height: clamp(36px, 6.2vh, 56px); }
+
+/* gap sentence and chosen help */
+.gapcard { width: 100%; }
+.gapcard .story { font-size: clamp(22px, 3.4vh, 30px); line-height: 1.5; }
+.gapw { display: inline-block; position: relative; min-width: 4em; height: 1.1em; border-bottom: 4px solid var(--amber, #f5a623); vertical-align: baseline; margin: 0 .15em; }
+.gapw i { position: absolute; left: 50%; top: -1.35em; transform: translateX(-50%); font-style: normal; color: #ffb703; font-size: 1.3em; line-height: 1; }
+.helpbox { width: 100%; }
+.helpline { background: var(--paper); color: var(--ink); border-radius: 18px; padding: 10px 16px; font-size: clamp(18px, 2.8vh, 24px); text-align: left; }
+.choices.menu { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+@media (max-width: 560px) { .choices.menu { grid-template-columns: 1fr; } }
