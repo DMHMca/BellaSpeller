@@ -356,3 +356,12 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .parade span { position: absolute; left: -60px; font-size: 44px; animation: marchby linear infinite; }
 @keyframes marchby { 0% { transform: translate(0, 0) rotate(-8deg); } 25% { transform: translate(25vw, -12px) rotate(8deg); } 50% { transform: translate(50vw, 0) rotate(-8deg); } 75% { transform: translate(75vw, -12px) rotate(8deg); } 100% { transform: translate(110vw, 0) rotate(-8deg); } }
 @media (prefers-reduced-motion: reduce) { .parade span { animation: none; left: 20%; } }
+
+/* celebration */
+.cheer { position: relative; }
+.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 5; }
+.confetti i { position: absolute; top: -14px; width: 10px; height: 16px; border-radius: 2px; animation: confall linear forwards; }
+@keyframes confall { to { transform: translateY(110vh) rotate(720deg); } }
+.pstars { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; font-size: 30px; color: rgba(255,255,255,.25); }
+.pstars .on { color: #ffd54a; text-shadow: 0 0 10px rgba(255,200,61,.8); }
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } }

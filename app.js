@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.95'; // bump with every release
+const APP_VER = '2.96'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -921,6 +921,33 @@ function showFix(word, typed) {
     say(msg + FIX_TAIL);
   });
 }
+// ---- celebrating a word: a little trumpet, a spoken well done that counts the words, and confetti ----
+const ORD = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'eleventh', 'twelfth', 'thirteenth', 'fourteenth', 'fifteenth', 'sixteenth', 'seventeenth', 'eighteenth', 'nineteenth', 'twentieth'];
+function celebrateText(n, N, clean) {
+  if (n >= N && N > 1) return clean ? 'Brilliant, first time! That is the last one, and you have done all ' + N + ' words. Fantastic!' : 'Well done, you stuck with it! That is the last one, and you have done all ' + N + ' words. Fantastic!';
+  const o = ORD[n - 1] || n + 'th';
+  return clean ? 'Brilliant, first time! That is the ' + o + ' one done.' : 'Well done, you worked it out! That is the ' + o + ' one done.';
+}
+let fanCtx = null;
+function fanfare() {
+  if (!soundOn()) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    fanCtx = fanCtx || new AC(); const c = fanCtx; if (c.state === 'suspended') c.resume();
+    const t0 = c.currentTime + 0.03;
+    [[523.25, 0], [659.25, 0.13], [783.99, 0.26], [1046.5, 0.39]].forEach(([f, dt], i) => {
+      const o = c.createOscillator(), g = c.createGain(), lp = c.createBiquadFilter(), t = t0 + dt, d = i === 3 ? 0.55 : 0.13;
+      o.type = 'sawtooth'; o.frequency.value = f; lp.type = 'lowpass'; lp.frequency.value = 2200;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.025); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.06);
+      o.connect(lp); lp.connect(g); g.connect(c.destination); o.start(t); o.stop(t + d + 0.1);
+    });
+  } catch (e) { }
+}
+function confettiHtml() {
+  const cols = ['#ff6b9d', '#ffd54a', '#4dd4ac', '#6fb1ff', '#c58bff'];
+  return '<div class="confetti" aria-hidden="true">' + Array.from({ length: 26 }, (_, i) => `<i style="left:${Math.round(Math.random() * 100)}%;background:${cols[i % cols.length]};animation-delay:${(Math.random() * 0.8).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.5).toFixed(2)}s"></i>`).join('') + '</div>';
+}
+const progressStars = (n, N) => '<div class="pstars" aria-label="' + n + ' of ' + N + ' done">' + Array.from({ length: N }, (_, i) => `<span class="${i < n ? 'on' : ''}">&#9733;</span>`).join('') + '</div>';
 function praise(word, clean) {
   return new Promise(res => {
     const p = clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!';
@@ -929,7 +956,7 @@ function praise(word, clean) {
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
     backBtn(res);
-    say(p);
+    fanfare(); setTimeout(() => { if ($('#next')) say(p); }, 800);
   });
 }
 
@@ -1302,17 +1329,18 @@ function sentenceParts(sentence, word) {
   return { pre: sentence.slice(0, at), post: sentence.slice(at + word.length) };
 }
 const remindOf = (sentence, word) => { const sp = sentence && sentenceParts(sentence, word); return sp ? { html: esc(sp.pre) + '<span class="blank"></span>' + esc(sp.post), spoken: sp.pre + ' blank ' + sp.post } : null; };
-function praiseSentence(word, sentence, clean) {
+function praiseSentence(word, sentence, clean, n, N) {
   return new Promise(res => {
-    const p = clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!';
+    const text = n && N ? celebrateText(n, N, clean) : (clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!');
     const sp = sentence && sentenceParts(sentence, word);
-    const page = sp ? `<div class="page"><p class="story">${esc(sp.pre)}<span class="pw set">${esc(word)}</span>${esc(sp.post)}</p></div>` : `<div class="wordtile small">${esc(word)}</div>`;
-    h(`<div class="screen wordpage">${page}<div class="bigstar mini"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(p)}</p>
-      <button id="next" class="btn big">Next ${ico('next')}</button></div>`);
+    const page = sp ? `<div class="page small"><p class="story">${esc(sp.pre)}<span class="pw set">${esc(word)}</span>${esc(sp.post)}</p></div>` : `<div class="wordtile small">${esc(word)}</div>`;
+    h(`<div class="screen wordpage cheer">${confettiHtml()}${page}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(text)}</p>${n && N ? progressStars(n, N) : ''}
+      <button id="next" class="btn big">${n && N && n >= N ? 'See how I did' : 'Next word'} ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
     backBtn(res);
-    say(sentence || p);
+    fanfare();
+    setTimeout(() => { if ($('#next')) say(text); }, 800);
   });
 }
 // Trace it, copy it, wait a moment: then she writes it from memory. Returns true, or BACK.
@@ -1367,7 +1395,7 @@ async function reviseWord(week, it, sentence, starred) {
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
     const good = ok && a.hints === 0 && !a.reminded && !aided;
-    if ((await praiseSentence(word, sentence, good)) === BACK) continue;
+    if ((await praiseSentence(word, sentence, good, starred.size, week.words.length)) === BACK) continue;
     return { good, ok, typed: a.typed, aided };
   }
 }
@@ -1534,6 +1562,7 @@ function reviseEnd(wk, firsts, sound) {
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
   wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); if (familyText(x)) texts.push(familyText(x)); texts.push(hintText(x)); });
+  for (let i = 1; i <= wk.words.length; i++) { texts.push(celebrateText(i, wk.words.length, true)); texts.push(celebrateText(i, wk.words.length, false)); }
   OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
