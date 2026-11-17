@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.87'; // bump with every release
+const APP_VER = '2.88'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -303,16 +303,16 @@ const cueSpoken = (sentence, word) => sentence + ' ... So the word I would like 
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) {
-  // Only helps that make her work for the spelling. None of them shows the word.
-  const out = ['sure', 'letters'];
-  if (x.say) out.push('voice');
+  // The three main helps first, then the smaller ones. None of them shows the word.
+  const out = [];
   { const f = famOf(x); if (f.rule || f.family.length) out.push('family'); }
+  out.push('sure', 'choice');
+  if (x.say) out.push('voice');
   if (x.hard) out.push('hard');
   if (x.parts && x.parts.includes('|')) out.push('parts');
-  out.push('choice');
   return out;
 }
-const HELP_LABEL = { sure: 'Are you sure?', letters: 'Say the letters', voice: 'Spelling voice', family: 'Words like it', hard: 'Hard part', parts: 'Word parts', choice: 'Pick the right spelling' };
+const HELP_LABEL = { sure: 'Are you sure?', voice: 'Spelling voice', family: 'Words like it', hard: 'Hard part', parts: 'Word parts', choice: 'Pick the right spelling' };
 // Empty boxes, one per letter, so she can see how long the word is and where the tricky bit is, without seeing any letters.
 function boxesHtml(x, marks, groups) {
   const w = x.w, hi = x.hard ? w.indexOf(x.hard) : -1; let i = 0, out = '';
@@ -355,7 +355,7 @@ const famOf = x => { const ph = phonicsRule(x.w); return ph || { rule: x.rule ||
 const familyText = x => { const f = famOf(x); return (f.rule ? f.rule : '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: (f.rule ? L('The rule:', esc(f.rule)) : L('Words like it:', f.family.slice(0, 3).map(esc).join(', '))) + '<button class="btn small" id="hearsay">Hear it</button>', say: familyText(x) }; }
+  if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: L('Listen carefully.', '<button class="btn small" id="hearsay">Hear it again</button>'), say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
@@ -1333,14 +1333,14 @@ async function reviseWord(week, it, sentence, starred) {
     let a = await writeWord(word, false, it.look || it.context ? null : remind, it.x, false, cue, null, true);
     if (a === BACK) { if (it.look) continue; return BACK; }
     if (a.askHelp) { // she asked for help before trying
-      const id = await helpMenu(it.x); if (id === BACK) continue;
+      const id = helpsFor(it.x).includes('family') ? 'family' : await helpMenu(it.x); if (id === BACK) continue;
       a = await writeWord(word, false, null, it.x, false, cue, id); if (a === BACK) continue;
     }
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
-    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null)) === BACK) continue; }
+    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null, a.tools && a.tools.includes('family'))) === BACK) continue; }
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
@@ -1387,7 +1387,7 @@ function helpMenu(x) {
     backBtn(() => r(BACK)); say(HELP_MENU);
   });
 }
-function helpChoice(x) {
+function helpChoice(x, first) {
   return new Promise(async res => {
     for (;;) {
       const c = await new Promise(r => {
@@ -1398,6 +1398,7 @@ function helpChoice(x) {
       });
       if (c === BACK) return res(BACK);
       if (c === 'again') return res('again');
+      if (first && helpsFor(x).includes('family')) return res({ help: 'family' }); // the first help is always the spoken rule
       const m = await new Promise(r => {
         h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}</div></div>`);
         document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
@@ -1472,12 +1473,12 @@ async function memoryTrickStep(week, x) {
     say(msg + (x.mnem ? ' ' + x.mnem : ''));
   });
 }
-async function hintLadder(week, x, mode, sentence) {
+async function hintLadder(week, x, mode, sentence, usedFamily) {
   const word = x.w;
   const tryLog = (a, help, n) => { S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
   let n = 0;
   for (;;) {
-    const c = n >= 3 ? 'show' : await helpChoice(x);
+    const c = n >= 3 ? 'show' : await helpChoice(x, !usedFamily);
     if (c === BACK) return BACK;
     if (c === 'show') {
       if ((await showAnswer(word)) === BACK) { n = 0; continue; } // last resort: she sees the word, then writes it from memory
@@ -1485,6 +1486,7 @@ async function hintLadder(week, x, mode, sentence) {
       return true;
     }
     const help = c === 'again' ? null : c.help;
+    if (help === 'family') usedFamily = true;
     if (help === 'trace') { const t = await traceFlow(word); if (t === BACK) continue; }
     const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help);
     if (a === BACK) continue;
