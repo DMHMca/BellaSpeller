@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.69'; // bump with every release
+const APP_VER = '2.70'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -273,13 +273,15 @@ const TOOLS = [
   { id: 'parts', label: 'Word parts', note: 'The word split into parts, such as side + ways. Word parts are among the better-supported teaching content.' },
   { id: 'trace', label: 'Trace, copy, then write', note: 'Trace it, copy it, wait a moment, then write it from memory. Small case studies only.' },
   { id: 'letters', label: 'Say the letters while writing', note: 'She says each letter as she writes it. Evidence is mixed.' },
+  { id: 'sure', label: 'Are you sure?', note: 'A gentle nudge, once per word, when a letter does not look right. It never says which letter. It counts as help.' },
   { id: 'choice', label: 'Pick the right spelling', note: 'She picks the right spelling from several, instead of writing it. This is recognition, not recall. Research found recall gives bigger memory benefits, so this is here to try, not because it is proven.' }
 ];
 const toolOn = id => !!(S.tools && S.tools[id]);
 // A tool is only offered for a word when it is switched on and the word has what the tool needs.
 const toolHas = (id, x) => toolOn(id) && (id === 'mnem' ? !!x.mnem : id === 'hard' ? !!x.hard : id === 'voice' ? !!x.say : id === 'parts' ? !!x.parts && x.parts.includes('|') : true);
 const toolsFor = x => TOOLS.filter(t => toolHas(t.id, x)).map(t => t.id);
-const REVEALS = ['mnem', 'hard', 'parts', 'voice'];
+const REVEALS = ['mnem', 'hard', 'parts', 'voice', 'sure'];
+const SURE_MSG = 'Are you sure?';
 function hardHtml(x) { const i = x.hard ? x.w.indexOf(x.hard) : -1; return i < 0 ? esc(x.w) : esc(x.w.slice(0, i)) + '<u>' + esc(x.hard) + '</u>' + esc(x.w.slice(i + x.hard.length)); }
 // What the switched-on tools show for a word. stage 'look': the word is on screen. stage 'write': it is hidden, so anything shown is help.
 function toolContent(x, stage) {
@@ -723,6 +725,7 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
     h(`<div class="screen writescreen">
       <div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>
       ${wobj ? toolsPanel() : ''}
+      <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
@@ -730,9 +733,11 @@ function writeWord(word, noBack, remind, wobj, force, cue) {
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
       const okk = document.querySelector('.key[data-k="ok"]'); if (okk) okk.disabled = !typed;
+      const sb = $('#surebox'); if (sb && sb.textContent && word.startsWith(typed)) sb.textContent = ''; // she has put it right herself
     };
+    let sureShown = false;
     // The word is finished as soon as it is spelled right; for anything else she taps the tick.
-    const add = c => { if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
+    const add = c => { if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && toolOn('sure') && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
     const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
@@ -1297,7 +1302,7 @@ function reviseEnd(wk, firsts, sound) {
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
   wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(s0 + ' ... ' + x.w); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
-  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
+  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
 // Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.
