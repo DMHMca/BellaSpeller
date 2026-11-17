@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.97'; // bump with every release
+const APP_VER = '2.98'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -84,7 +84,7 @@ How to work:
 
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
-{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word", "pic": "three or four emoji that picture this paragraph"}
+{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
 {{CHOICE_FORMAT}}
 
 Rules:
@@ -92,8 +92,7 @@ Rules:
 {{CHOICE_RULE}}
 3. Every part except the last ends with a cliffhanger. The last part resolves the story and ends warmly. Do not end by repeating the words.
 4. A spelling word may also appear naturally elsewhere in the story, in narration, in other paragraphs and in choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
-5. The "pic" of each p beat is three or four emoji, and nothing else, that make a little picture of what is happening in that paragraph: the place, the objects, the animals, the weather, the mood. Show the key object of the paragraph (for the paper bridge story: books, paper, a bridge). Use only objects, animals, nature, places, vehicles, tools and faces. Never any food or drink, and no flags.
-6. Reply with the JSON object only.`;
+5. Reply with the JSON object only.`;
 
 const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}';
 const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
@@ -575,15 +574,17 @@ function startWaitLines() {
   }, 4200);
 }
 // Makes sure the clips exist. Shows a short "getting ready" screen, which Bella can skip.
-async function prep(texts, msg) {
+let prepShown = false, justWritten = false;
+async function prep(texts, msg, ready) {
   if (!ttsOn() || !soundOn()) return null;
   const need = [];
   for (const t of new Set(texts)) { if (t && sendable(t) && !(await getClipUrl(t))) need.push(t); }
   if (!need.length) return null;
+  prepShown = true;
   let n = 0, skip = false, err = null;
   await new Promise(res => {
-    h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1>${waitBlock()}<button id="go" class="btn small">Start now</button></div>`);
-    startWaitLines();
+    if (ready) h(`<div class="screen cheer">${confettiHtml()}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><p class="subtle" id="rdy">Just warming up my voice...</p><button id="go" class="btn big">Start now ${ico('next')}</button></div>`), fanfare();
+    else h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><button id="go" class="btn small">Start now</button></div>`);
     on('#go', () => { skip = true; res(); });
     let i = 0;
     const worker = async () => {
@@ -592,7 +593,7 @@ async function prep(texts, msg) {
         n++;
       }
     };
-    Promise.all([worker(), worker(), worker()]).then(() => res());
+    Promise.all([worker(), worker(), worker()]).then(() => { if (!ready || err || skip) return res(); const r = $('#rdy'); if (r) r.textContent = 'Everything is ready!'; const g = $('#go'); if (g) g.innerHTML = 'Start the story ' + ico('next'); }); // the ready screen waits for her tap
   });
   lastTtsErr = err ? err.message : '';
   return err;
@@ -618,10 +619,22 @@ function stopAll() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (audioEl) { audioEl.onended = audioEl.onerror = null; audioEl.pause(); audioEl = null; }
 }
+let wakeCtx = null;
+// Speakers and Bluetooth often switch off in silence and swallow the first second of the next sound. A very quiet hiss just before each clip keeps them awake.
+function wakeAudio() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    wakeCtx = wakeCtx || new AC(); const c = wakeCtx; if (c.state === 'suspended') c.resume();
+    const len = Math.floor(c.sampleRate * 0.9), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.004;
+    const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start();
+  } catch (e) { }
+}
 function say(t) {
   const tok = ++sayTok;
   stopAll();
   if (!soundOn()) return;
+  if (ttsOn()) wakeAudio();
   speechUntil = Date.now() + 120000;
   if (!ttsOn()) return builtinSay(t);
   getClipUrl(t).then(url => {
@@ -632,7 +645,7 @@ function say(t) {
       audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
       const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
       el.preload = 'auto';
-      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, 350);
+      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, 700);
     } else {
       builtinSay(t);
       if (ttsFails < 3 && sendable(t)) fetchClip(t).then(() => { ttsFails = 0; }, e => { ttsFails++; lastTtsErr = e.message; });
@@ -792,7 +805,7 @@ function storySegments(beats) { // the story as sentences; only a choice breaks 
   const steps = []; let cur = [];
   const flush = () => { if (cur.length) { steps.push({ seg: cur }); cur = []; } };
   beats.forEach(b => {
-    if (b.n || b.p) { const sents = splitSentences(fill(b.n || b.p)); sents.forEach((t, k) => cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null, pic: b.p && k === sents.length - 1 ? b.pic : undefined })); }
+    if (b.n || b.p) { const sents = splitSentences(fill(b.n || b.p)); sents.forEach((t, k) => cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null })); }
     else if (b.c) { flush(); steps.push({ choice: b.c }); }
   });
   flush();
@@ -1225,7 +1238,7 @@ function failScreen(msg) {
 async function writeNewStory(wk, idea) {
   for (;;) {
     waiting(SCREEN_PROMPTS[3]); say(SCREEN_PROMPTS[3]);
-    try { const ep = await draftStory(wk, { idea }); ep.idea = idea; return ep; }
+    try { const ep = await draftStory(wk, { idea }); ep.idea = idea; justWritten = true; return ep; }
     catch (e) { hush(); if ((await failScreen(e.message || 'Something went wrong.')) === BACK) return BACK; }
   }
 }
@@ -1288,6 +1301,13 @@ function clubSetup() {
     say(msg);
   });
 }
+function readyScreen() {
+  return new Promise(res => {
+    h(`<div class="screen cheer">${confettiHtml()}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>Your story is ready!</h1><button id="next" class="btn big">Start the story ${ico('next')}</button></div>`);
+    on('#next', () => { hush(); res(); }); keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
+    fanfare();
+  });
+}
 async function storyDay() {
   const wk = curWeek();
   if (!(await storyStart(wk))) return home();
@@ -1296,7 +1316,9 @@ async function storyDay() {
   const order = beats.filter(b => b.p && b.word).map(b => b.word);
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
   const steps = storySegments(beats);
-  await prep([].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Getting the story ready');
+  prepShown = false;
+  await prep([].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Your story is ready!', true);
+  if (justWritten) { justWritten = false; if (!prepShown) await readyScreen(); }
   prog = ep.title;
   if ((await gentle('Some words in this story are highlighted in yellow.', 'They are this week\'s words. We will have a little go at them afterwards.', 'Start the story', STORY_INTRO)) === BACK) return home();
   let i = 0;
@@ -1336,7 +1358,7 @@ function picFor(word) {
   for (const part of ep.parts || []) for (const b of part) if (b.p && b.word === word && b.pic) return b.pic;
   return '';
 }
-const sceneBar = word => { const p = picFor(word); return p ? `<div class="scenebar" aria-hidden="true">${p}</div>` : ''; };
+const sceneBar = () => ''; // the emoji pictures were dropped; a better picture idea is still to come
 function sentenceParts(sentence, word) {
   const m = new RegExp("(^|[^A-Za-z'’])(" + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ")(?![A-Za-z]|['’][A-Za-z])", 'i').exec(sentence);
   if (!m) return null;
