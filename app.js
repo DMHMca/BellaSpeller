@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.86'; // bump with every release
+const APP_VER = '2.87'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -98,8 +98,9 @@ const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{
 const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
 const CHOICE_RULE = n => '2. The whole story has exactly ' + n + (n === 1 ? ' choice' : ' choices') + ' in total (not one per part), spread out through the story. Put each choice after at least two paragraphs. Both options must lead sensibly into the rest of the story.';
 const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it straight through, and never use a c beat.';
-const LENGTHS = { short: { label: 'Short', max: 350, aim: 250 }, standard: { label: 'Standard', max: 500, aim: 330 }, long: { label: 'Long', max: 800, aim: 550 } };
-const curLen = () => LENGTHS[S.len] || LENGTHS.standard;
+// The story's length follows the number of spelling words: about this many words of story for each one.
+const LENGTHS = { short: { label: 'Short', per: 18 }, standard: { label: 'Standard', per: 24 }, long: { label: 'Long', per: 36 } };
+const curLen = () => { const L = LENGTHS[S.len] || LENGTHS.standard, n = Math.max(3, (curWeek().words || []).length), aim = L.per * n; return { label: L.label, aim, max: Math.round(aim * 1.2 + 30) }; };
 const castN = () => Math.min(4, Math.max(2, parseInt(S.castN, 10) || 2));
 const castRule = n => 'exactly ' + ['', '', 'two', 'three', 'four'][n] + ' friends, written only as ' + ['{g1}', '{g2}', '{g3}', '{g4}'].slice(0, n).join(', ').replace(/, ([^,]*)$/, ' and $1') + '. Do not add other named characters, and keep the cast small so the story stays short';
 const storyRules = () => STORY_RULES.replace('{{CAST_RULE}}', castRule(castN())).replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Add up the words before you answer: a story over ' + curLen().max + ' words is rejected and has to be rewritten, which wastes time.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
