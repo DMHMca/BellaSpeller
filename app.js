@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.82'; // bump with every release
+const APP_VER = '2.83'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -305,7 +305,7 @@ function helpsFor(x) {
   // Only helps that make her work for the spelling. None of them shows the word.
   const out = ['sure', 'letters'];
   if (x.say) out.push('voice');
-  if (x.family && x.family.length) out.push('family');
+  if ((x.family && x.family.length) || x.rule) out.push('family');
   if (x.hard) out.push('hard');
   if (x.parts && x.parts.includes('|')) out.push('parts');
   out.push('choice');
@@ -319,9 +319,11 @@ function boxesHtml(x, marks, groups) {
   if (groups) { let off = 0; return groups.map(g => { const t = `<span class="bxg">${cells(g.length, off)}</span>`; off += g.length; return t; }).join('<span class="bxplus">+</span>'); }
   return `<span class="bxg">${cells(w.length, 0)}</span>`;
 }
+// What is said aloud for Words like it: the rule and the similar words, never the word itself.
+const familyText = x => (x.rule ? x.rule + ' ' : '') + (x.family && x.family.length ? 'Other words spelled like it are ' + x.family.slice(0, 3).join(', ') + '.' : '');
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'family' && x.family) return { html: L('Words like it:', x.family.slice(0, 3).map(esc).join(', ')) };
+  if (id === 'family' && (x.rule || x.family)) return { html: (x.rule ? L('The rule:', esc(x.rule)) : '') + (x.family && x.family.length ? L('Words like it:', x.family.slice(0, 3).map(esc).join(', ')) : '') + '<button class="btn small" id="hearsay">Hear it</button>', say: familyText(x) };
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
   if (id === 'parts' && x.parts) return { html: L('Word parts. One box for each letter:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
@@ -358,7 +360,7 @@ async function aiJSON(sys, user, maxTokens) {
 // Asks the AI to suggest tool data for each word, keeps only suggestions that pass checks, never overwrites what a grown-up or Bella typed.
 async function suggestTools(wk) {
   const words = wk.words.map(x => x.w);
-  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine); "wrong": two or three misspellings that children commonly write for this word, each a made-up string and not a real English word (for example freind for friend); "family": three everyday words a nine-year-old knows that are spelled with the same pattern as this word, never the word itself (for when: what, where, why; for friend: field, piece, chief). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "...", "wrong": ["...", "..."], "family": ["...", "...", "..."]}]}.';
+  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine); "wrong": two or three misspellings that children commonly write for this word, each a made-up string and not a real English word (for example freind for friend); "rule": one short, friendly sentence under 16 words that names the spelling pattern in the word and gives two or three common words that share it, without ever writing out the whole word (for there: It starts with th, like this, that and those. For friend: The ie is the same as in field and piece.); "family": three everyday words a nine-year-old knows that are spelled with the same pattern as this word, never the word itself (for when: what, where, why; for friend: field, piece, chief). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "...", "wrong": ["...", "..."], "rule": "...", "family": ["...", "...", "..."]}]}.';
   const o = await aiJSON(sys, 'Spelling words: ' + words.join(', '), 3000);
   let added = 0;
   (o.words || []).forEach(sg => {
@@ -368,6 +370,7 @@ async function suggestTools(wk) {
     if (!x.say && ok(sg.say) && sg.say.replace(/-/g, '').toLowerCase() === w && sg.say.includes('-')) { x.say = sg.say.toLowerCase().trim(); added++; }
     if (!x.parts && ok(sg.parts) && sg.parts.replace(/\|/g, '').toLowerCase() === w && sg.parts.includes('|')) { x.parts = sg.parts.toLowerCase().trim(); added++; }
     if (!x.wrong && Array.isArray(sg.wrong)) { const good = sg.wrong.map(t => String(t).toLowerCase().trim()).filter(t => /^[a-z'-]+$/.test(t) && t !== w && Math.abs(t.length - w.length) <= 3 && !words.includes(t)).slice(0, 4); if (good.length) { x.wrong = good; added++; } }
+    if (!x.rule && ok(sg.rule) && sg.rule.length <= 130 && !sg.rule.toLowerCase().includes(w) && ![...sg.rule.matchAll(US)].length) { x.rule = sg.rule.trim(); added++; }
     if (!x.family && Array.isArray(sg.family)) {
       const share = f => { let a = 0; while (a < w.length && a < f.length && w[a] === f[a]) a++; let b = 0; while (b < w.length && b < f.length && w[w.length - 1 - b] === f[f.length - 1 - b]) b++; return a >= 2 || b >= 3 || (x.hard && f.includes(x.hard)); };
       const fam = sg.family.map(t => String(t).toLowerCase().trim()).filter(f => /^[a-z]{2,12}$/.test(f) && f !== w && !words.includes(f) && share(f) && ![...f.matchAll(US)].length).slice(0, 4);
@@ -375,14 +378,14 @@ async function suggestTools(wk) {
     }
     if (!x.mnem && ok(sg.mnem) && sg.mnem.length <= 140 && ![...sg.mnem.matchAll(US)].some(m => !words.includes(m[0].toLowerCase()))) { x.mnem = sg.mnem.trim(); x.mnemBy = 'ai'; added++; }
   });
-  wk.words.forEach(x => { x.sug = true; });
+  wk.words.forEach(x => { x.sug = true; x.ruleTried = true; });
   save();
   return added;
 }
 // Quietly makes tool data for any word that has none yet. Needs the AI key and a connection; failure is silent.
 let suggesting = false;
 async function ensureTools(wk) {
-  if (suggesting || !aiKey() || !navigator.onLine || !wk.words.some(x => !x.sug)) return;
+  if (suggesting || !aiKey() || !navigator.onLine || !wk.words.some(x => !x.sug || !x.ruleTried)) return;
   suggesting = true;
   try { await suggestTools(wk); } catch (e) { } finally { suggesting = false; }
 }
@@ -778,7 +781,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help) {
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
     const sp = cue && sentenceParts(cue, word);
-    const sayIt = () => say(sp ? cueSpoken(cue, word) : word);
+    const sayIt = () => say(help === 'family' && wobj && familyText(wobj) ? familyText(wobj) : sp ? cueSpoken(cue, word) : word);
     if (help) used.add(help);
     h(`<div class="screen writescreen">
       ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
@@ -1412,7 +1415,7 @@ function reviseEnd(wk, firsts, sound) {
 // Everything the spelling steps need spoken, fetched ahead so nothing waits.
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
-  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
+  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); if (x.rule || (x.family && x.family.length)) texts.push(familyText(x)); texts.push(hintText(x)); });
   OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
@@ -1681,7 +1684,7 @@ function adult() {
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy', 'wrong', 'family', 'sug'].forEach(k => { x[k] = old[k]; }); } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
