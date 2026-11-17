@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.81'; // bump with every release
+const APP_VER = '2.82'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -302,24 +302,30 @@ const cueSpoken = (sentence, word) => sentence + ' ... So the word I would like 
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) {
-  const out = [];
-  // A memory trick is not offered here: it only works once she knows the spelling. See memoryTrickStep.
-  if (x.family && x.family.length) out.push('family');
+  // Only helps that make her work for the spelling. None of them shows the word.
+  const out = ['sure', 'letters'];
   if (x.say) out.push('voice');
-  if (x.parts && x.parts.includes('|')) out.push('parts');
+  if (x.family && x.family.length) out.push('family');
   if (x.hard) out.push('hard');
-  out.push('trace', 'nextletter', 'choice', 'sure');
+  if (x.parts && x.parts.includes('|')) out.push('parts');
+  out.push('choice');
   return out;
 }
-const HELP_LABEL = { mnem: 'A memory trick', mymnem: 'Make my own memory trick', family: 'Words like it', voice: 'Say it the spelling way', parts: 'Word parts', hard: 'The tricky part', trace: 'Trace it and copy it', nextletter: 'Give me the next letter', choice: 'Pick from some spellings', sure: 'Tell me if a letter looks wrong' };
+const HELP_LABEL = { sure: 'Are you sure?', letters: 'Say the letters', voice: 'Spelling voice', family: 'Words like it', hard: 'Hard part', parts: 'Word parts', choice: 'Pick the right spelling' };
+// Empty boxes, one per letter, so she can see how long the word is and where the tricky bit is, without seeing any letters.
+function boxesHtml(x, marks, groups) {
+  const w = x.w, hi = x.hard ? w.indexOf(x.hard) : -1; let i = 0, out = '';
+  const cells = (n, off) => { let h2 = ''; for (let k = 0; k < n; k++) { const at = off + k, m = marks && hi >= 0 && at >= hi && at < hi + x.hard.length; h2 += `<span class="bx${m ? ' hardbx' : ''}"></span>`; } return h2; };
+  if (groups) { let off = 0; return groups.map(g => { const t = `<span class="bxg">${cells(g.length, off)}</span>`; off += g.length; return t; }).join('<span class="bxplus">+</span>'); }
+  return `<span class="bxg">${cells(w.length, 0)}</span>`;
+}
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'mnem' && x.mnem) return { html: L('Memory trick:', esc(x.mnem)) };
   if (id === 'family' && x.family) return { html: L('Words like it:', x.family.slice(0, 3).map(esc).join(', ')) };
-  if (id === 'voice' && x.say) return { html: L('Say it the spelling way:', esc(x.say) + ' <button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
-  if (id === 'parts' && x.parts) return { html: L('Word parts:', x.parts.split('|').map(esc).join(' + ')) };
-  if (id === 'hard' && x.hard) return { html: L('The tricky letters are:', '<u>' + esc(x.hard) + '</u>') };
-  if (id === 'nextletter') return { html: L('', 'Tap Next letter if you get stuck.') };
+  if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
+  if (id === 'parts' && x.parts) return { html: L('Word parts. One box for each letter:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
+  if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
+  if (id === 'letters') return { html: L('', 'Say each letter out loud as you type it.') };
   if (id === 'sure') return { html: L('', 'I will tell you if a letter does not look right.') };
   return { html: '' };
 }
@@ -1346,12 +1352,11 @@ function helpChoice(x) {
       if (c === BACK) return res(BACK);
       if (c === 'again') return res('again');
       const m = await new Promise(r => {
-        h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}<button class="choice" data-h="show">Show me the word</button></div></div>`);
+        h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}</div></div>`);
         document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
         backBtn(() => r(BACK)); say(HELP_MENU);
       });
       if (m === BACK) continue;
-      if (m === 'show') return res('show');
       return res({ help: m });
     }
   });
@@ -1380,7 +1385,7 @@ async function hintLadder(week, x, mode, sentence) {
     const c = n >= 3 ? 'show' : await helpChoice(x);
     if (c === BACK) return BACK;
     if (c === 'show') {
-      if ((await showAnswer(word)) === BACK) { n = 0; continue; }
+      if ((await traceFlow(word)) === BACK) { n = 0; continue; } // last resort: she sees it, traces it, copies it, waits, then writes it from memory
       const a = await writeWord(word, false, null, x, false, sentence); if (a === BACK) continue; tryLog(a, null, ++n);
       return true;
     }
