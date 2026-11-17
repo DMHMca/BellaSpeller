@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.93'; // bump with every release
+const APP_VER = '2.94'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -827,7 +827,7 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button><button class="key wide ok" data-k="ok" aria-label="Done">${ico('check')}</button>` : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, noBack, remind, wobj, force, cue, help, ask) {
+function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, note) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
@@ -836,7 +836,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask) {
     if (help) used.add(help);
     h(`<div class="screen writescreen">
       ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
-      <div id="helpbox" class="helpbox"></div>
+      ${note ? `<p class="msg smallmsg">${esc(note)}</p>` : ''}<div id="helpbox" class="helpbox"></div>
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
@@ -850,7 +850,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask) {
     let sureShown = false, armed = false;
     setTimeout(() => { armed = true; }, 700); // taps from the screen before can land here; ignore input for the first moments
     // The word is finished as soon as it is spelled right; for anything else she taps the tick.
-    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && help === 'sure' && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
+    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && (help === 'sure' || autoSure) && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
     const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: !!help || tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
@@ -1497,17 +1497,19 @@ async function hintLadder(week, x, mode, sentence, usedFamily) {
   const tryLog = (a, help, n) => { S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
   let n = 0;
   for (;;) {
-    const c = n >= 3 ? 'show' : await helpChoice(x, !usedFamily);
+    // After the first miss she is not asked anything: the spoken rule comes straight away, and Are you sure? is on for every go from here.
+    const auto = !usedFamily && helpsFor(x).includes('family');
+    const c = n >= 3 ? 'show' : auto ? { help: 'family', auto: true } : await helpChoice(x, !usedFamily);
     if (c === BACK) return BACK;
     if (c === 'show') {
       if ((await showAnswer(word)) === BACK) { n = 0; continue; } // last resort: she sees the word, then writes it from memory
-      const a = await writeWord(word, false, null, x, false, sentence); if (a === BACK) continue; tryLog(a, null, ++n);
+      const a = await writeWord(word, false, null, x, false, sentence, null, false, true); if (a === BACK) continue; tryLog(a, null, ++n);
       return true;
     }
     const help = c === 'again' ? null : c.help;
     if (help === 'family') usedFamily = true;
     if (help === 'trace') { const t = await traceFlow(word); if (t === BACK) continue; }
-    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help);
+    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help, false, true, c.auto ? 'Not quite. Listen to the rule, then have another go.' : '');
     if (a === BACK) continue;
     tryLog(a, help, ++n);
     if (a.typed === word) return true;
