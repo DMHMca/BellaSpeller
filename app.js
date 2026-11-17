@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.65'; // bump with every release
+const APP_VER = '2.66'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -69,7 +69,7 @@ Setting and values: the story is set in a modern, sensible English family world,
 
 If the idea is a mystery or investigation, play fair: plant real clues early, give two or three suspects each with a reason and an alibi, let the friends make a wrong guess, and solve it kindly by reasoning from the clues. If the idea is science or building, keep it real and safe: garden and indoor experiments with an adult nearby, nothing dangerous. Show the steps of a good investigation (a question, a guess, a test, a measurement, a result, trying again), and let a failed test teach something.
 
-Characters: exactly four friends, written only as {g1}, {g2}, {g3} and {g4}. The request says whether each is a girl or a boy and gives any trait: use the right pronouns (she and her, he and him) and keep each trait consistent. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
+Characters: {{CAST_RULE}}. The request says whether each is a girl or a boy and gives any trait: use the right pronouns (she and her, he and him) and keep each trait consistent. Never invent names for them. Other people have no names (her dad, the new teacher, a little brother).
 
 How to work:
 1. Plan first. Before writing, set out the plot in a few lines: the problem, what happens, how it ends. Put this in the "plan" field. The app ignores it; it is there so that you think the story through.
@@ -99,7 +99,9 @@ const CHOICE_RULE = n => '2. The whole story has exactly ' + n + (n === 1 ? ' ch
 const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it straight through, and never use a c beat.';
 const LENGTHS = { short: { label: 'Short', max: 350, aim: 250 }, standard: { label: 'Standard', max: 500, aim: 330 }, long: { label: 'Long', max: 800, aim: 550 } };
 const curLen = () => LENGTHS[S.len] || LENGTHS.standard;
-const storyRules = () => STORY_RULES.replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Add up the words before you answer: a story over ' + curLen().max + ' words is rejected and has to be rewritten, which wastes time.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
+const castN = () => Math.min(4, Math.max(2, parseInt(S.castN, 10) || 2));
+const castRule = n => 'exactly ' + ['', '', 'two', 'three', 'four'][n] + ' friends, written only as ' + ['{g1}', '{g2}', '{g3}', '{g4}'].slice(0, n).join(', ').replace(/, ([^,]*)$/, ' and $1') + '. Do not add other named characters, and keep the cast small so the story stays short';
+const storyRules = () => STORY_RULES.replace('{{CAST_RULE}}', castRule(castN())).replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Add up the words before you answer: a story over ' + curLen().max + ' words is rejected and has to be rewritten, which wastes time.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
 function partPlan(n) { return [Math.max(1, n)]; } // one story, one part, every word in it
 function lastSentence(t) {
   // A sentence ends at . ! or ? (and any closing quote) when the next word starts with a capital or an opening quote.
@@ -146,13 +148,14 @@ function checkEpisode(ep, words) {
   if (total > curLen().max) bad.push('The story is ' + total + ' words, over the limit of ' + curLen().max + '. Shorten it.');
   words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
   if (texts.some(t => /\{(?!g[1-4]\})/.test(t))) bad.push('It uses a name placeholder the app does not know.');
+  if (texts.some(t => [...String(t).matchAll(/\{g([1-4])\}/g)].some(m => +m[1] > castN()))) bad.push('It uses more characters than the ' + castN() + ' in the cast.');
   const usHit = texts.map(t => [...String(t).matchAll(US)].map(m => m[0].toLowerCase()).filter(w => !words.includes(w))[0]).find(Boolean);
   if (usHit) bad.push('It mentions food or uses American wording (\"' + usHit + '\"). The family rules say no food in the stories and British English, as the instructions say.');
   return bad;
 }
 const DEFAULT_FAMILY_RULES = 'No food in the stories at all: no meals, snacks, treats, feasts or drinks. (Bella does not like cheese; no white bread, toast, flapjacks, biscuits, cakes or sweets; fruit only at the start of a meal. A list of foods that are fine will be added later.)';
 const familyRules = () => (S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules).trim();
-const castDesc = () => [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return '{g' + (i + 1) + '} is a ' + (m.boy ? 'boy' : 'girl') + (m.trait ? ', ' + m.trait : ''); }).join('; ');
+const castDesc = () => [0, 1, 2, 3].slice(0, castN()).map(i => { const m = (S.cast || [])[i] || {}; return '{g' + (i + 1) + '} is a ' + (m.boy ? 'boy' : 'girl') + (m.trait ? ', ' + m.trait : ''); }).join('; ');
 const storyBrief = extra => '\nCharacters: ' + castDesc() + '.' + (extra && extra.idea ? '\nStory idea from the author: ' + extra.idea : '') + (familyRules() ? '\nFamily rules to follow: ' + familyRules() : '');
 const aiBase = () => (S.aiBase || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 const aiKey = () => S.aiKey || S.orKey;
@@ -627,39 +630,47 @@ function splitSentences(t) {
   out.push(t.slice(start).trim());
   return out.filter(Boolean);
 }
-function narratePage(items) {
-  const text = items.map(q => q.t).join(' '), nw = text.split(/\s+/).length, dense = nw > 110 ? ' dense dense2' : nw > 70 ? ' dense' : '';
+// The whole story in one scrolling window: all she has to do is read. With sound on it is read aloud and the window follows the voice.
+function chunkItems(items) { // groups of sentences of about 40 words, for the voice
+  const out = []; let cur = [], n = 0;
+  items.forEach(q => { const w = q.t.split(/\s+/).length; if (cur.length && n + w > 40) { out.push(cur); cur = []; n = 0; } cur.push(q); n += w; });
+  if (cur.length) out.push(cur);
+  return out;
+}
+const chunkText = c => c.map(q => q.t).join(' ');
+function storyScroll(items) {
+  const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen"><div class="page${dense}"><p class="story">${items.map(q => q.w ? hlHtml(q.t, q.w) : esc(q.t)).join(' ')}</p></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div></div>`);
-    on('#hear', () => say(text));
-    on('#next', () => { hush(); res(); });
-    keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
-    backBtn(res);
-    say(text);
+    h(`<div class="screen storyscreen"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}">${c.map(q => q.w ? hlHtml(q.t, q.w) : esc(q.t)).join(' ')}</span> `).join('')}</div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Read it to me again">${ico('speaker')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
+    let run = 0;
+    const play = async () => {
+      const my = ++run; hush();
+      if (!soundOn()) return;
+      for (let i = 0; i < chunks.length; i++) {
+        if (my !== run) return;
+        const el = document.querySelector(`.chunk[data-i="${i}"]`), sp = $('#sp');
+        if (el && sp) sp.scrollTo({ top: Math.max(0, el.offsetTop - 24), behavior: 'smooth' });
+        const ok = await sayDone(chunkText(chunks[i]));
+        if (!ok || my !== run) return;
+      }
+    };
+    on('#hear', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: 0 }); play(); });
+    on('#next', () => { run++; hush(); res(); });
+    keyHandler = e => { if (e.key === 'Enter') { run++; hush(); res(); } };
+    backBtn(r => { run++; res(r); });
+    play();
   });
 }
-const PAGE_WORDS = 70;
-const STORY_INTRO = 'Watch for the words with a yellow highlight. They are your test words. You will spell them at the end.';
-function packPages(beats) {
-  const steps = [], wc = t => t.split(/\s+/).filter(Boolean).length;
-  const all = beats.reduce((a, b) => a + (b.n || b.p ? wc(fill(b.n || b.p)) : 0), 0), limit = Math.max(PAGE_WORDS, Math.ceil(all / 4) + 20);
-  let cur = [], words = 0;
-  const flush = () => { if (cur.length) { steps.push({ page: cur }); cur = []; words = 0; } };
+const STORY_INTRO = 'Some of the words in this story are highlighted in yellow. They are this week\'s words. We will have a little go at them afterwards.';
+function storySegments(beats) { // the story as sentences; only a choice breaks it into more than one window
+  const steps = []; let cur = [];
+  const flush = () => { if (cur.length) { steps.push({ seg: cur }); cur = []; } };
   beats.forEach(b => {
-    if (b.n || b.p) {
-      const sents = splitSentences(fill(b.n || b.p));
-      sents.forEach((t, k) => {
-        const n = wc(t);
-        if (cur.length && words + n > limit) flush();
-        cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null }); words += n;
-      });
-    } else if (b.c) { flush(); steps.push({ choice: b.c }); }
+    if (b.n || b.p) { const sents = splitSentences(fill(b.n || b.p)); sents.forEach((t, k) => cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null })); }
+    else if (b.c) { flush(); steps.push({ choice: b.c }); }
   });
   flush();
-  // a tiny last page is joined to the one before it
-  const last = steps[steps.length - 1], prev = steps[steps.length - 2];
-  if (last && last.page && prev && prev.page && last.page.reduce((n, q) => n + wc(q.t), 0) < 15) { prev.page = prev.page.concat(last.page); steps.pop(); }
   return steps;
 }
 function choose(q, opts) {
@@ -833,7 +844,7 @@ function shelf(ep, st) {
       const all = allIdeas(), unused = all.filter(t => !isUsed(t)).slice(0, SHELF_SIZE);
       const told = all.filter(isUsed).sort((x, y) => S.used[y.id] - S.used[x.id]);
       h(`<div class="screen"><h1>Choose your story</h1>
-      <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, 4).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
+      <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
       <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${nChoices() || 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
       <button id="lentoggle" class="caststrip"><span>Story length: <b id="lenstate">${curLen().label.toLowerCase()} (under ${curLen().max} words)</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
@@ -940,21 +951,24 @@ function pickTrait(current) {
 function castScreen() {
   return new Promise(res => {
     const cast = [0, 1, 2, 3].map(i => { const m = (S.cast || [])[i] || {}; return { name: S.girls[i] || POOL[i], boy: !!m.boy, trait: m.trait || '' }; });
+    let n = castN();
     h(`<div class="screen"><h1>Who is in your story?</h1><p class="subtle">Tap Girl or Boy to choose a name. Then pick a trait if you like.</p>
+      <div class="chiprow" id="castcount">${[2, 3, 4].map(k => `<button class="chip small${k === n ? ' on' : ''}" data-k="${k}">${k} characters</button>`).join('')}</div>
       <div class="cast" id="castlist"></div>
       ${S.name ? `<label class="toggle"><input type="checkbox" id="meIn" ${S.meIn ? 'checked' : ''}> Put me in the story as the first one</label>` : ''}
       <button id="next" class="btn big">Use these ${ico('check')}</button></div>`);
     const others = i => cast.filter((_, j) => j !== i).map(c => c.name);
     const choose_ = async i => { const c = cast[i]; const n = await pickName(c.boy, c.name, others(i)); if (n) c.name = n; draw(); };
     const draw = () => {
-      $('#castlist').innerHTML = cast.map((c, i) => `<div class="castrow2"><div class="seg"><button class="segbtn${c.boy ? '' : ' on'}" data-g="${i}" data-v="0">Girl</button><button class="segbtn${c.boy ? ' on' : ''}" data-g="${i}" data-v="1">Boy</button></div><button class="namebtn" data-n="${i}">${esc(c.name)}</button><button class="chip small" data-t="${i}">${esc(c.trait || '+ trait')}</button></div>`).join('');
+      $('#castlist').innerHTML = cast.slice(0, n).map((c, i) => `<div class="castrow2"><div class="seg"><button class="segbtn${c.boy ? '' : ' on'}" data-g="${i}" data-v="0">Girl</button><button class="segbtn${c.boy ? ' on' : ''}" data-g="${i}" data-v="1">Boy</button></div><button class="namebtn" data-n="${i}">${esc(c.name)}</button><button class="chip small" data-t="${i}">${esc(c.trait || '+ trait')}</button></div>`).join('');
       document.querySelectorAll('#castlist [data-g]').forEach(b => { b.onclick = () => { const i = +b.dataset.g, boy = b.dataset.v === '1', c = cast[i]; if (boy !== c.boy) { c.boy = boy; if (!(boy ? BOYS : POOL).includes(c.name)) c.name = (boy ? BOYS : POOL).find(n => !others(i).includes(n)); } draw(); choose_(i); }; });
       document.querySelectorAll('#castlist [data-n]').forEach(b => { b.onclick = () => choose_(+b.dataset.n); });
       document.querySelectorAll('#castlist [data-t]').forEach(b => { b.onclick = async () => { const c = cast[+b.dataset.t]; const t = await pickTrait(c.trait); if (t !== null) { c.trait = t; draw(); } }; });
     };
     draw();
+    document.querySelectorAll('#castcount .chip').forEach(b => { b.onclick = () => { n = +b.dataset.k; document.querySelectorAll('#castcount .chip').forEach(x => x.classList.toggle('on', +x.dataset.k === n)); draw(); }; });
     on('#next', () => {
-      hush();
+      hush(); S.castN = n;
       S.girls = cast.map((c, i) => c.name.trim() || POOL[i]);
       S.cast = cast.map(c => ({ boy: c.boy, trait: c.trait }));
       if ($('#meIn')) S.meIn = $('#meIn').checked;
@@ -1115,15 +1129,15 @@ async function storyDay() {
   const beats = [].concat(...ep.parts);
   const order = beats.filter(b => b.p && b.word).map(b => b.word);
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
-  const steps = packPages(beats);
-  await prep(steps.filter(x => x.page).map(x => x.page.map(q => q.t).join(' ')).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Getting the story ready');
+  const steps = storySegments(beats);
+  await prep([].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Getting the story ready');
   prog = ep.title;
-  if ((await gentle('Watch for the highlighted words.', 'They are your test words. You will spell them at the end.', 'Start the story', STORY_INTRO)) === BACK) return home();
+  if ((await gentle('Some words in this story are highlighted in yellow.', 'They are this week\'s words. We will have a little go at them afterwards.', 'Start the story', STORY_INTRO)) === BACK) return home();
   let i = 0;
   while (i < steps.length) {
     const st0 = steps[i];
     let r;
-    if (st0.page) r = await narratePage(st0.page);
+    if (st0.seg) r = await storyScroll(st0.seg);
     else {
       const b = { c: st0.choice };
       for (;;) {
@@ -1135,7 +1149,7 @@ async function storyDay() {
     if (r === BACK) { if (i === 0) return home(); i--; } else i++;
   }
   // The story is over. Now each word is said in its sentence, in the order it came, and she spells it.
-  const go = await gentle('The story is finished. Now it is your turn.', 'I will say each word from the story. Spell it for me.', 'Ready', SPELL_INTRO);
+  const go = await gentle('That was the story!', 'Now let us see which of the yellow words you remember. I will say each one, and you can have a go at spelling it.', 'Ready', SPELL_INTRO);
   if (go === BACK) return home();
   const queue = order.map(w => wk.words.find(q => q.w === w)).filter(Boolean).map(x => ({ x, look: false, counts: true, mode: 'story', context: true }));
   const firsts = await runWords(wk, queue, new Set());
@@ -1224,7 +1238,7 @@ async function reviseWord(week, it, sentence, starred) {
   }
 }
 const OOPS = ['Oops, nearly!', 'Crumbs, so close!', 'Not quite, but nearly!', 'Ooh, nearly there!'];
-const CLUE = 'Here is a clue.', ANSWER_MSG = 'Here it is. Have a good look.', SPELL_INTRO = 'The story is finished. Now it is your turn. I will say each word from the story. Spell it for me.';
+const CLUE = 'Here is a clue.', ANSWER_MSG = 'Here it is. Have a good look.', SPELL_INTRO = 'That was the story! Now let us see which of the yellow words you remember. I will say each one, and you can have a go at spelling it.';
 function hintText(x) {
   const fam = (x.family || []).slice(0, 3);
   if (fam.length) return 'Here are some words spelled in the same way: ' + fam.join(', ') + '. Have another go.';
