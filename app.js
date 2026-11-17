@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.79'; // bump with every release
+const APP_VER = '2.80'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -543,7 +543,7 @@ function say(t) {
   getClipUrl(t).then(url => {
     if (tok !== sayTok) return;
     if (url) {
-      audioEl = new Audio(url);
+      audioEl = new Audio(url); audioEl.playbackRate = 0.9; // a little slower than the voice's own pace
       audioEl.onended = () => { speechUntil = Date.now() + 2500; };
       audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
       audioEl.play().catch(() => { if (tok === sayTok) builtinSay(t); });
@@ -564,7 +564,7 @@ function builtinSay(t) {
     const u = new SpeechSynthesisUtterance(t);
     if (voice) u.voice = voice;
     u.lang = voice ? voice.lang : 'en-GB';
-    u.rate = 0.9;
+    u.rate = 0.82;
     u.onend = u.onerror = () => { speechUntil = Date.now() + 2500; };
     keepUtt = u; // stops the browser discarding it before it has finished
     speechSynthesis.speak(u);
@@ -898,7 +898,7 @@ function shelf(ep, st) {
       h(`<div class="screen"><h1>Choose your story</h1>
       <div class="optrow"><button id="caststrip" class="optchip">Characters: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></button><button id="chtoggle" class="optchip">Choices: <b id="chstate">${nChoices() || 'off'}</b></button><button id="lentoggle" class="optchip">Length: <b id="lenstate">${curLen().label.toLowerCase()}</b></button></div>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
-      ${hasStory ? `<div class="againrow">${card('again', 'book', (done ? 'Play again: ' : st.part > 0 ? 'Carry on: ' : 'Play: ') + ep.title, done ? 'Tell this story again' : st.part > 0 ? 'Not finished yet' : 'Not played yet', 'wide')}<button id="resetstory" class="optchip">Start over</button></div>` : ''}
+      ${hasStory ? `<div class="againrow">${card('again', 'book', (done ? 'Play again: ' : st.part > 0 ? 'Carry on: ' : 'Play: ') + ep.title, done ? 'Tell this story again' : st.part > 0 ? 'Not finished yet' : 'Not played yet', 'wide')}<button id="resetstory" class="optchip">Reset</button></div>` : ''}
       <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
@@ -909,7 +909,7 @@ function shelf(ep, st) {
       on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
       all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
       on('#again', () => { hush(); res({ kind: 'again' }); });
-      on('#resetstory', () => { const wk0 = curWeek(); S.story[wk0.id] = { part: 0 }; if (S.due) delete S.due[wk0.id]; save(); hush(); res({ kind: 'again' }); }); // back to the beginning of this story, with no missed words carried over
+      on('#resetstory', () => { const wk0 = curWeek(); hush(); delete S.story[wk0.id]; wk0.ep = null; if (S.due) delete S.due[wk0.id]; save(); ep = null; st = undefined; render(); }); // this week's story is put away and she chooses again // back to the beginning of this story, with no missed words carried over
       backBtn(res);
     };
     render();
