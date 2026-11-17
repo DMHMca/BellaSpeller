@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.51'; // bump with every release
+const APP_VER = '2.55'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -251,6 +251,99 @@ const STORY_TYPES = [
   { title: 'Birthday problem', blurb: 'The party plans go wrong', icon: 'gift', idea: 'Planning a birthday party goes wrong in several funny ways.' },
   { title: 'The secret club', blurb: 'Rules, secrets and a problem', icon: 'star', idea: 'The friends start a secret club with its own rules, and then a problem tests it.' }
 ];
+// ---------- support tools (all switchable, all off by default) ----------
+// Each word can carry: hard (the hard letters), parts (word parts, split with |), say (spelling voice), mnem (a memory trick).
+const TOOLS = [
+  { id: 'mnem', label: 'Memory trick', note: 'A short sentence or phrase that holds the spelling. Evidence for spelling is mixed; her own tricks are preferred.' },
+  { id: 'hard', label: 'Underline the hard part', note: 'The tricky letters are underlined. No controlled study; she does this with her pen herself.' },
+  { id: 'voice', label: 'Spelling voice', note: 'The word said the way it is spelled, such as w-hen. Some support: one controlled study, and her phonics scheme teaches it.' },
+  { id: 'parts', label: 'Word parts', note: 'The word split into parts, such as side + ways. Word parts are among the better-supported teaching content.' },
+  { id: 'trace', label: 'Trace, copy, then write', note: 'Trace it, copy it, wait a moment, then write it from memory. Small case studies only.' },
+  { id: 'letters', label: 'Say the letters while writing', note: 'She says each letter as she writes it. Evidence is mixed.' }
+];
+const toolOn = id => !!(S.tools && S.tools[id]);
+// A tool is only offered for a word when it is switched on and the word has what the tool needs.
+const toolHas = (id, x) => toolOn(id) && (id === 'mnem' ? !!x.mnem : id === 'hard' ? !!x.hard : id === 'voice' ? !!x.say : id === 'parts' ? !!x.parts && x.parts.includes('|') : true);
+const toolsFor = x => TOOLS.filter(t => toolHas(t.id, x)).map(t => t.id);
+const REVEALS = ['mnem', 'hard', 'parts', 'voice'];
+function hardHtml(x) { const i = x.hard ? x.w.indexOf(x.hard) : -1; return i < 0 ? esc(x.w) : esc(x.w.slice(0, i)) + '<u>' + esc(x.hard) + '</u>' + esc(x.w.slice(i + x.hard.length)); }
+// What the switched-on tools show for a word. stage 'look': the word is on screen. stage 'write': it is hidden, so anything shown is help.
+function toolContent(x, stage) {
+  const shown = []; let html = '';
+  if (toolOn('hard') && x.hard) { shown.push('hard'); if (stage === 'write') html += `<div class="toolline"><b>The hard part:</b> <u>${esc(x.hard)}</u></div>`; }
+  if (toolOn('parts') && x.parts && x.parts.includes('|')) { shown.push('parts'); html += `<div class="toolline"><b>Word parts:</b> ${x.parts.split('|').map(esc).join(' + ')}</div>`; }
+  if (toolOn('voice') && x.say) { shown.push('voice'); html += `<div class="toolline"><b>Spelling voice:</b> ${esc(x.say)}</div>`; }
+  if (toolOn('mnem')) { if (x.mnem) { shown.push('mnem'); html += `<div class="toolline"><b>Memory trick:</b> ${esc(x.mnem)}</div>`; } else html += `<div class="toolline"><button class="btn small" id="mymnem">Make my own memory trick</button></div>`; }
+  if (toolOn('letters') && stage === 'write') { shown.push('letters'); html += '<div class="toolline">Say each letter out loud as you type it.</div>'; }
+  return { html, shown };
+}
+function toolsPanel() {
+  return `<div class="toolsbar"><button class="btn small" id="toolsbtn">${ico('bulb')}<span>Tools</span></button>
+    <div id="toolchips" class="chiprow" ${S.toolsOpen ? '' : 'hidden'}>${TOOLS.map(t => `<button class="chip small${toolOn(t.id) ? ' on' : ''}" data-tool="${t.id}" aria-pressed="${toolOn(t.id)}">${esc(t.label)}</button>`).join('')}</div>
+    <div id="toolbody"></div></div>`;
+}
+// Wires the Tools button and chips. Calls after(content) now and after every change.
+function wireTools(x, stage, after) {
+  const body = () => {
+    const c = toolContent(x, stage); $('#toolbody').innerHTML = c.html;
+    const m = $('#mymnem'); if (m) m.onclick = async () => { const t = await typeText({ title: 'Your memory trick for this word', initial: '', max: 140 }); if (t && t.trim()) { x.mnem = t.trim(); x.mnemBy = 'bella'; save(); body(); } };
+    if (after) after(c);
+  };
+  on('#toolsbtn', () => { S.toolsOpen = !S.toolsOpen; save(); $('#toolchips').hidden = !S.toolsOpen; });
+  document.querySelectorAll('.chip[data-tool]').forEach(c => { c.onclick = () => { S.tools = S.tools || {}; const id = c.dataset.tool; S.tools[id] = !toolOn(id); save(); c.classList.toggle('on', toolOn(id)); c.setAttribute('aria-pressed', String(toolOn(id))); body(); }; });
+  body();
+}
+async function aiJSON(sys, user, maxTokens) {
+  const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+  if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: maxTokens || 3000, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }] }) });
+  if (!r.ok) throw new Error('The AI service answered ' + r.status);
+  const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new Error('The reply was not usable.');
+  return JSON.parse(t.slice(a, b + 1));
+}
+// Asks the AI to suggest tool data for each word, keeps only suggestions that pass checks, never overwrites what a grown-up or Bella typed.
+async function suggestTools(wk) {
+  const words = wk.words.map(x => x.w);
+  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "..."}]}.';
+  const o = await aiJSON(sys, 'Spelling words: ' + words.join(', '), 3000);
+  let added = 0;
+  (o.words || []).forEach(sg => {
+    const x = wk.words.find(w => w.w === String(sg.word || '').toLowerCase()); if (!x) return;
+    const w = x.w, ok = t => typeof t === 'string' && t.trim();
+    if (!x.hard && ok(sg.hard) && w.includes(sg.hard.toLowerCase().trim()) && sg.hard.trim().length < w.length) { x.hard = sg.hard.toLowerCase().trim(); added++; }
+    if (!x.say && ok(sg.say) && sg.say.replace(/-/g, '').toLowerCase() === w && sg.say.includes('-')) { x.say = sg.say.toLowerCase().trim(); added++; }
+    if (!x.parts && ok(sg.parts) && sg.parts.replace(/\|/g, '').toLowerCase() === w && sg.parts.includes('|')) { x.parts = sg.parts.toLowerCase().trim(); added++; }
+    if (!x.mnem && ok(sg.mnem) && sg.mnem.length <= 140 && ![...sg.mnem.matchAll(US)].some(m => !words.includes(m[0].toLowerCase()))) { x.mnem = sg.mnem.trim(); x.mnemBy = 'ai'; added++; }
+  });
+  save();
+  return added;
+}
+function toolsProgress() {
+  const logs = S.log.filter(l => l.mode === 'revise' && !l.redo);
+  if (!logs.length) return '<p class="note">None yet.</p>';
+  const rowFor = (label, f) => { const g = logs.filter(f); return g.length ? `<tr><td>${esc(label)}</td><td>${g.length}</td><td>${g.filter(l => l.ok && !l.hints && !l.remind).length}</td></tr>` : ''; };
+  const rows = rowFor('No tool', l => !(l.tools && l.tools.length)) + TOOLS.map(t => rowFor(t.label, l => (l.tools || []).includes(t.id))).join('');
+  return `<table><tr><th>Tool</th><th>Words tried</th><th>Right first time, no help</th></tr>${rows}</table><p class="note">A hint, not a finding. Bella chooses the tools herself, so a tool can look good or bad for other reasons. A word can appear in more than one row.</p>`;
+}
+function toolsPane(wk) {
+  const rows = wk.words.map((x, i) => `<tr><td><b>${esc(x.w)}</b></td>
+    <td><input type="text" class="tf" data-i="${i}" data-f="hard" value="${esc(x.hard || '')}" placeholder="hard letters" autocomplete="off"></td>
+    <td><input type="text" class="tf" data-i="${i}" data-f="parts" value="${esc(x.parts || '')}" placeholder="side|ways" autocomplete="off"></td>
+    <td><input type="text" class="tf" data-i="${i}" data-f="say" value="${esc(x.say || '')}" placeholder="w-hen" autocomplete="off"></td>
+    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a memory trick" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
+  return `<h2>Support tools</h2>
+    <p class="note">Bella chooses which tools to use, with the Tools button on the revision pages. Each use is recorded, so the Progress tab can show what she tries. This page sets what each tool shows for each word. The evidence for every tool is a bet, not a finding.</p>
+    ${TOOLS.map(t => `<div class="wl"><div><b>${esc(t.label)}.</b> <span class="note">${esc(t.note)}</span></div></div>`).join('')}
+    <h2>Tool details for this week's words</h2>
+    <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word.</p>
+    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Memory trick</th></tr>${rows}</table>
+    <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
+    <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
+}
+
 // ---------- story ideas (the shelf) ----------
 // Built-in ideas first; when few unused ones are left the AI writes a fresh batch. Used ideas move to "Already told".
 const SHELF_SIZE = 6;
@@ -493,10 +586,10 @@ function choose(q, opts) {
 function learnCard(week, wobj) {
   return new Promise(res => {
     const why = wobj.red ? RED_WHY : (week.rule || '');
-    const word = `<span class="grow" id="gw">${esc(wobj.w)}</span>`;
+    const word = `<span class="grow" id="gw">${toolOn('hard') && wobj.hard ? hardHtml(wobj) : esc(wobj.w)}</span>`;
     const body = `<p class="story solo">${word}</p>`;
-    const tags = (wobj.red ? `<span class="tag red">Tricky word</span>` : '') + (wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '');
-    h(`<div class="screen cardscreen"><div class="page">${body}</div>${tags ? `<div class="row">${tags}</div>` : ''}
+    const tags = wobj.red ? `<span class="tag red">Tricky word</span>` : '';
+    h(`<div class="screen cardscreen"><div class="page">${body}</div>${tags ? `<div class="row">${tags}</div>` : ''}${toolsPanel()}
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${why ? `<button id="why" class="btn small">${ico('bulb')}<span>Why?</span></button>` : ''}<button id="next" class="btn big">I've said it ${ico('check')}</button></div>
       <div id="whybox" style="width:100%"></div></div>`);
     // The word starts small, in line with the sentence, then grows and changes colour as it is spoken.
@@ -506,6 +599,7 @@ function learnCard(week, wobj) {
       const g = $('#gw'); if (g) g.classList.remove('big');
       tm = setTimeout(() => { const g2 = $('#gw'); if (g2) g2.classList.add('big'); }, 1900);
     };
+    wireTools(wobj, 'look', () => { const g = $('#gw'); if (g) g.innerHTML = toolOn('hard') && wobj.hard ? hardHtml(wobj) : esc(wobj.w); });
     const spoken = cardSpeech(wobj.w, '');
     on('#hear', () => { grow(); say(spoken); });
     on('#why', () => { $('#whybox').innerHTML = `<div class="page small"><p class="story">${esc(why)}</p></div>`; say(why); });
@@ -519,12 +613,14 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button>` : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, noBack, remind) {
+function writeWord(word, noBack, remind, wobj) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
+    const used = new Set();
     const sayIt = () => say(word);
     h(`<div class="screen">
       <div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>
+      ${wobj ? toolsPanel() : ''}
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}<button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
@@ -536,7 +632,7 @@ function writeWord(word, noBack, remind) {
     };
     const add = c => { if (typed.length < 24) { typed += c; draw(); } };
     const del = () => { typed = typed.slice(0, -1); draw(); };
-    const finish = () => { if (typed && !done) { done = true; hush(); res({ typed, hints, reminded }); } };
+    const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
       let i = 0;
       while (i < typed.length && i < word.length && typed[i] === word[i]) i++;
@@ -550,6 +646,7 @@ function writeWord(word, noBack, remind) {
       else if (/^[a-zA-Z'-]$/.test(e.key)) { add(e.key.toLowerCase()); e.preventDefault(); }
     };
     on('#hear', sayIt); on('#hint', hint); on('#done', finish);
+    if (wobj) wireTools(wobj, 'write', c => c.shown.forEach(id => used.add(id)));
     on('#remind', () => { reminded = true; $('#remindbox').innerHTML = `<div class="page small"><p class="story">${remind.html}</p></div>`; say(remind.spoken); });
     if (!noBack) backBtn(res);
     draw(); sayIt();
@@ -1071,16 +1168,47 @@ function praiseSentence(word, sentence, clean) {
     say(sentence || p);
   });
 }
+// Trace it, copy it, wait a moment: then she writes it from memory. Returns true, or BACK.
+function traceFlow(word) {
+  return new Promise(async res => {
+    h(`<div class="screen"><p class="msg">Trace the word with your finger</p><div class="page"><div class="tracebox"><div class="traceword">${esc(word)}</div><canvas id="tc"></canvas></div></div><button id="tdone" class="btn big">Done tracing ${ico('check')}</button></div>`);
+    const cv = $('#tc'), box = cv.parentElement; cv.width = box.clientWidth; cv.height = box.clientHeight;
+    const cx = cv.getContext('2d'); cx.lineWidth = 8; cx.lineCap = 'round'; cx.strokeStyle = '#d4276a';
+    let down = false; const pos = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.onpointerdown = e => { down = true; const [x, y] = pos(e); cx.beginPath(); cx.moveTo(x, y); try { cv.setPointerCapture(e.pointerId); } catch (e2) { } };
+    cv.onpointermove = e => { if (!down) return; const [x, y] = pos(e); cx.lineTo(x, y); cx.stroke(); };
+    cv.onpointerup = () => { down = false; };
+    say(word);
+    const s1 = await new Promise(r => { on('#tdone', () => r('ok')); backBtn(() => r(BACK)); });
+    if (s1 === BACK) return res(BACK);
+    const s2 = await new Promise(r => {
+      let typed = '';
+      h(`<div class="screen"><p class="msg">Now copy it</p><div class="wordtile small">${esc(word)}</div><div id="slots" class="slots"></div><p id="cmsg" class="subtle"></p>${kbHtml()}<button id="cdone" class="btn big">Done ${ico('check')}</button></div>`);
+      const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; $('#cdone').disabled = !typed; };
+      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < 24) typed += k; draw(); }; });
+      on('#cdone', () => { if (typed === word) r('ok'); else { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } });
+      backBtn(() => r(BACK)); draw();
+    });
+    if (s2 === BACK) return res(BACK);
+    h(`<div class="screen" id="tw"><p class="msg">Wait a moment...</p><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div></div>`);
+    await new Promise(r => setTimeout(r, 10000));
+    if (!$('#tw')) return; // she left this screen
+    res(true);
+  });
+}
 // One word in Revise. it = { x: word object, look: show it first, counts: counts towards the score }.
 async function reviseWord(week, it, sentence, starred) {
   const word = it.x.w, remind = remindOf(sentence, word);
   let attempts = 0;
   for (;;) { // Back from the correction or praise screens restarts the word
     if (it.look && (await learnCard(week, it.x, null)) === BACK) return BACK;
-    const a = await writeWord(word, false, it.look ? null : remind);
+    let traced = false;
+    if (toolOn('trace')) { const tr = await traceFlow(word); if (tr === BACK) { if (it.look) continue; return BACK; } traced = true; }
+    const a = await writeWord(word, false, it.look ? null : remind, it.x);
     if (a === BACK) { if (it.look) continue; return BACK; }
+    const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
     const ok = a.typed === word;
-    S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
+    S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
     if (!ok) {
       if ((await showFix(word, a.typed)) === BACK) continue;
@@ -1091,18 +1219,19 @@ async function reviseWord(week, it, sentence, starred) {
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
-    const good = ok && a.hints === 0 && !a.reminded;
+    const good = ok && a.hints === 0 && !a.reminded && !aided;
     if ((await praiseSentence(word, sentence, good)) === BACK) continue;
-    return { good, ok, typed: a.typed };
+    return { good, ok, typed: a.typed, aided };
   }
 }
 function reviseEnd(wk, firsts, sound) {
   return new Promise(res => {
-    const N = wk.words.length, missed = wk.words.filter(x => !(firsts[x.w] && firsts[x.w].good));
+    const N = wk.words.length, goodN = wk.words.filter(x => firsts[x.w] && firsts[x.w].good).length, missed = wk.words.filter(x => !(firsts[x.w] && firsts[x.w].ok)), helped = wk.words.filter(x => firsts[x.w] && firsts[x.w].aided).length;
     const tiles = missed.map(x => { const t = (firsts[x.w] && firsts[x.w].typed) || '', mk = matchMask(x.w, t); return `<div class="wordtile small">${[...x.w].map((c, i) => mk[i] ? esc(c) : `<span class="hid">${esc(c)}</span>`).join('')}</div>`; }).join('');
-    h(`<div class="screen"><h1>${sound ? (N - missed.length) + ' out of ' + N + ' first time' : 'All done!'}</h1>
+    h(`<div class="screen"><h1>${sound ? goodN + ' out of ' + N + ' first time' : 'All done!'}</h1>
       ${sound ? '' : '<p class="subtle">Turn the sound on to get a score.</p>'}
-      ${sound && missed.length ? `<p class="msg">Still hiding:</p><div class="row">${tiles}</div>` : (sound ? '<p class="msg">Every single one!</p>' : '')}
+      ${sound && missed.length ? `<p class="msg">Still hiding:</p><div class="row">${tiles}</div>` : (sound && !helped ? '<p class="msg">Every single one!</p>' : '')}
+      ${helped ? `<p class="subtle">${helped} ${helped === 1 ? 'word' : 'words'} used a tool, so ${helped === 1 ? 'it is' : 'they are'} not counted in the score.</p>` : ''}
       <p class="subtle">And a star for every word.</p><button id="next" class="btn big">See my stars ${ico('next')}</button></div>`);
     on('#next', res);
   });
@@ -1195,7 +1324,7 @@ function owned() {
   return Object.keys(days).filter(w => days[w].size >= 2);
 }
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['progress', 'Progress'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['tools', 'Tools'], ['progress', 'Progress'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -1252,10 +1381,12 @@ function adult() {
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>Revision sittings</h2>
     ${(S.sittings || []).filter(x => x.wk === wk.id).length ? `<table><tr><th>Day</th><th>Right first time</th></tr>${(S.sittings || []).filter(x => x.wk === wk.id).map(x => `<tr><td>${esc(x.d)}</td><td>${x.score} out of ${x.of}</td></tr>`).join('')}</table>` : '<p class="note">None yet. The score counts a word only when she writes it right first time, without Remind me or Next letter.</p>'}
+    <h2>Tools Bella has tried</h2>
+    ${toolsProgress()}
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
 
-    </div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
+    </div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
@@ -1339,11 +1470,25 @@ function adult() {
     a.download = 'bellaspeller-backup-' + today() + '.json'; a.click();
   });
   document.querySelectorAll('.redtick').forEach(c => { c.onchange = () => { wk.words[+c.dataset.i].red = c.checked || undefined; save(); }; });
+  document.querySelectorAll('.toolsw').forEach(c => { c.onchange = () => { S.tools = S.tools || {}; S.tools[c.dataset.t] = c.checked; save(); }; });
+  on('#tsave', () => {
+    document.querySelectorAll('.tf').forEach(f => { const x = wk.words[+f.dataset.i], v = f.value.trim().toLowerCase(); const k = f.dataset.f;
+      const bad = (k === 'hard' && v && !x.w.includes(v)) || (k === 'parts' && v && v.replace(/\|/g, '') !== x.w) || (k === 'say' && v && v.replace(/-/g, '') !== x.w);
+      if (k === 'mnem') { const t = f.value.trim(); if (t !== (x.mnem || '')) { x.mnem = t || undefined; x.mnemBy = t ? 'grown-up' : undefined; } return; }
+      x[k] = bad ? x[k] : (v || undefined); });
+    save(); adultTab = 'tools'; adultFlash = 'Saved. A box that does not match its word (for example hard letters that are not in the word) is ignored.'; adult();
+  });
+  on('#tsuggest', async () => {
+    const b = $('#tsuggest'); b.disabled = true; b.textContent = 'Asking the AI...';
+    try { const n = await suggestTools(wk); adultTab = 'tools'; adultFlash = n ? 'Added ' + n + ' suggestions to empty boxes. Please glance over them.' : 'Nothing new to add.'; }
+    catch (e) { adultTab = 'tools'; adultFlash = 'Could not get suggestions: ' + (e.message || 'something went wrong.'); }
+    adult();
+  });
   on('#chWords', () => { $('#chBox').hidden = !$('#chBox').hidden; });
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
