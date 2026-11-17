@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.88'; // bump with every release
+const APP_VER = '2.89'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -601,7 +601,9 @@ function say(t) {
       audioEl = new Audio(url); audioEl.playbackRate = 0.9; // a little slower than the voice's own pace
       audioEl.onended = () => { speechUntil = Date.now() + 2500; };
       audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
-      audioEl.play().catch(() => { if (tok === sayTok) builtinSay(t); });
+      const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
+      el.preload = 'auto';
+      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, 350);
     } else {
       builtinSay(t);
       if (ttsFails < 3 && sendable(t)) fetchClip(t).then(() => { ttsFails = 0; }, e => { ttsFails++; lastTtsErr = e.message; });
@@ -623,7 +625,7 @@ function builtinSay(t) {
     u.onend = u.onerror = () => { speechUntil = Date.now() + 2500; };
     keepUtt = u; // stops the browser discarding it before it has finished
     speechSynthesis.speak(u);
-  }, 120);
+  }, 350);
 }
 const hush = () => { sayTok++; stopAll(); };
 // Speak, and resolve true when the speech has ended (or, with sound off, after a reading pause); false if something else spoke or hush() was called.
