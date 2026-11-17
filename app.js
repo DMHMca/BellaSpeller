@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.96'; // bump with every release
+const APP_VER = '2.97'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -84,7 +84,7 @@ How to work:
 
 Reply with one JSON object: {"plan": string, "title": string, "parts": [part1, part2, ...]}. The request says how many parts and how many words go in each. Each part is a list of beats. A beat is one of:
 {"n": "a narration paragraph with no spelling word to learn, one to three sentences"}
-{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word"}
+{"p": "a paragraph of two or three sentences whose LAST sentence contains the spelling word", "word": "the spelling word", "pic": "three or four emoji that picture this paragraph"}
 {{CHOICE_FORMAT}}
 
 Rules:
@@ -92,7 +92,8 @@ Rules:
 {{CHOICE_RULE}}
 3. Every part except the last ends with a cliffhanger. The last part resolves the story and ends warmly. Do not end by repeating the words.
 4. A spelling word may also appear naturally elsewhere in the story, in narration, in other paragraphs and in choices. Write natural prose, and never avoid an ordinary word just because it is one of this week's spelling words.
-5. Reply with the JSON object only.`;
+5. The "pic" of each p beat is three or four emoji, and nothing else, that make a little picture of what is happening in that paragraph: the place, the objects, the animals, the weather, the mood. Show the key object of the paragraph (for the paper bridge story: books, paper, a bridge). Use only objects, animals, nature, places, vehicles, tools and faces. Never any food or drink, and no flags.
+6. Reply with the JSON object only.`;
 
 const CHOICE_FORMAT = '{"c": {"q": "a question about what happens next", "o": [{"l": "short option", "n": "what happens, at most two sentences"}, {"l": "short option", "n": "what happens, at most two sentences"}]}}';
 const nChoices = () => (S.choices === true ? 1 : Math.min(3, Math.max(0, parseInt(S.choices, 10) || 0)));
@@ -121,6 +122,14 @@ function addSentences(ep) {
 }
 
 const US = /\b(pizzas?|burgers?|hamburgers?|hot ?dogs?|fries|soda|candy|cookies?|mom|mommy|sidewalk|vacation|recess|takeaways?|fast food|junk food|mcdonald'?s|kfc|food|foods|eat|eats|eating|ate|eaten|meals?|mealtimes?|breakfast|lunch|lunchtime|dinner|supper|snacks?|feasts?|hungry|starving|drinks?|drinking|juice|squash|milk|tea|coffee|soup|eggs?|fish|chicken|vegetables?|salad|yoghurt|fruits?|apples?(?! trees?)|bananas?|bread|sandwiches|sandwich|pasta|rice|potato|potatoes|picnic|bake|baking|baked|cheese|toast|flapjacks?|biscuits?|cakes?|cupcakes?|crisps|sweets|chocolate|ice cream|marshmallows?|fizzy|white bread|midnight feast)\b/ig;
+// Keeps only a few real emoji, and never food, drink or flags.
+function cleanPic(t) {
+  if (typeof t !== 'string') return undefined;
+  const em = t.match(/\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic}\uFE0F?)*/gu) || [];
+  const food = ch => { const c = ch.codePointAt(0); return (c >= 0x1F32D && c <= 0x1F32F) || c === 0x1F33D || c === 0x1F336 || (c >= 0x1F345 && c <= 0x1F37F) || (c >= 0x1F950 && c <= 0x1F96F) || (c >= 0x1F9C0 && c <= 0x1F9CB) || c === 0x1F95B; };
+  const ok = em.filter(e => !food(e)).slice(0, 5);
+  return ok.length >= 2 ? ok.join('') : undefined;
+}
 function checkEpisode(ep, words) {
   const bad = [];
   const plan = partPlan(words.length);
@@ -134,7 +143,7 @@ function checkEpisode(ep, words) {
       if (b && typeof b.n === 'string') texts.push(b.n);
       else if (b && b.c && Array.isArray(b.c.o) && b.c.o.length >= 2) { choices++; texts.push(String(b.c.q)); b.c.o.forEach(o => texts.push(String(o.l), String(o.n))); }
       else if (b && typeof b.p === 'string' && typeof b.word === 'string') {
-        b.word = b.word.toLowerCase(); here++; used.push(b.word); texts.push(b.p);
+        b.word = b.word.toLowerCase(); here++; used.push(b.word); texts.push(b.p); b.pic = cleanPic(b.pic);
         if (!words.includes(b.word)) bad.push('"' + b.word + '" is not one of the words.');
         else if (new RegExp(',\\s*' + b.word + '[.!?]+["”’)]*$', 'i').test(lastSentence(b.p))) bad.push('The word "' + b.word + '" is only tacked on to the end of its sentence. Use it naturally inside a sentence.');
         else if (wholeWord(b.word, lastSentence(b.p)) !== 1) bad.push('The last sentence of the paragraph for "' + b.word + '" should contain "' + b.word + '" exactly once as a whole word.');
@@ -754,7 +763,7 @@ const chunkText = c => c.map(q => q.t).join(' ');
 function storyScroll(items) {
   const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen storyscreen"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}">${c.map(q => q.w ? hlHtml(q.t, q.w) : esc(q.t)).join(' ')}</span> `).join('')}</div>
+    h(`<div class="screen storyscreen"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}">${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Read it to me again">${ico('speaker')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
     let run = 0;
     const play = async () => {
@@ -783,7 +792,7 @@ function storySegments(beats) { // the story as sentences; only a choice breaks 
   const steps = []; let cur = [];
   const flush = () => { if (cur.length) { steps.push({ seg: cur }); cur = []; } };
   beats.forEach(b => {
-    if (b.n || b.p) { const sents = splitSentences(fill(b.n || b.p)); sents.forEach((t, k) => cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null })); }
+    if (b.n || b.p) { const sents = splitSentences(fill(b.n || b.p)); sents.forEach((t, k) => cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null, pic: b.p && k === sents.length - 1 ? b.pic : undefined })); }
     else if (b.c) { flush(); steps.push({ choice: b.c }); }
   });
   flush();
@@ -838,7 +847,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const sayIt = () => say(help === 'family' && wobj && familyText(wobj) ? familyText(wobj) : sp ? cueSpoken(cue, word) : word);
     if (help) used.add(help);
     h(`<div class="screen writescreen">
-      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
+      ${wobj ? sceneBar(word) : ''}${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
       ${note ? `<p class="msg smallmsg">${esc(note)}</p>` : ''}<div id="helpbox" class="helpbox"></div>
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
@@ -1322,6 +1331,12 @@ function storySentence(wk, w) {
   for (const part of ep.parts || []) for (const b of part) if (b.p && b.word === w) return fill(lastSentence(b.p));
   return null;
 }
+function picFor(word) {
+  const ep = epOf(curWeek()); if (!ep) return '';
+  for (const part of ep.parts || []) for (const b of part) if (b.p && b.word === word && b.pic) return b.pic;
+  return '';
+}
+const sceneBar = word => { const p = picFor(word); return p ? `<div class="scenebar" aria-hidden="true">${p}</div>` : ''; };
 function sentenceParts(sentence, word) {
   const m = new RegExp("(^|[^A-Za-z'’])(" + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ")(?![A-Za-z]|['’][A-Za-z])", 'i').exec(sentence);
   if (!m) return null;
@@ -1334,7 +1349,7 @@ function praiseSentence(word, sentence, clean, n, N) {
     const text = n && N ? celebrateText(n, N, clean) : (clean ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!');
     const sp = sentence && sentenceParts(sentence, word);
     const page = sp ? `<div class="page small"><p class="story">${esc(sp.pre)}<span class="pw set">${esc(word)}</span>${esc(sp.post)}</p></div>` : `<div class="wordtile small">${esc(word)}</div>`;
-    h(`<div class="screen wordpage cheer">${confettiHtml()}${page}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(text)}</p>${n && N ? progressStars(n, N) : ''}
+    h(`<div class="screen wordpage cheer">${confettiHtml()}${sceneBar(word)}${page}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(text)}</p>${n && N ? progressStars(n, N) : ''}
       <button id="next" class="btn big">${n && N && n >= N ? 'See how I did' : 'Next word'} ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
@@ -1471,7 +1486,7 @@ const trickyWords = wk => {
 function trickScreen(x) {
   return new Promise(res => {
     const msg = 'Let us remember this word.';
-    h(`<div class="screen"><p class="msg">${msg}</p><div class="wordtile">${esc(x.w)}</div>
+    h(`<div class="screen"><p class="msg">${msg}</p>${sceneBar(x.w)}<div class="wordtile">${esc(x.w)}</div>
       ${x.mnem ? `<div class="helpline"><b>Memory trick:</b> ${esc(x.mnem)}</div>` : '<p class="subtle">Make up a trick to help you remember it.</p>'}
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mk" class="btn">${x.mnem ? 'Change my trick' : 'Make my own trick'}</button><button id="next" class="btn big">Now trace it ${ico('next')}</button></div></div>`);
     const sayAll = () => say(msg + ' ' + x.w + '. ' + (x.mnem || ''));

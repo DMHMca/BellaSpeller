@@ -365,3 +365,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .pstars { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; font-size: 30px; color: rgba(255,255,255,.25); }
 .pstars .on { color: #ffd54a; text-shadow: 0 0 10px rgba(255,200,61,.8); }
 @media (prefers-reduced-motion: reduce) { .confetti { display: none; } }
+
+/* little pictures for the story */
+.scene { display: block; text-align: center; font-size: clamp(44px, 8vh, 64px); letter-spacing: 10px; margin: 8px 0 12px; line-height: 1.2; }
+.scenebar { text-align: center; font-size: clamp(30px, 5.2vh, 46px); letter-spacing: 8px; line-height: 1.1; }
