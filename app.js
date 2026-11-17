@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.92'; // bump with every release
+const APP_VER = '2.93'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -348,6 +348,8 @@ const PNOTE = {
   ss: 'At the end of a short word, we often double the s, the l and the f.', ll: 'At the end of a short word, we often double the l, the s and the f.', ff: 'At the end of a short word, we often double the f, the l and the s.',
   ould: 'The letters o u l d say ood.', le: 'The letters l e at the end of a word say ul.', ie: 'The letters i e can say ee, as in field, or eye, as in pie.'
 };
+// The sound each pattern makes, written the way a speech voice will say it as a sound, not as letter names. Not checked by ear yet.
+const PSOUND = { th: 'thhh', sh: 'shhh', ch: 'chhh', wh: 'wuh', kn: 'nnn', wr: 'rrr', qu: 'kwuh', ph: 'fff', ck: 'kuh', tion: 'shun', tch: 'chhh', dge: 'juh', ight: 'ite', ea: 'ee', ee: 'ee', oa: 'oh', ai: 'ay', ay: 'ay', oo: 'oo', ie: 'ee', ei: 'ay', ou: 'ow', ow: 'ow', oy: 'oy', oi: 'oy', au: 'or', aw: 'or', ar: 'ar', or: 'or', er: 'er', ir: 'er', ur: 'er', ss: 'sss', ll: 'lll', ff: 'fff', ould: 'ood', le: 'ul' };
 const listOf = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
 function phonicsRule(w) {
   for (const [pat, where, ex] of PHONICS) {
@@ -357,7 +359,8 @@ function phonicsRule(w) {
     if (family.length < 2) continue;
     const place = where === 'start' ? 'It starts with ' + pat : where === 'end' ? 'It ends with ' + pat : 'It has ' + pat + ' in it';
     const letters = pat.split('').join(' ');
-    const spoken = (where === 'start' ? 'It starts with the letters ' : where === 'end' ? 'It ends with the letters ' : 'It has the letters ') + letters + ', like ' + listOf(family) + '. ' + (PNOTE[pat] || '');
+    const snd = PSOUND[pat];
+    const spoken = (where === 'start' ? 'It starts with ' : where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. ' + 'Listen: ' + listOf(family) + '. ' : 'the letters ' + letters + ', like ' + listOf(family) + '. ') + (PNOTE[pat] || '');
     return { rule: place + ', like ' + listOf(family) + '.', spoken, family };
   }
   if (/[aeiou][^aeiouwy]e$/.test(w)) { const family = ['make', 'time', 'hope', 'cube'].filter(e => e !== w).slice(0, 3); return { rule: 'It has a magic e on the end, like ' + listOf(family) + '.', spoken: 'It has a magic e on the end, like ' + listOf(family) + '. The e is silent, but it makes the vowel say its own name.', family }; }
