@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.80'; // bump with every release
+const APP_VER = '2.81'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -490,6 +490,20 @@ async function fetchClip(t) {
   const u = URL.createObjectURL(blob); urlCache.set(clipKey(t), u);
   return u;
 }
+// Something to look at while she waits: a dancing row of stars and a silly line that changes every few seconds.
+const WAIT_LINES = ['Sharpening the pencils...', 'Asking the characters what they would like to do...', 'Teaching the dragons to queue...', 'Untangling the wellies...', 'Finding a very good hiding place for the plot...', 'Checking nobody has hidden the full stops...', 'Polishing the adjectives...', 'Waking the story up gently...', 'Counting the stars. There are quite a lot...', 'Lending the hero a torch...', 'Persuading the cat to hold still...', 'Looking for the last page...', 'Making sure the dragon is friendly...'];
+function waitBlock() {
+  return '<div class="dance" aria-hidden="true"><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span><span>&#9733;</span></div><p class="subtle waitline" id="funline">' + esc(WAIT_LINES[Math.floor(Math.random() * WAIT_LINES.length)]) + '</p>';
+}
+function startWaitLines() {
+  let k = Math.floor(Math.random() * WAIT_LINES.length);
+  const iv = setInterval(() => {
+    const el = document.getElementById('funline');
+    if (!el) return clearInterval(iv); // she has moved on
+    el.classList.add('fade');
+    setTimeout(() => { k = (k + 1) % WAIT_LINES.length; el.textContent = WAIT_LINES[k]; el.classList.remove('fade'); }, 400);
+  }, 3500);
+}
 // Makes sure the clips exist. Shows a short "getting ready" screen, which Bella can skip.
 async function prep(texts, msg) {
   if (!ttsOn() || !soundOn()) return null;
@@ -498,14 +512,14 @@ async function prep(texts, msg) {
   if (!need.length) return null;
   let n = 0, skip = false, err = null;
   await new Promise(res => {
-    h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><div class="bar"><i id="pbar"></i></div><p class="subtle" id="pc">0 of ${need.length}</p><button id="go" class="btn small">Start now</button></div>`);
+    h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1>${waitBlock()}<button id="go" class="btn small">Start now</button></div>`);
+    startWaitLines();
     on('#go', () => { skip = true; res(); });
     let i = 0;
     const worker = async () => {
       while (i < need.length && !skip && !err) {
         try { await fetchClip(need[i++]); } catch (e) { err = e; }
-        n++; const pc = $('#pc'); if (pc) pc.textContent = n + ' of ' + need.length;
-        const pb = $('#pbar'); if (pb) pb.style.width = Math.round(100 * n / need.length) + '%';
+        n++;
       }
     };
     Promise.all([worker(), worker(), worker()]).then(() => res());
@@ -857,7 +871,8 @@ function praise(word, clean) {
 
 // ---------- starting a story: shelf, cast, Bella's own idea ----------
 function waiting(msg) {
-  h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><p class="subtle">This can take up to a minute.</p></div>`);
+  h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1>${waitBlock()}</div>`);
+  startWaitLines();
 }
 async function transcribe(blob) {
   const buf = new Uint8Array(await blob.arrayBuffer());
