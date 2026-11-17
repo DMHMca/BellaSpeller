@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.66'; // bump with every release
+const APP_VER = '2.67'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -425,7 +425,7 @@ const FIX_TAIL = ' Have a good look. Then try once more.';
 const FIX_A = 'So close. The yellow letters were hiding.', FIX_B = 'So close. Here is how it looks.';
 const RED_WHY = 'This is a tricky word. It has no rule. You just have to remember it.';
 const cardSpeech = (word, sentence) => (sentence ? sentence + ' ... ' + word + '. Say it out loud.' : word + '. Say it out loud.');
-const CLUB_MSG = 'These are the four girls in your story. Tap a name to change it.';
+const CLUB_MSG = 'These are the friends in your story. Tap a name to change it.';
 const COMMON = [...PRAISE, ...SCREEN_PROMPTS, 'Well done. You got there!', FIX_A + FIX_TAIL, FIX_B + FIX_TAIL, CLUB_MSG];
 const effVp = () => (S.vp === undefined ? 'ms-emily' : S.vp); // Emily unless a grown-up chose otherwise
 const preset = () => PRESETS.find(p => p.id === effVp());
@@ -1038,7 +1038,7 @@ function confirmIdea(text) {
 }
 function readyScreen(title) {
   return new Promise(res => {
-    const names = S.girls.slice(0, 4);
+    const names = S.girls.slice(0, castN());
     const list = names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
     h(`<div class="screen"><h1>Ready?</h1><p class="subtle">${esc(title)}</p>
       <div class="page small"><p class="lead-in">In your story</p><p class="story">${esc(list)}</p></div>
