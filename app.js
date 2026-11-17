@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.63'; // bump with every release
+const APP_VER = '2.65'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -77,7 +77,7 @@ How to work:
 3. Place each word where it belongs. For each spelling word, choose a paragraph where the word arises naturally from what is happening, and put it in that paragraph's LAST sentence. The last sentence must follow from the sentences before it.
 4. Do not invent a reason for someone to write the word. No notes, signs, lists or diary lines unless the plot truly calls for one.
 5. Do not bend the story to fit a word. If a word will not fit a paragraph, move it to a different paragraph.
-6. Keep each paragraph short: two sentences, three at most, about 35 words, so the page is not crowded. Write exactly one paragraph for each spelling word, plus at most two short extra paragraphs (an opening and a closing). Spread the spelling words evenly, so that a word turns up in almost every paragraph and the words come one after another at a steady pace, while the story still hangs together. Keep the plan under 60 words.
+6. Write in short, simple sentences, about 8 to 14 words each and never more than 22, that carry the reader along from one to the next. The story is shown as one run of sentences, not as paragraphs, so every sentence must follow from the one before it. Keep each paragraph short: two or three sentences, so the page is not crowded. Write exactly one paragraph for each spelling word, plus at most two short extra paragraphs (an opening and a closing). Spread the spelling words evenly, so that a word turns up in almost every paragraph and the words come one after another at a steady pace, while the story still hangs together. Keep the plan under 60 words.
 7. Use each spelling word in an ordinary, natural way, in a complete sentence that a child would really say or read. Never use a word as a tag on the end of a sentence ("..., really.") or in a half-finished phrase ("she forgot when"), and never turn a sentence back to front to reach the word ("off she went" is fine, "off Ellie went" is not). If a word will not sit naturally in a paragraph, move it to another paragraph.
 8. {{LENGTH_RULE}}
 
@@ -140,6 +140,8 @@ function checkEpisode(ep, words) {
     if (Math.abs(here - plan[pi]) > 1) bad.push('Part ' + (pi + 1) + ' should have about ' + plan[pi] + ' word paragraphs, not ' + here + '.');
   });
   if (totalChoices !== nChoices()) bad.push('The story should have ' + (nChoices() ? 'exactly ' + nChoices() + (nChoices() === 1 ? ' choice' : ' choices') : 'no choices') + ' in all, not ' + totalChoices + '.');
+  const longOnes = texts.slice(1).flatMap(t => splitSentences(t)).filter(t => t.split(/\s+/).length > 24).length;
+  if (longOnes > 1) bad.push('Some sentences are too long (' + longOnes + ' are over 24 words). Write short, simple sentences.');
   const total = texts.slice(1).join(' ').split(/\s+/).filter(Boolean).length;
   if (total > curLen().max) bad.push('The story is ' + total + ' words, over the limit of ' + curLen().max + '. Shorten it.');
   words.forEach(w => { if (used.filter(x => x === w).length !== 1) bad.push('"' + w + '" should be the word of exactly one paragraph.'); });
@@ -618,12 +620,17 @@ function narrate(text, label, hl) {
     say(text);
   });
 }
-// A story page: several short paragraphs together, each with its spelling word in bold. Spoken as one piece.
-function narratePage(paras) {
-  const text = paras.map(q => q.t).join(' ');
+// The story is a run of short sentences. A page is as many sentences as fit, broken at a sentence end. Each test word is highlighted in its own sentence.
+function splitSentences(t) {
+  t = String(t).trim(); const out = []; let start = 0;
+  for (const m of t.matchAll(/[.!?]+["”’')]*\s+(?=["“‘'A-Z])/g)) { out.push(t.slice(start, m.index + m[0].length).trim()); start = m.index + m[0].length; }
+  out.push(t.slice(start).trim());
+  return out.filter(Boolean);
+}
+function narratePage(items) {
+  const text = items.map(q => q.t).join(' '), nw = text.split(/\s+/).length, dense = nw > 110 ? ' dense dense2' : nw > 70 ? ' dense' : '';
   return new Promise(res => {
-    const nw = text.split(/\s+/).length, dense = nw > 110 ? ' dense dense2' : nw > 70 ? ' dense' : '';
-    h(`<div class="screen"><div class="page${dense}">${paras.map(q => `<p class="story">${q.w ? hlHtml(q.t, q.w) : esc(q.t)}</p>`).join('')}</div>
+    h(`<div class="screen"><div class="page${dense}"><p class="story">${items.map(q => q.w ? hlHtml(q.t, q.w) : esc(q.t)).join(' ')}</p></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div></div>`);
     on('#hear', () => say(text));
     on('#next', () => { hush(); res(); });
@@ -632,22 +639,27 @@ function narratePage(paras) {
     say(text);
   });
 }
-const PAGE_WORDS = 90;
+const PAGE_WORDS = 70;
 const STORY_INTRO = 'Watch for the words with a yellow highlight. They are your test words. You will spell them at the end.';
 function packPages(beats) {
   const steps = [], wc = t => t.split(/\s+/).filter(Boolean).length;
-  let cur = [];
-  // About four pages whatever the length: the page size follows the story, so long paragraphs are not left one to a page.
-  const all = beats.reduce((a, b) => a + (b.n || b.p ? wc(fill(b.n || b.p)) : 0), 0), limit = Math.max(PAGE_WORDS, Math.ceil(all / 4) + 25);
-  const flush = () => { if (cur.length) { steps.push({ page: cur }); cur = []; } };
+  const all = beats.reduce((a, b) => a + (b.n || b.p ? wc(fill(b.n || b.p)) : 0), 0), limit = Math.max(PAGE_WORDS, Math.ceil(all / 4) + 20);
+  let cur = [], words = 0;
+  const flush = () => { if (cur.length) { steps.push({ page: cur }); cur = []; words = 0; } };
   beats.forEach(b => {
     if (b.n || b.p) {
-      const t = fill(b.n || b.p), total = cur.reduce((a, q) => a + wc(q.t), 0);
-      if (cur.length && total + wc(t) > limit) flush();
-      cur.push({ t, w: b.p ? b.word : null });
+      const sents = splitSentences(fill(b.n || b.p));
+      sents.forEach((t, k) => {
+        const n = wc(t);
+        if (cur.length && words + n > limit) flush();
+        cur.push({ t, w: b.p && k === sents.length - 1 ? b.word : null }); words += n;
+      });
     } else if (b.c) { flush(); steps.push({ choice: b.c }); }
   });
   flush();
+  // a tiny last page is joined to the one before it
+  const last = steps[steps.length - 1], prev = steps[steps.length - 2];
+  if (last && last.page && prev && prev.page && last.page.reduce((n, q) => n + wc(q.t), 0) < 15) { prev.page = prev.page.concat(last.page); steps.pop(); }
   return steps;
 }
 function choose(q, opts) {
