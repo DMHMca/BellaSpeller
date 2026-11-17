@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.60'; // bump with every release
+const APP_VER = '2.61'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -618,6 +618,34 @@ function narrate(text, label, hl) {
     say(text);
   });
 }
+// A story page: several short paragraphs together, each with its spelling word in bold. Spoken as one piece.
+function narratePage(paras) {
+  const text = paras.map(q => q.t).join(' ');
+  return new Promise(res => {
+    h(`<div class="screen"><div class="page">${paras.map(q => `<p class="story">${q.w ? hlHtml(q.t, q.w) : esc(q.t)}</p>`).join('')}</div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div></div>`);
+    on('#hear', () => say(text));
+    on('#next', () => { hush(); res(); });
+    keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
+    backBtn(res);
+    say(text);
+  });
+}
+const PAGE_WORDS = 70;
+function packPages(beats) {
+  const steps = [], wc = t => t.split(/\s+/).filter(Boolean).length;
+  let cur = [];
+  const flush = () => { if (cur.length) { steps.push({ page: cur }); cur = []; } };
+  beats.forEach(b => {
+    if (b.n || b.p) {
+      const t = fill(b.n || b.p), total = cur.reduce((a, q) => a + wc(q.t), 0);
+      if (cur.length && total + wc(t) > PAGE_WORDS) flush();
+      cur.push({ t, w: b.p ? b.word : null });
+    } else if (b.c) { flush(); steps.push({ choice: b.c }); }
+  });
+  flush();
+  return steps;
+}
 function choose(q, opts) {
   return new Promise(res => {
     h(`<div class="screen"><div class="page"><p class="story">${esc(q)}</p></div><div class="msg">Tap what happens next</div>
@@ -1071,15 +1099,16 @@ async function storyDay() {
   const beats = [].concat(...ep.parts);
   const order = beats.filter(b => b.p && b.word).map(b => b.word);
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
-  await prep(partTexts(beats, wk).concat(spellTexts(wk)), 'Getting the story ready');
+  const steps = packPages(beats);
+  await prep(steps.filter(x => x.page).map(x => x.page.map(q => q.t).join(' ')).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk)), 'Getting the story ready');
   prog = ep.title;
   let i = 0;
-  while (i < beats.length) {
-    const b = beats[i];
+  while (i < steps.length) {
+    const st0 = steps[i];
     let r;
-    if (b.n) r = await narrate(fill(b.n));
-    else if (b.p) r = await narrate(fill(b.p), 'Next', b.word);
-    else if (b.c) {
+    if (st0.page) r = await narratePage(st0.page);
+    else {
+      const b = { c: st0.choice };
       for (;;) {
         const k = await choose(fill(b.c.q), b.c.o.map(o => fill(o.l)));
         if (k === BACK) { r = BACK; break; }
