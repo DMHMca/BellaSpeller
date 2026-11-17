@@ -317,3 +317,8 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .helpline { background: var(--paper); color: var(--ink); border-radius: 18px; padding: 10px 16px; font-size: clamp(18px, 2.8vh, 24px); text-align: left; }
 .choices.menu { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
 @media (max-width: 560px) { .choices.menu { grid-template-columns: 1fr; } }
+
+/* story shelf options: one small row */
+.optrow { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; width:100%; }
+.optchip { padding:6px 14px; border:2px dashed rgba(255,255,255,.35); border-radius:999px; background:rgba(255,255,255,.08); color:#fff; font:inherit; font-size:15px; cursor:pointer; }
+.optchip b { color:var(--amber); }

@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.75'; // bump with every release
+const APP_VER = '2.76'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -425,7 +425,7 @@ function toolsPane(wk) {
 const SHELF_SIZE = 6;
 const allIdeas = () => STORY_TYPES.map((t, i) => Object.assign({ id: 'b' + i }, t)).concat(S.ideas || []);
 const isUsed = t => !!(S.used && S.used[t.id]);
-function markUsed(t) { if (!t || !t.id) return; S.used = S.used || {}; S.used[t.id] = Date.now(); save(); }
+function markUsed(t) { if (!t || !t.id) return; S.used = S.used || {}; S.used[t.id] = Date.now(); save(); if (allIdeas().filter(x => !isUsed(x)).length < SHELF_SIZE + 3) makeIdeas(); } // a replacement is written in the background as soon as one is used
 let makingIdeas = false;
 async function makeIdeas() {
   if (makingIdeas || !aiKey()) return false;
@@ -894,18 +894,16 @@ function shelf(ep, st) {
       const all = allIdeas(), unused = all.filter(t => !isUsed(t)).slice(0, SHELF_SIZE);
       const told = all.filter(isUsed).sort((x, y) => S.used[y.id] - S.used[x.id]);
       h(`<div class="screen"><h1>Choose your story</h1>
-      <button id="caststrip" class="caststrip"><span>In your story: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></span><span class="chg">${ico('swap')} Change</span></button>
-      <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${nChoices() || 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
-      <button id="lentoggle" class="caststrip"><span>Story length: <b id="lenstate">${curLen().label.toLowerCase()} (under ${curLen().max} words)</b></span><span class="chg">${ico('swap')} Change</span></button>
+      <div class="optrow"><button id="caststrip" class="optchip">Characters: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></button><button id="chtoggle" class="optchip">Choices: <b id="chstate">${nChoices() || 'off'}</b></button><button id="lentoggle" class="optchip">Length: <b id="lenstate">${curLen().label.toLowerCase()}</b></button></div>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
       ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Not finished yet', 'wide') : ''}
-      ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>
+      ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
       </div>`);
       on('#own', () => { hush(); res({ kind: 'own' }); });
       on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
-      on('#lentoggle', () => { const k = Object.keys(LENGTHS), n = k[(k.indexOf(S.len in LENGTHS ? S.len : 'standard') + 1) % k.length]; S.len = n; save(); $('#lenstate').textContent = LENGTHS[n].label.toLowerCase() + ' (under ' + LENGTHS[n].max + ' words)'; });
+      on('#lentoggle', () => { const k = Object.keys(LENGTHS), n = k[(k.indexOf(S.len in LENGTHS ? S.len : 'standard') + 1) % k.length]; S.len = n; save(); $('#lenstate').textContent = LENGTHS[n].label.toLowerCase(); });
       on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
       all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
       on('#again', () => { hush(); res({ kind: 'again' }); });
@@ -914,7 +912,7 @@ function shelf(ep, st) {
     render();
     say(SCREEN_PROMPTS[0]);
     // running low on fresh ideas: ask the AI for a new batch, then refresh the shelf if she is still on it
-    if (allIdeas().filter(t => !isUsed(t)).length < SHELF_SIZE) makeIdeas().then(ok => { if (ok && document.getElementById('own') && !document.getElementById('typeOverlay')) render(); });
+    if (allIdeas().filter(t => !isUsed(t)).length < SHELF_SIZE + 3) makeIdeas().then(ok => { if (ok && document.getElementById('own') && !document.getElementById('typeOverlay')) render(); });
   });
 }
 function typeText({ title, initial = '', max = 400, names = false }) {
