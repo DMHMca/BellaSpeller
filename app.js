@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.76'; // bump with every release
+const APP_VER = '2.77'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -888,15 +888,17 @@ async function tidyIdea(idea) {
 }
 function shelf(ep, st) {
   return new Promise(res => {
-    const hasStory = ep && st, done = hasStory && st.part >= ep.parts.length;
+    let hasStory, done;
     const card = (id, icon, title, blurb, cls) => `<button class="shelfcard ${cls || ''}" id="${id}"><span class="ticon">${ico(icon)}</span><div><b>${esc(title)}</b><small>${esc(blurb)}</small></div></button>`;
+    let resetFlash = false;
     const render = () => {
+      hasStory = ep && st; done = hasStory && st.part >= ep.parts.length;
       const all = allIdeas(), unused = all.filter(t => !isUsed(t)).slice(0, SHELF_SIZE);
       const told = all.filter(isUsed).sort((x, y) => S.used[y.id] - S.used[x.id]);
       h(`<div class="screen"><h1>Choose your story</h1>
       <div class="optrow"><button id="caststrip" class="optchip">Characters: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></button><button id="chtoggle" class="optchip">Choices: <b id="chstate">${nChoices() || 'off'}</b></button><button id="lentoggle" class="optchip">Length: <b id="lenstate">${curLen().label.toLowerCase()}</b></button></div>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
-      ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Not finished yet', 'wide') : ''}
+      ${hasStory ? `<div class="againrow">${card('again', 'book', (done ? 'Play again: ' : st.part > 0 ? 'Carry on: ' : 'Play: ') + ep.title, done ? 'Tell this story again' : st.part > 0 ? 'Not finished yet' : 'Not played yet', 'wide')}<button id="resetstory" class="optchip">Start over</button></div>` : ''}
       <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
@@ -907,6 +909,7 @@ function shelf(ep, st) {
       on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
       all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
       on('#again', () => { hush(); res({ kind: 'again' }); });
+      on('#resetstory', () => { const wk0 = curWeek(); S.story[wk0.id] = { part: 0 }; if (S.due) delete S.due[wk0.id]; save(); resetFlash = true; st = S.story[wk0.id]; render(); }); // back to the beginning of this story, with no missed words carried over
       backBtn(res);
     };
     render();
