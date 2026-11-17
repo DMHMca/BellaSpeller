@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.56'; // bump with every release
+const APP_VER = '2.58'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -100,11 +100,7 @@ const NO_CHOICE_RULE = '2. The story has no choices for the reader. Tell it stra
 const LENGTHS = { short: { label: 'Short', max: 350, aim: 300 }, standard: { label: 'Standard', max: 500, aim: 400 }, long: { label: 'Long', max: 800, aim: 650 } };
 const curLen = () => LENGTHS[S.len] || LENGTHS.standard;
 const storyRules = () => STORY_RULES.replace('{{LENGTH_RULE}}', 'Keep the whole story under ' + curLen().max + ' words in all (aim for about ' + curLen().aim + '), so that reading it takes little time. Spend the words on a clear problem and a kind ending, not on extra scenes. Count them: a story over ' + curLen().max + ' words will be rejected.').replace('{{CHOICE_FORMAT}}', nChoices() ? CHOICE_FORMAT : '').replace('{{CHOICE_RULE}}', nChoices() ? CHOICE_RULE(nChoices()) : NO_CHOICE_RULE);
-const WORDS_PER_PART = 6;
-function partPlan(n) { // how many words in each part: about six to a part, shared evenly
-  const parts = Math.max(1, Math.ceil(n / WORDS_PER_PART)), base = Math.floor(n / parts), extra = n % parts;
-  return Array.from({ length: parts }, (_, i) => base + (i < extra ? 1 : 0));
-}
+function partPlan(n) { return [Math.max(1, n)]; } // one story, one part, every word in it
 function lastSentence(t) {
   // A sentence ends at . ! or ? (and any closing quote) when the next word starts with a capital or an opening quote.
   // So "Is it really happy?" she whispered. stays one sentence.
@@ -308,7 +304,7 @@ async function aiJSON(sys, user, maxTokens) {
 // Asks the AI to suggest tool data for each word, keeps only suggestions that pass checks, never overwrites what a grown-up or Bella typed.
 async function suggestTools(wk) {
   const words = wk.words.map(x => x.w);
-  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine); "wrong": two or three misspellings that children commonly write for this word, each a made-up string and not a real English word (for example freind for friend). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "...", "wrong": ["...", "..."]}]}.';
+  const sys = 'You help a nine-year-old girl in England with dyslexia learn spellings. For each spelling word give: "hard": the 1 to 4 letters of the word that cannot be sounded out or are most often written wrongly (a run of letters that appears in the word); "say": the word spelled out as it is written but said in pieces with hyphens, so that removing the hyphens gives the word (for example w-hen); "parts": the word split with | into two or three meaningful parts such as syllables or smaller words (for example side|ways), or the word unsplit if there is no good split; "mnem": one short memory sentence or phrase in plain British English that helps hold the spelling, under 14 words (an acrostic such as Big Elephants Can Always Understand Small Elephants for because is fine); "wrong": two or three misspellings that children commonly write for this word, each a made-up string and not a real English word (for example freind for friend); "family": three everyday words a nine-year-old knows that are spelled with the same pattern as this word, never the word itself (for when: what, where, why; for friend: field, piece, chief). No food or eating in any phrase. Reply with JSON only: {"words": [{"word": "...", "hard": "...", "say": "...", "parts": "...", "mnem": "...", "wrong": ["...", "..."], "family": ["...", "...", "..."]}]}.';
   const o = await aiJSON(sys, 'Spelling words: ' + words.join(', '), 3000);
   let added = 0;
   (o.words || []).forEach(sg => {
@@ -318,10 +314,23 @@ async function suggestTools(wk) {
     if (!x.say && ok(sg.say) && sg.say.replace(/-/g, '').toLowerCase() === w && sg.say.includes('-')) { x.say = sg.say.toLowerCase().trim(); added++; }
     if (!x.parts && ok(sg.parts) && sg.parts.replace(/\|/g, '').toLowerCase() === w && sg.parts.includes('|')) { x.parts = sg.parts.toLowerCase().trim(); added++; }
     if (!x.wrong && Array.isArray(sg.wrong)) { const good = sg.wrong.map(t => String(t).toLowerCase().trim()).filter(t => /^[a-z'-]+$/.test(t) && t !== w && Math.abs(t.length - w.length) <= 3 && !words.includes(t)).slice(0, 4); if (good.length) { x.wrong = good; added++; } }
+    if (!x.family && Array.isArray(sg.family)) {
+      const share = f => { let a = 0; while (a < w.length && a < f.length && w[a] === f[a]) a++; let b = 0; while (b < w.length && b < f.length && w[w.length - 1 - b] === f[f.length - 1 - b]) b++; return a >= 2 || b >= 3 || (x.hard && f.includes(x.hard)); };
+      const fam = sg.family.map(t => String(t).toLowerCase().trim()).filter(f => /^[a-z]{2,12}$/.test(f) && f !== w && !words.includes(f) && share(f) && ![...f.matchAll(US)].length).slice(0, 4);
+      if (fam.length) { x.family = fam; added++; }
+    }
     if (!x.mnem && ok(sg.mnem) && sg.mnem.length <= 140 && ![...sg.mnem.matchAll(US)].some(m => !words.includes(m[0].toLowerCase()))) { x.mnem = sg.mnem.trim(); x.mnemBy = 'ai'; added++; }
   });
+  wk.words.forEach(x => { x.sug = true; });
   save();
   return added;
+}
+// Quietly makes tool data for any word that has none yet. Needs the AI key and a connection; failure is silent.
+let suggesting = false;
+async function ensureTools(wk) {
+  if (suggesting || !aiKey() || !navigator.onLine || !wk.words.some(x => !x.sug)) return;
+  suggesting = true;
+  try { await suggestTools(wk); } catch (e) { } finally { suggesting = false; }
 }
 function toolsProgress() {
   const logs = S.log.filter(l => l.mode === 'revise' && !l.redo);
@@ -350,6 +359,7 @@ function toolsPane(wk) {
     <td><input type="text" class="tf" data-i="${i}" data-f="hard" value="${esc(x.hard || '')}" placeholder="hard letters" autocomplete="off"></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="parts" value="${esc(x.parts || '')}" placeholder="side|ways" autocomplete="off"></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="say" value="${esc(x.say || '')}" placeholder="w-hen" autocomplete="off"></td>
+    <td>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</td>
     <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td>
     <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a memory trick" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
   return `<h2>Support tools</h2>
@@ -357,7 +367,7 @@ function toolsPane(wk) {
     ${TOOLS.map(t => `<div class="wl"><div><b>${esc(t.label)}.</b> <span class="note">${esc(t.note)}</span></div></div>`).join('')}
     <h2>Tool details for this week's words</h2>
     <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word. Common wrong spellings are used by Pick the right spelling, after her own past mistakes.</p>
-    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Common wrong spellings</th><th>Memory trick</th></tr>${rows}</table>
+    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Same-pattern words (untick to remove)</th><th>Common wrong spellings</th><th>Memory trick</th></tr>${rows}</table>
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }
@@ -464,7 +474,7 @@ function partTexts(beats, wk) {
   if (wk) { if (wk.rule) o.push(wk.rule); o.push(RED_WHY); }
   beats.forEach(b => {
     if (b.n) o.push(fill(b.n));
-    else if (b.p) { o.push(fill(b.p)); if (b.word) { o.push(pointLine(b.word)); o.push(b.word); } }
+    else if (b.p) o.push(fill(b.p));
     else if (b.c) { o.push(fill(b.c.q) + ' ' + b.c.o.map(x => fill(x.l)).join('. Or. ')); b.c.o.forEach(x => o.push(fill(x.n))); }
   });
   return o;
@@ -579,9 +589,14 @@ function fill(t) {
 }
 
 // ---------- small screens ----------
-function narrate(text, label) {
+function hlHtml(text, word) {
+  const ls = lastSentence(text), cut = text.lastIndexOf(ls), sp = sentenceParts(ls, word);
+  if (!sp) return esc(text);
+  return esc(text.slice(0, cut)) + esc(sp.pre) + `<span class="pw hl">${esc(word)}</span>` + esc(sp.post);
+}
+function narrate(text, label, hl) {
   return new Promise(res => {
-    h(`<div class="screen"><div class="page"><p class="story">${esc(text)}</p></div>
+    h(`<div class="screen"><div class="page"><p class="story">${hl ? hlHtml(text, hl) : esc(text)}</p></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">${esc(label || 'Next')} ${ico('next')}</button></div></div>`);
     on('#hear', () => say(text));
     on('#next', () => { hush(); res(); });
@@ -631,11 +646,11 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button>` : ''}</div>`).join('')}</div>`;
 
-function writeWord(word, noBack, remind, wobj) {
+function writeWord(word, noBack, remind, wobj, force, cue) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
-    const sayIt = () => say(word);
+    const sayIt = () => say(cue || word);
     h(`<div class="screen">
       <div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>
       ${wobj ? toolsPanel() : ''}
@@ -665,7 +680,7 @@ function writeWord(word, noBack, remind, wobj) {
     };
     on('#hear', sayIt); on('#hint', hint); on('#done', finish);
     if (wobj) wireTools(wobj, 'write', c => c.shown.forEach(id => used.add(id)));
-    if (wobj && toolOn('choice')) {
+    if (wobj && (force || toolOn('choice'))) {
       used.add('choice');
       const opts = shuffle([word].concat(misspellings(wobj, (curWeek().words || []).map(q => q.w))));
       const cue = document.querySelector('.cue span'); if (cue) cue.textContent = soundOn() ? 'Listen, then pick the right spelling' : 'Pick the right spelling';
@@ -722,111 +737,6 @@ function praise(word, clean) {
   });
 }
 
-// The word line spoken when a word is pointed out
-const pointLine = w => 'This is one of your words: ' + w + '. Have a good look.';
-
-// One page for a story word: the paragraph is read, the word is pointed out where it stands, it hides, she writes it into the gap.
-// Returns true if right first time with no hints, or BACK.
-function storyWord(week, wobj, rawText, starred) {
-  return new Promise(res => {
-    const word = wobj.w, text = fill(rawText);
-    const ls = lastSentence(text), cut = text.lastIndexOf(ls);
-    const head = text.slice(0, cut), sent = text.slice(cut);
-    const mt = new RegExp("(^|[^A-Za-z'’])(" + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ")(?![A-Za-z]|['’][A-Za-z])", 'i').exec(sent);
-    const at = mt ? mt.index + mt[1].length : sent.length;
-    const pre = sent.slice(0, at), post = mt ? sent.slice(at + word.length) : '';
-    const why = wobj.red ? RED_WHY : (week.rule || '');
-    const tags = (wobj.red ? '<span class="tag red">Tricky word</span>' : '') + (wobj.say ? `<span class="tag">Say it the spelling way: ${esc(wobj.say)}</span>` : '');
-    let state = 'read', typed = '', hints = 0, attempts = 0, tries = 0, firstOk = false, firstHints = 0, mask = null, tm = null, pr = '';
-    const para = () => {
-      const dh = state === 'read' || state === 'settle' ? '' : ' dim', dp = state === 'point' ? ' dim' : '';
-      let w;
-      if (state === 'read') w = `<span class="pw">${esc(word)}</span>`;
-      else if (state === 'point') w = `<span class="pw hl" id="pwd">${esc(word)}</span>`;
-      else if (state === 'gap') w = '<span class="blank"></span>';
-      else if (state === 'fix') w = `<span class="pw fixw">${[...word].map((c, i) => mask[i] ? esc(c) : `<span class="hid">${esc(c)}</span>`).join('')}</span>`;
-      else w = `<span class="pw set">${esc(word)}</span>`;
-      return `<div class="page"><p class="story para${state === 'gap' ? ' gapmode' : ''}"><span class="phead${dh}">${esc(head)}</span><span class="${dp.trim()}">${esc(pre)}</span>${w}<span class="${dp.trim()}">${esc(post)}</span></p></div>`;
-    };
-    const stop = () => { clearTimeout(tm); hush(); };
-    const toPoint = () => {
-      stop(); state = 'point'; typed = ''; hints = 0; render();
-      say(pointLine(word));
-    };
-    const toGap = () => { stop(); state = 'gap'; typed = ''; hints = 0; render(); };
-    const toSettle = (praiseText, clean) => {
-      stop(); state = 'settle'; pr = praiseText;
-      const sk = 'story:' + word;
-      if (!starred || !starred.has(sk)) { S.stars++; if (starred) starred.add(sk); }
-      save(); render(); say(pr);
-    };
-    const attempt = () => {
-      const ok = typed === word;
-      S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: 'story', typed, hints, ok, redo: attempts++ > 0 || undefined });
-      save();
-      if (tries === 0) { firstOk = ok; firstHints = hints; }
-      tries++;
-      if (ok) return toSettle(firstOk && firstHints === 0 && tries === 1 ? PRAISE[Math.floor(Math.random() * PRAISE.length)] : 'Well done. You got there!');
-      if (tries === 1) { mask = matchMask(word, typed); stop(); state = 'fix'; render(); say((mask.some(x => !x) ? FIX_A : FIX_B) + FIX_TAIL); return; }
-      toSettle('Well done. You got there!');
-    };
-    function render() {
-      let body = para();
-      if (state === 'read') {
-        body += `<div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it again">${ico('speaker')}</button><button id="next" class="btn big">Next ${ico('next')}</button></div>`;
-      } else if (state === 'point') {
-        body += `<p class="msg">${esc(pointLine(word))}</p>${tags ? `<div class="row">${tags}</div>` : ''}
-          <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${why ? `<button id="why" class="btn small">${ico('bulb')}<span>Why?</span></button>` : ''}<button id="next" class="btn big">I've had a good look ${ico('check')}</button></div><div id="whybox" style="width:100%"></div>`;
-      } else if (state === 'gap') {
-        body += `<div id="slots" class="slots"></div>
-          <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="hint" class="btn small">${ico('bulb')}<span>Next letter</span></button></div>
-          ${kbHtml()}<button id="done" class="btn big">Done ${ico('check')}</button>`;
-      } else if (state === 'fix') {
-        body += `<p class="msg">${mask.some(x => !x) ? FIX_A : FIX_B}</p><p class="subtle">Have a good look. Then try once more.</p><button id="next" class="btn big">Try once more ${ico('next')}</button>`;
-      } else {
-        body += `<div class="bigstar mini"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><p class="msg">${esc(pr)}</p><button id="next" class="btn big">Next ${ico('next')}</button>`;
-      }
-      h(`<div class="screen wordpage">${body}</div>`);
-      keyHandler = null;
-      if (state === 'read') {
-        on('#hear', () => { sayDone(text).then(ok => { if (ok && state === 'read') toPoint(); }); });
-        on('#next', toPoint);
-        keyHandler = e => { if (e.key === 'Enter') toPoint(); };
-      } else if (state === 'point') {
-        on('#hear', () => say(pointLine(word)));
-        on('#why', () => { $('#whybox').innerHTML = `<div class="page small"><p class="story">${esc(why)}</p></div>`; say(why); });
-        on('#next', toGap);
-        keyHandler = e => { if (e.key === 'Enter') toGap(); };
-      } else if (state === 'gap') {
-        const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; $('#done').disabled = !typed; };
-        const add = c => { if (typed.length < 24) { typed += c; draw(); } };
-        const del = () => { typed = typed.slice(0, -1); draw(); };
-        const finish = () => { if (typed) attempt(); };
-        const hint = () => { let i = 0; while (i < typed.length && i < word.length && typed[i] === word[i]) i++; if (i < word.length) { typed = word.slice(0, i + 1); hints++; draw(); } };
-        document.querySelectorAll('.key').forEach(b => { b.onclick = () => { const k = b.dataset.k; k === 'del' ? del() : add(k); }; });
-        keyHandler = e => {
-          if (e.ctrlKey || e.metaKey || e.altKey) return;
-          if (e.key === 'Backspace') { del(); e.preventDefault(); }
-          else if (e.key === 'Enter') { finish(); e.preventDefault(); }
-          else if (/^[a-zA-Z'-]$/.test(e.key)) { add(e.key.toLowerCase()); e.preventDefault(); }
-        };
-        on('#hear', () => say(word)); on('#hint', hint); on('#done', finish);
-        draw();
-      } else if (state === 'fix') {
-        on('#next', toGap);
-        keyHandler = e => { if (e.key === 'Enter') toGap(); };
-      } else {
-        on('#next', () => { stop(); res(firstOk && firstHints === 0 && attempts === 1); });
-        keyHandler = e => { if (e.key === 'Enter') { stop(); res(firstOk && firstHints === 0 && attempts === 1); } };
-      }
-      // Back: while looking or reading it goes to the step before the word; later it restarts the word's look.
-      backBtn(r => { if (state === 'read' || state === 'point') { stop(); res(BACK); } else toPoint(); });
-    }
-    render();
-    sayDone(text).then(ok => { if (ok && state === 'read') toPoint(); });
-  });
-}
-
 // ---------- starting a story: shelf, cast, Bella's own idea ----------
 function waiting(msg) {
   h(`<div class="screen"><div class="spin"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>${esc(msg)}</h1><p class="subtle">This can take up to a minute.</p></div>`);
@@ -870,7 +780,7 @@ function shelf(ep, st) {
       <button id="chtoggle" class="caststrip"><span>Choices in the story: <b id="chstate">${nChoices() || 'off'}</b></span><span class="chg">${ico('swap')} Change</span></button>
       <button id="lentoggle" class="caststrip"><span>Story length: <b id="lenstate">${curLen().label.toLowerCase()} (under ${curLen().max} words)</b></span><span class="chg">${ico('swap')} Change</span></button>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
-      ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Part ' + (st.part + 1) + ' of ' + ep.parts.length, 'wide') : ''}
+      ${hasStory ? card('again', 'book', (done ? 'Play again: ' : 'Carry on: ') + ep.title, done ? 'Tell this story again' : 'Not finished yet', 'wide') : ''}
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
       <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>
       ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
@@ -1143,19 +1053,19 @@ function clubSetup() {
 }
 async function storyDay() {
   const wk = curWeek();
-  let ep = epOf(wk), st = S.story[wk.id];
   if (!(await storyStart(wk))) return home();
-  ep = epOf(wk); st = S.story[wk.id];
-  prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
-  const beats = ep.parts[st.part], starred = new Set();
-  await prep(partTexts(beats, wk).concat(COMMON), 'Getting the story ready');
-  prog = `${ep.title} · part ${st.part + 1} of ${ep.parts.length}`;
+  const ep = epOf(wk), st = S.story[wk.id], sound = soundOn();
+  const beats = [].concat(...ep.parts);
+  const order = beats.filter(b => b.p && b.word).map(b => b.word);
+  wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
+  await prep(partTexts(beats, wk).concat(spellTexts(wk)), 'Getting the story ready');
+  prog = ep.title;
   let i = 0;
   while (i < beats.length) {
     const b = beats[i];
     let r;
     if (b.n) r = await narrate(fill(b.n));
-    else if (b.p) { const wobj = wk.words.find(x => x.w === b.word) || { w: b.word }; r = await storyWord(wk, wobj, b.p, starred); }
+    else if (b.p) r = await narrate(fill(b.p), 'Next', b.word);
     else if (b.c) {
       for (;;) {
         const k = await choose(fill(b.c.q), b.c.o.map(o => fill(o.l)));
@@ -1165,9 +1075,14 @@ async function storyDay() {
     }
     if (r === BACK) { if (i === 0) return home(); i--; } else i++;
   }
-  st.part++; save();
-  await ceiling();
-  home();
+  // The story is over. Now each word is said in its sentence, in the order it came, and she spells it.
+  const go = await gentle('The story is finished. Now it is your turn.', 'I will say each word from the story. Spell it for me.', 'Ready', 'The story is finished. Now it is your turn. I will say each word from the story. Spell it for me.');
+  if (go === BACK) return home();
+  const queue = order.map(w => wk.words.find(q => q.w === w)).filter(Boolean).map(x => ({ x, look: false, counts: true, mode: 'story', context: true }));
+  const firsts = await runWords(wk, queue, new Set());
+  if (!firsts) return home();
+  st.part = ep.parts.length; save();
+  await finishSitting(wk, firsts, sound, 'story');
 }
 // ---------- Revise: the words in random order, like the school test ----------
 // The story sentence for a word (the last sentence of its paragraph), or null if the week has no story.
@@ -1233,18 +1148,14 @@ async function reviseWord(week, it, sentence, starred) {
     if (it.look && (await learnCard(week, it.x, null)) === BACK) return BACK;
     let traced = false;
     if (toolOn('trace')) { const tr = await traceFlow(word); if (tr === BACK) { if (it.look) continue; return BACK; } traced = true; }
-    const a = await writeWord(word, false, it.look ? null : remind, it.x);
+    const cue = it.context && sentence ? sentence + ' ... ' + word : null;
+    const a = await writeWord(word, false, it.look || it.context ? null : remind, it.x, false, cue);
     if (a === BACK) { if (it.look) continue; return BACK; }
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
     const ok = a.typed === word;
-    S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
+    S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
-    if (!ok) {
-      if ((await showFix(word, a.typed)) === BACK) continue;
-      const b = await writeWord(word, false, null, it.x);
-      if (b === BACK) continue;
-      if (b.typed !== word && (await showFix(word, b.typed)) === BACK) continue;
-    }
+    if (!ok) { if ((await hintLadder(week, it.x, it.mode)) === BACK) continue; }
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
@@ -1252,6 +1163,49 @@ async function reviseWord(week, it, sentence, starred) {
     if ((await praiseSentence(word, sentence, good)) === BACK) continue;
     return { good, ok, typed: a.typed, aided };
   }
+}
+const OOPS = ['Oops, nearly!', 'Crumbs, so close!', 'Not quite, but nearly!', 'Ooh, nearly there!'];
+const CLUE = 'Here is a clue.', ANSWER_MSG = 'Here it is. Have a good look.';
+function hintText(x) {
+  const fam = (x.family || []).slice(0, 3);
+  if (fam.length) return 'Here are some words spelled in the same way: ' + fam.join(', ') + '. Have another go.';
+  if (x.say) return 'Try saying it the spelling way: ' + x.say + '. Have another go.';
+  if (x.parts && x.parts.includes('|')) return 'It has these parts: ' + x.parts.split('|').join(', ') + '. Have another go.';
+  if (x.hard) return 'The tricky part has these letters in it: ' + x.hard.split('').join(', ') + '. Have another go.';
+  return 'It starts with ' + x.w[0] + ' and has ' + x.w.length + ' letters. Have another go.';
+}
+// A kind screen with one button. Back goes back a step.
+function gentle(msg, sub, btn, spoken) {
+  return new Promise(res => {
+    h(`<div class="screen"><p class="msg">${esc(msg)}</p>${sub ? `<p class="subtle">${esc(sub)}</p>` : ''}<button id="next" class="btn big">${esc(btn || 'Try again')} ${ico('next')}</button></div>`);
+    on('#next', () => { hush(); res(); });
+    keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
+    backBtn(res);
+    say(spoken || msg);
+  });
+}
+function showAnswer(word) {
+  return new Promise(res => {
+    h(`<div class="screen"><p class="msg">${ANSWER_MSG}</p><div class="wordtile">${esc(word)}</div><button id="next" class="btn big">I've had a good look ${ico('check')}</button></div>`);
+    on('#next', () => { hush(); res(); });
+    keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
+    backBtn(res);
+    say(ANSWER_MSG + ' ' + word);
+  });
+}
+// She got it wrong. She is not given the answer straight away: she is helped to find it, step by step,
+// and always ends by writing it right (or seeing it and writing it). Returns true or BACK.
+async function hintLadder(week, x, mode) {
+  const word = x.w;
+  const tryLog = (typed, rung) => { S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed, hints: 0, ok: typed === word, rung, redo: true }); save(); };
+  if ((await gentle(OOPS[Math.floor(Math.random() * OOPS.length)], 'Have another go.')) === BACK) return BACK;
+  let a = await writeWord(word, false, null, x); if (a === BACK) return BACK; tryLog(a.typed, 1); if (a.typed === word) return true;
+  if ((await gentle(CLUE, hintText(x), 'Try again', hintText(x))) === BACK) return BACK;
+  a = await writeWord(word, false, null, x); if (a === BACK) return BACK; tryLog(a.typed, 2); if (a.typed === word) return true;
+  a = await writeWord(word, false, null, x, true); if (a === BACK) return BACK; tryLog(a.typed, 3); if (a.typed === word) return true;
+  if ((await showAnswer(word)) === BACK) return BACK;
+  a = await writeWord(word, false, null, x); if (a === BACK) return BACK; tryLog(a.typed, 4);
+  return true;
 }
 function reviseEnd(wk, firsts, sound) {
   return new Promise(res => {
@@ -1265,29 +1219,47 @@ function reviseEnd(wk, firsts, sound) {
     on('#next', res);
   });
 }
-async function revise() {
-  const wk = curWeek(), N = wk.words.length, sound = soundOn();
-  const met = w => S.log.some(l => l.wk === wk.id && l.w === w);
-  const queue = shuffle(wk.words.slice()).map(x => ({ x, look: !sound || !met(x.w), counts: true }));
-  const starred = new Set(), firsts = {};
+// Everything the spelling steps need spoken, fetched ahead so nothing waits.
+function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
-  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) texts.push(s0); if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); });
-  await prep(texts, 'Getting the words ready');
+  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(s0 + ' ... ' + x.w); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
+  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.');
+  return texts;
+}
+// Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.
+async function runWords(wk, queue, starred) {
+  const N = wk.words.length, firsts = {};
   let i = 0;
   while (i < queue.length) {
     const it = queue[i];
     if (it.counts && firsts[it.x.w]) { for (let k = queue.length - 1; k > i; k--) if (queue[k].x.w === it.x.w && !queue[k].counts) queue.splice(k, 1); }
     prog = `Word ${Math.min(i + 1, N)} of ${N}`;
     const r = await reviseWord(wk, it, storySentence(wk, it.x.w), starred);
-    if (r === BACK) { if (i === 0) return home(); i--; continue; }
-    if (it.counts) { firsts[it.x.w] = r; if (!r.good) queue.splice(Math.min(i + 3, queue.length), 0, { x: it.x, look: true, counts: false }); }
+    if (r === BACK) { if (i === 0) return null; i--; continue; }
+    if (it.counts) { firsts[it.x.w] = r; if (!r.good) queue.splice(Math.min(i + 3, queue.length), 0, { x: it.x, look: false, counts: false, mode: it.mode, context: false }); }
     i++;
   }
+  return firsts;
+}
+async function finishSitting(wk, firsts, sound, kind) {
   prog = '';
-  if (sound) { S.sittings = S.sittings || []; S.sittings.push({ t: Date.now(), d: today(), wk: wk.id, score: wk.words.filter(x => firsts[x.w] && firsts[x.w].good).length, of: N }); save(); }
+  S.due = S.due || {}; S.due[wk.id] = wk.words.filter(x => firsts[x.w] && !firsts[x.w].ok).map(x => x.w); // missed words come back next sitting
+  if (sound) { S.sittings = S.sittings || []; S.sittings.push({ t: Date.now(), d: today(), wk: wk.id, kind, score: wk.words.filter(x => firsts[x.w] && firsts[x.w].good).length, of: wk.words.length }); }
+  save();
   await reviseEnd(wk, firsts, sound);
   await ceiling();
   home();
+}
+async function revise() {
+  const wk = curWeek(), sound = soundOn();
+  const met = w => S.log.some(l => l.wk === wk.id && l.w === w);
+  const due = (S.due && S.due[wk.id]) || [];
+  const queue = shuffle(wk.words.slice()).sort((p, q) => (due.includes(q.w) ? 1 : 0) - (due.includes(p.w) ? 1 : 0)).map(x => ({ x, look: !sound || !met(x.w), counts: true, mode: 'revise' }));
+  ensureTools(wk);
+  await prep(spellTexts(wk), 'Getting the words ready');
+  const firsts = await runWords(wk, queue, new Set());
+  if (!firsts) return home();
+  await finishSitting(wk, firsts, sound, 'revision');
 }
 function ceiling() {
   return new Promise(res => {
@@ -1310,7 +1282,7 @@ function home() {
   prog = '';
   const wk = curWeek(), ep = epOf(wk);
   const stNow = S.story[wk.id];
-  const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : `Part ${stNow.part + 1} of ${ep.parts.length}`;
+  const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : 'Carry on';
   const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s story" : "My story"}</b><small>${esc(sub)}</small></div></button>`;
   h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span></div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
@@ -1409,7 +1381,7 @@ function adult() {
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>Revision sittings</h2>
-    ${(S.sittings || []).filter(x => x.wk === wk.id).length ? `<table><tr><th>Day</th><th>Right first time</th></tr>${(S.sittings || []).filter(x => x.wk === wk.id).map(x => `<tr><td>${esc(x.d)}</td><td>${x.score} out of ${x.of}</td></tr>`).join('')}</table>` : '<p class="note">None yet. The score counts a word only when she writes it right first time, without Remind me or Next letter.</p>'}
+    ${(S.sittings || []).filter(x => x.wk === wk.id).length ? `<table><tr><th>Day</th><th>Right first time</th><th>After</th></tr>${(S.sittings || []).filter(x => x.wk === wk.id).map(x => `<tr><td>${esc(x.d)}</td><td>${x.score} out of ${x.of}</td><td>${x.kind === 'story' ? 'the story' : 'revision'}</td></tr>`).join('')}</table>` : '<p class="note">None yet. The score counts a word only when she writes it right first time, without Remind me or Next letter.</p>'}
     <h2>Tools Bella has tried</h2>
     ${toolsProgress()}
     <h2>This week, word by word</h2>
@@ -1506,6 +1478,7 @@ function adult() {
       if (k === 'wrong') { const list = f.value.split(',').map(t => t.trim().toLowerCase()).filter(t => /^[a-z'-]+$/.test(t) && t !== x.w).slice(0, 6); x.wrong = list.length ? list : undefined; return; }
       if (k === 'mnem') { const t = f.value.trim(); if (t !== (x.mnem || '')) { x.mnem = t || undefined; x.mnemBy = t ? 'grown-up' : undefined; } return; }
       x[k] = bad ? x[k] : (v || undefined); });
+    wk.words.forEach((x, i) => { if (x.family) { const keep = [...document.querySelectorAll('.fam')].filter(c => +c.dataset.i === i && c.checked).map(c => c.dataset.f); x.family = keep.length ? keep : undefined; } });
     save(); adultTab = 'tools'; adultFlash = 'Saved. A box that does not match its word (for example hard letters that are not in the word) is ignored.'; adult();
   });
   on('#tsuggest', async () => {
@@ -1518,11 +1491,11 @@ function adult() {
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy', 'wrong'].forEach(k => { x[k] = old[k]; }); } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy', 'wrong', 'family', 'sug'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
-    save(); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? ' Write a new story on the Story tab.' : ''); adult();
+    save(); ensureTools(wk); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? ' Write a new story on the Story tab.' : ''); adult();
   });
   on('#read', () => {
     const ws = parseWords($('#nw').value);
@@ -1535,7 +1508,7 @@ function adult() {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
       S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: null });
-      S.cur = id; save(); adultTab = 'story'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '. Next: press "Write with all three" below to have stories written for these words.'; adult();
+      S.cur = id; save(); ensureTools(S.weeks[S.weeks.length - 1]); adultTab = 'story'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '. Next: press "Write with all three" below to have stories written for these words.'; adult();
     });
   });
 }
