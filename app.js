@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.90'; // bump with every release
+const APP_VER = '2.92'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -336,6 +336,18 @@ const PHONICS = [
   ['er', 'any', ['her', 'water', 'sister', 'letter']], ['ir', 'any', ['girl', 'first', 'third', 'bird']], ['ur', 'any', ['turn', 'hurt', 'burst', 'nurse']], ['ss', 'any', ['dress', 'glass', 'class', 'mess']],
   ['ll', 'any', ['bell', 'tall', 'small', 'hill']], ['ff', 'any', ['off', 'cliff', 'puff', 'sniff']]
 ];
+// What the pattern sounds like and how it works, in plain words, said aloud with the rule. Basic phonics.
+const PNOTE = {
+  th: 'The two letters t and h work together to make one sound, the sound at the start of this and thin.', sh: 'The two letters s and h work together to make one sound, sh.', ch: 'The two letters c and h work together to make one sound, ch.',
+  wh: 'The letters w and h together say w.', kn: 'The k is silent. The two letters say n.', wr: 'The w is silent. The two letters say r.', qu: 'Q is always followed by u, and together they say kw.',
+  ph: 'The letters p and h together say f.', ck: 'The letters c and k together say k, at the end of a word.', tion: 'The letters t i o n together say shun.', tch: 'The letters t c h together say ch.', dge: 'The letters d g e together say j.',
+  ight: 'The letters i g h t together say ite. The g and h are silent.', ough: 'The letters o u g h can be said in lots of different ways, so this one needs to be learned.',
+  ea: 'The letters e a usually say ee.', ee: 'The letters e e say ee.', oa: 'The letters o a say oh.', ai: 'The letters a i say ay. A i goes in the middle of a word. A y goes at the end.', ay: 'The letters a y say ay. A y goes at the end of a word. A i goes in the middle.',
+  oo: 'The letters o o say oo, as in moon.', ou: 'The letters o u say ow, as in house.', ow: 'The letters o w say ow, as in down.', oi: 'The letters o i say oi. O i goes in the middle. O y goes at the end.', oy: 'The letters o y say oi. O y goes at the end. O i goes in the middle.',
+  au: 'The letters a u say or.', aw: 'The letters a w say or.', ar: 'The letters a r say ar, as in car.', or: 'The letters o r say or.', er: 'E r, i r and u r all say er.', ir: 'I r, e r and u r all say er.', ur: 'U r, e r and i r all say er.',
+  ss: 'At the end of a short word, we often double the s, the l and the f.', ll: 'At the end of a short word, we often double the l, the s and the f.', ff: 'At the end of a short word, we often double the f, the l and the s.',
+  ould: 'The letters o u l d say ood.', le: 'The letters l e at the end of a word say ul.', ie: 'The letters i e can say ee, as in field, or eye, as in pie.'
+};
 const listOf = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
 function phonicsRule(w) {
   for (const [pat, where, ex] of PHONICS) {
@@ -344,18 +356,20 @@ function phonicsRule(w) {
     const family = ex.filter(e => e !== w).slice(0, 3);
     if (family.length < 2) continue;
     const place = where === 'start' ? 'It starts with ' + pat : where === 'end' ? 'It ends with ' + pat : 'It has ' + pat + ' in it';
-    return { rule: place + ', like ' + listOf(family) + '.', family };
+    const letters = pat.split('').join(' ');
+    const spoken = (where === 'start' ? 'It starts with the letters ' : where === 'end' ? 'It ends with the letters ' : 'It has the letters ') + letters + ', like ' + listOf(family) + '. ' + (PNOTE[pat] || '');
+    return { rule: place + ', like ' + listOf(family) + '.', spoken, family };
   }
-  if (/[aeiou][^aeiouwy]e$/.test(w)) { const family = ['make', 'time', 'hope', 'cube'].filter(e => e !== w).slice(0, 3); return { rule: 'It has a magic e on the end, like ' + listOf(family) + '.', family }; }
+  if (/[aeiou][^aeiouwy]e$/.test(w)) { const family = ['make', 'time', 'hope', 'cube'].filter(e => e !== w).slice(0, 3); return { rule: 'It has a magic e on the end, like ' + listOf(family) + '.', spoken: 'It has a magic e on the end, like ' + listOf(family) + '. The e is silent, but it makes the vowel say its own name.', family }; }
   return null;
 }
 // The rule and words like it for a word: from the built-in spelling patterns first, then from the AI's suggestion.
 const famOf = x => { const ph = phonicsRule(x.w); return ph || { rule: x.rule || '', family: x.family || [] }; };
 // What is said aloud for Words like it: the rule and the similar words, never the word itself.
-const familyText = x => { const f = famOf(x); return (f.rule ? f.rule : '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); };
+const familyText = x => { const f = famOf(x); return (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: L('Listen carefully.', '<button class="btn small" id="hearsay">Hear it again</button>'), say: familyText(x) }; }
+  if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling rule again</span></button>', say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
