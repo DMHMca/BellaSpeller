@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.74'; // bump with every release
+const APP_VER = '2.75'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -303,7 +303,7 @@ const HELP_Q = 'That is not quite right. Would you like some help to spell this,
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) {
   const out = [];
-  if (x.mnem) out.push('mnem'); else out.push('mymnem');
+  // A memory trick is not offered here: it only works once she knows the spelling. See memoryTrickStep.
   if (x.family && x.family.length) out.push('family');
   if (x.say) out.push('voice');
   if (x.parts && x.parts.includes('|')) out.push('parts');
@@ -1278,7 +1278,7 @@ async function reviseWord(week, it, sentence, starred) {
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
-    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null)) === BACK) continue; }
+    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null)) === BACK) continue; await memoryTrickStep(week, it.x); }
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
@@ -1336,13 +1336,24 @@ function helpChoice(x) {
       });
       if (m === BACK) continue;
       if (m === 'show') return res('show');
-      if (m === 'mymnem') {
-        const t = await typeText({ title: 'Your memory trick for this word', initial: '', max: 140 });
-        if (t && t.trim()) { x.mnem = t.trim(); x.mnemBy = 'bella'; save(); return res({ help: 'mnem' }); }
-        continue;
-      }
       return res({ help: m });
     }
+  });
+}
+// A memory trick helps hold a spelling she now knows. It is offered only when a word keeps going wrong over several sittings, and only after she has the right spelling.
+const MNEM_AFTER = 3;
+async function memoryTrickStep(week, x) {
+  const misses = S.log.filter(l => l.w === x.w && !l.redo && !l.ok).length;
+  if (misses < MNEM_AFTER) return;
+  const msg = 'This word keeps hiding. A memory trick can help you hold on to it.';
+  await new Promise(res => {
+    const body = x.mnem ? `<div class="helpline"><b>Memory trick:</b> ${esc(x.mnem)}</div>` : '';
+    h(`<div class="screen"><p class="msg">${msg}</p><div class="wordtile small">${esc(x.w)}</div>${body}
+      <div class="row">${x.mnem ? '' : '<button id="mk" class="btn">Make my own trick</button>'}<button id="next" class="btn big">${x.mnem ? 'Got it' : 'Not now'} ${ico('next')}</button></div></div>`);
+    on('#next', () => { hush(); res(); });
+    const mk = $('#mk'); if (mk) mk.onclick = async () => { const t = await typeText({ title: 'Your memory trick for ' + x.w, initial: '', max: 140 }); if (t && t.trim()) { x.mnem = t.trim(); x.mnemBy = 'bella'; save(); } res(); };
+    backBtn(res);
+    say(msg + (x.mnem ? ' ' + x.mnem : ''));
   });
 }
 async function hintLadder(week, x, mode, sentence) {
@@ -1381,7 +1392,7 @@ function reviseEnd(wk, firsts, sound) {
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
   wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); texts.push(hintText(x)); });
-  OOPS.forEach(t => texts.push(t)); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
+  OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
 // Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.
