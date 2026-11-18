@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.28'; // bump with every release
+const APP_VER = '3.29'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1136,7 +1136,9 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     // The word is finished as soon as it is spelled right; for anything else she taps the tick.
     const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && (help === 'sure' || autoSure) && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } } }; // nothing is decided until she presses the finished key (extra letters such as wente for went are common)
     const del = () => { typed = typed.slice(0, -1); draw(); };
-    const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: !!help || tl.some(id => REVEALS.includes(id)) }); } };
+    const finish = () => {
+      if (typed && !done && wobj && (help === 'sure' || autoSure) && typed !== word && !sureShown) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); return; } // she can change it, or press the finished key again to keep it
+      if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: !!help || tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
       let i = 0;
       while (i < typed.length && i < word.length && typed[i] === word[i]) i++;
@@ -1839,20 +1841,21 @@ async function memoryTrickStep(week, x) {
 async function hintLadder(week, x, mode, sentence, usedFamily) {
   const word = x.w;
   const tryLog = (a, help, n) => { noteTyped(word, a.typed); S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
-  let n = 0;
+  let n = 0, sureOn = false;
   for (;;) {
     // After a wrong go she chooses: another go on her own, or help (the spelling rule, or Are you sure?).
     const c = n >= 3 ? 'show' : await helpChoice(x);
     if (c === BACK) return BACK;
     if (c === 'show') {
       if ((await showAnswer(word)) === BACK) { n = 0; continue; } // last resort: she sees the word, then writes it from memory
-      const a = await writeWord(word, false, null, x, false, sentence); if (a === BACK) continue; tryLog(a, null, ++n);
+      const a = await writeWord(word, false, null, x, false, sentence, null, false, sureOn); if (a === BACK) continue; tryLog(a, null, ++n);
       return true;
     }
     const help = c === 'again' ? null : c.help;
     if (help === 'family') usedFamily = true;
+    if (help === 'sure') sureOn = true;
     if (help === 'trace') { const t = await traceFlow(word); if (t === BACK) continue; }
-    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help);
+    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help, false, sureOn);
     if (a === BACK) continue;
     tryLog(a, help, ++n);
     if (a.typed === word) return true;
