@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.01'; // bump with every release
+const APP_VER = '3.02'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -581,6 +581,7 @@ function wireHandwriting() {
   ink.onpointerdown = e => {
     if (e.pointerType === 'pen') penSeen = Date.now();
     else if (e.pointerType === 'touch' && Date.now() - penSeen < 4000) return; // a palm resting while the pen is in use
+    if (e.pointerType === 'touch' && (cur || e.width > 45 || e.height > 45)) return; // for a plain stylus or a finger: ignore a second contact, and any big contact, which is a palm
     try { ink.setPointerCapture(e.pointerId); } catch (x) { }
     const [x, y] = pos(e); cur = { id: e.pointerId, pts: [{ x, y, t: Date.now() }] }; strokes.push(cur);
     ix.fillStyle = '#111'; ix.beginPath(); ix.arc(x, y, 2.5, 0, 7); ix.fill();
