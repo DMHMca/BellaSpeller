@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.76'; // bump with every release
+const APP_VER = '3.77'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2049,25 +2049,14 @@ function trickScreen(x) {
   });
 }
 // She ticks the tricky words she wants a memory trick for, or ticks them all with the master tick. Returns the chosen words, or null for Back.
-// Each word of the week with its spelling trick: the one written for the word, or else the phonics rule that fits it.
+// Each word of the week with its spelling trick, if it has one.
 function trickText(x) {
-  if (x.mnem) return x.mnem;
-  const f = phonicsRule(x.w);
-  if (f && f.rule) return f.rule + (f.family && f.family.length ? '' : '');
-  if (x.hard) return 'The tricky letters are ' + [...x.hard].join(', ') + '.';
-  return '';
-}
-// Only the words she has made a mnemonic for.
-function mineScreen(all) {
-  return new Promise(res => {
-    h(`<div class="screen mnscreen"><p class="msg">Your mnemonics</p>${mnDoneHtml(all.filter(x => x.mnemonic).map(x => ({ w: x.w, sentence: x.mnemonic })))}<div class="row"><button id="mndone" class="btn big">Done ${ico('check')}</button></div></div>`);
-    on('#mndone', () => res()); backBtn(() => res());
-  });
+  return x.mnem || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
 }
 function tricksScreen(all) {
   return new Promise(res => {
     h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tricks</p>
-      <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt">${esc(trickText(x) || 'No spelling trick yet.')}</span>`).join('')}</div></div>`);
+      <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt${trickText(x) ? '' : ' none'}">${esc(trickText(x) || 'No spelling trick yet.')}</span>`).join('')}</div></div>`);
     backBtn(() => res());
   });
 }
