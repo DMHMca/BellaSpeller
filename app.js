@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.66'; // bump with every release
+const APP_VER = '3.67'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1930,21 +1930,58 @@ const trickyWords = wk => {
   return wk.words.filter(x => miss[x.w]).sort((a, b) => miss[b.w] - miss[a.w]);
 };
 // ---------- Memory tricks: each letter of the word points to a silly word that starts with it ----------
-const MN_ADJ = { a: 'awesome', b: 'bouncy', c: 'cheeky', d: 'dizzy', e: 'enormous', f: 'fluffy', g: 'giggly', h: 'hairy', i: 'icky', j: 'jolly', k: 'kooky', l: 'lumpy', m: 'mighty', n: 'naughty', o: 'odd', p: 'purple', q: 'quirky', r: 'rubbery', s: 'silly', t: 'tickly', u: 'ugly', v: 'velvet', w: 'wobbly', x: 'xtra-spotty', y: 'yellow', z: 'zany' };
-const MN_NOUN = { a: 'aliens', b: 'bananas', c: 'crocodiles', d: 'dragons', e: 'elephants', f: 'frogs', g: 'goats', h: 'hippos', i: 'iguanas', j: 'jellyfish', k: 'kangaroos', l: 'llamas', m: 'monkeys', n: 'noodles', o: 'octopuses', p: 'penguins', q: 'queens', r: 'rabbits', s: 'sausages', t: 'trolls', u: 'unicorns', v: 'vultures', w: 'walruses', x: 'xylophones', y: 'yaks', z: 'zebras' };
-const MN_VERB = { a: 'annoy', b: 'bounce on', c: 'chase', d: 'dance with', e: 'eat', f: 'flip', g: 'giggle at', h: 'hug', i: 'itch', j: 'juggle', k: 'kick', l: 'leap over', m: 'munch', n: 'nibble', o: 'order', p: 'poke', q: 'quack at', r: 'race', s: 'sneeze on', t: 'tickle', u: 'unwrap', v: 'vanish with', w: 'wiggle at', x: 'x-ray', y: 'yell at', z: 'zoom past' };
-const MN_SETS = [[MN_ADJ, MN_NOUN, MN_VERB], [MN_NOUN, MN_VERB, MN_ADJ], [MN_VERB, MN_ADJ, MN_NOUN]];
-// A built-in silly set of words, one for each letter. The variant picks which kind of word each position gets, so "Another one" gives something different.
-function mnemonicWords(w, variant) {
-  return [...w].map((c, i) => { const set = MN_SETS[(variant + i) % 3]; return (set[0][c] || c); });
+// Silly words for each letter, in four kinds, so a sentence can be built that makes sense: adjectives, plural nouns, verbs that take an object, and adverbs.
+const MN_BANK = {
+  a: ['awesome,angry', 'aliens,ants', 'annoy,adore', 'amazingly,angrily'],
+  b: ['bouncy,bossy', 'bananas,bears', 'bounce on,bump', 'boldly,bravely'],
+  c: ['cheeky,crunchy', 'crocodiles,cows', 'chase,chew', 'carefully,cleverly'],
+  d: ['dizzy,daft', 'dragons,ducks', 'dance with,drag', 'daringly,dizzily'],
+  e: ['enormous,excited', 'elephants,eagles', 'eat,excite', 'eagerly,endlessly'],
+  f: ['fluffy,funny', 'frogs,foxes', 'flip,follow', 'fast,fearlessly'],
+  g: ['giggly,grumpy', 'goats,gorillas', 'giggle at,grab', 'gently,gladly'],
+  h: ['hairy,hungry', 'hippos,hens', 'hug,hide from', 'happily,hungrily'],
+  i: ['icky,itchy', 'iguanas,insects', 'inspect,invite', 'instantly,immediately'],
+  j: ['jolly,jumpy', 'jellyfish,jaguars', 'juggle,jump on', 'joyfully,jauntily'],
+  k: ['kooky,kind', 'kangaroos,koalas', 'kick,kiss', 'keenly,kindly'],
+  l: ['lumpy,lazy', 'llamas,lions', 'leap over,lick', 'loudly,lazily'],
+  m: ['mighty,messy', 'monkeys,mice', 'munch,mimic', 'madly,merrily'],
+  n: ['naughty,nosy', 'noodles,newts', 'nibble,nudge', 'noisily,nervously'],
+  o: ['odd,orange', 'octopuses,owls', 'order,overtake', 'oddly,openly'],
+  p: ['purple,polite', 'penguins,pigs', 'poke,pinch', 'politely,proudly'],
+  q: ['quirky,quiet', 'queens,quails', 'quack at,question', 'quickly,quietly'],
+  r: ['rubbery,rowdy', 'rabbits,robots', 'race,rescue', 'rapidly,rowdily'],
+  s: ['silly,sleepy', 'sausages,snakes', 'sneeze on,squash', 'slowly,sleepily'],
+  t: ['tickly,tiny', 'trolls,tigers', 'tickle,tease', 'tenderly,tirelessly'],
+  u: ['ugly,upset', 'unicorns,umpires', 'unwrap,undo', 'urgently,upside-down'],
+  v: ['velvet,vain', 'vultures,vans', 'visit,vex', 'vaguely,vigorously'],
+  w: ['wobbly,wild', 'walruses,wizards', 'wiggle at,watch', 'wildly,wisely'],
+  x: ['xtra-spotty,xtra-big', 'xylophones,x-rays', 'x-ray,x-change', 'xtra-loudly,xtra-slowly'],
+  y: ['yellow,yappy', 'yaks,yetis', 'yell at,yank', 'yummily,yearningly'],
+  z: ['zany,zippy', 'zebras,zombies', 'zoom past,zap', 'zanily,zealously']
+};
+const MN_ROLES = ['adj', 'noun', 'verb', 'adv'];
+const mnOptions = (c, role) => ((MN_BANK[c] || [])[MN_ROLES.indexOf(role)] || '').split(',').filter(Boolean);
+// What kind of word each position is, so the whole thing reads as a sentence: adjectives, a noun, a verb, adjectives, a noun, and an adverb on the end.
+function mnSkeleton(n) {
+  if (n <= 1) return ['noun'];
+  if (n === 2) return ['noun', 'verb'];
+  const extras = n - 3, adv = extras >= 3 ? 1 : 0, adj = extras - adv, aS = Math.ceil(adj / 2), aO = adj - aS;
+  return [].concat(Array(aS).fill('adj'), ['noun', 'verb'], Array(aO).fill('adj'), ['noun'], adv ? ['adv'] : []);
 }
+// A silly sentence with one word for each letter. The variant picks between the two choices for each letter, so "Another one" gives something different.
+function mnemonicWords(w, variant) {
+  const roles = mnSkeleton(w.length);
+  return [...w].map((c, i) => { const o = mnOptions(c, roles[i]); return o.length ? o[((variant >> (i % 3)) + i) % o.length] : c; });
+}
+// Which kind of word is this, for this letter? Used when she taps a word to change it.
+const mnRoleOf = (c, word) => MN_ROLES.find(r => mnOptions(c, r).includes(word));
 const mnCap = t => t.charAt(0).toUpperCase() + t.slice(1);
 // Asks the AI for something funnier, if this device has the key. Each word must start with the right letter, in order.
 async function aiMnemonic(w, notThese) {
   if (!aiKey()) throw new Error('no key');
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
-  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 200, temperature: 1, messages: [{ role: 'user', content: 'Make a silly, funny memory trick for a nine-year-old in England to spell the word "' + w + '". Give one short word for each letter, in order, starting with that exact letter, so the words read as one funny sentence (' + w.length + ' words). Kind and harmless, nothing rude or scary. British English. ' + (notThese ? 'Not this one: ' + notThese + '. ' : '') + 'Reply with JSON only: {"words": [' + [...w].map(c => '"' + c + '..."').join(', ') + ']}' }] }) });
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 200, temperature: 1, messages: [{ role: 'user', content: 'Make a silly, funny memory trick for a nine-year-old in England to spell the word "' + w + '". Give one short word for each letter, in order, starting with that exact letter, so the words read as one funny sentence that makes proper grammatical sense from the first word to the last, for example an adjective, a noun, a verb, an adjective, a noun, then an adverb (' + w.length + ' words). Kind and harmless, nothing rude or scary. British English. ' + (notThese ? 'Not this one: ' + notThese + '. ' : '') + 'Reply with JSON only: {"words": [' + [...w].map(c => '"' + c + '..."').join(', ') + ']}' }] }) });
   if (!r.ok) throw aiFail(r.status);
   const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
   const a = t.indexOf('{'), b = t.lastIndexOf('}'); if (a < 0 || b <= a) throw new Error('bad');
@@ -1972,7 +2009,7 @@ function mnemonicScreen(x, made) {
       on('#mnhear', () => say(w + '. ' + sentence()));
       on('#mnok', () => { gone = true; clearTimeout(timer); hush(); x.mnemWords = words ? words.slice() : undefined; x.mnem = sentence(); x.mnemBy = 'bella'; save(); res(); });
       on('#mnanother', another);
-      document.querySelectorAll('.mnword').forEach(b => { b.onclick = () => { if (!words || +b.dataset.i >= shown) return; const i = +b.dataset.i, c = w[i], opts = [MN_ADJ[c], MN_NOUN[c], MN_VERB[c]].filter(Boolean), at = opts.indexOf(words[i]); words[i] = opts[(at + 1) % opts.length]; draw(); }; });
+      document.querySelectorAll('.mnword').forEach(b => { b.onclick = () => { if (!words || +b.dataset.i >= shown) return; const i = +b.dataset.i, c = w[i], role = mnRoleOf(c, words[i]) || mnSkeleton(n)[i], opts = mnOptions(c, role), at = opts.indexOf(words[i]); if (opts.length > 1) { words[i] = opts[(at + 1) % opts.length]; draw(); } }; });
       backBtn(() => { gone = true; clearTimeout(timer); hush(); res(BACK); });
     };
     const reveal = () => { if (gone) return; if (shown < n) { shown++; draw(); timer = setTimeout(reveal, 650); } else { say(w + '. ' + sentence()); } };
