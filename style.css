@@ -492,3 +492,8 @@ body.inkmode .writescreen .slots { display: none; }
   .shelfside .optrow { flex-direction: column; align-items: stretch; gap: 8px; }
   .shelfside .optchip { font-size: 17px; padding: 10px 12px; border-radius: 16px; text-align: left; }
 }
+
+/* what the app read from her writing: big and clear */
+.readback { display: flex; align-items: baseline; justify-content: center; gap: 14px; font-size: 26px; margin: 2px 0 6px; }
+.readback .readword { font-size: clamp(52px, 11vh, 84px); line-height: 1.05; letter-spacing: .06em; background: var(--paper, #fdf8ec); color: var(--ink, #2a2154); padding: 2px 26px 6px; border-radius: 18px; border-bottom: 6px solid var(--amber, #ffc83d); }
+.wread .row { justify-content: center; }

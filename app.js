@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.48'; // bump with every release
+const APP_VER = '3.49'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1216,7 +1216,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
-      W = Math.min(wrap.parentNode.clientWidth || 700, 1100); H = Math.max(190, Math.min(360, Math.round(innerHeight * 0.3)));
+      W = Math.min(wrap.parentNode.clientWidth || 700, 1100); H = Math.max(135, Math.min(250, Math.round(innerHeight * 0.21)));
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       paintGuide = () => {
@@ -1276,7 +1276,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       catch (e) { $('#wread').textContent = e.message || 'I could not read that.'; return; }
       if (!text) { $('#wread').textContent = 'I could not read that. Please write it again.'; return; }
       typed = text.slice(0, Math.min(24, word.length + 3)); draw();
-      $('#wread').innerHTML = '<div class="readback">I read: <b>' + esc(typed) + '</b></div><div class="row"><button id="wyes" class="btn">Yes, that is what I wrote</button><button id="wagain" class="btn small">Write it again</button></div>';
+      $('#wread').innerHTML = '<div class="readback"><span>I read:</span> <b class="readword">' + esc(typed) + '</b></div><div class="row"><button id="wyes" class="btn">Yes, that is what I wrote</button><button id="wagain" class="btn small">Write it again</button></div>';
       const r0 = wrow(); if (r0) r0.style.display = 'none'; // the read-back has its own buttons
       on('#wyes', () => finish()); on('#wagain', () => { clearInk(); typed = ''; draw(); });
     });
