@@ -566,3 +566,8 @@ body.onmn #app { max-width: 1100px; }
 .pkmaster { max-width: 360px; background: var(--amber, #ffc83d); font-size: 24px; }
 .pkmaster.on { background: var(--amber, #ffc83d); }
 #pkgo:disabled { opacity: .4; }
+
+.pkgrid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.pktext { display: flex; flex-direction: column; min-width: 0; }
+.pktext b { font-size: 26px; letter-spacing: .04em; }
+.pktext small { font-size: 16px; font-weight: 400; letter-spacing: 0; color: #a02a76; line-height: 1.25; }

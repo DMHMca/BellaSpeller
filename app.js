@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.67'; // bump with every release
+const APP_VER = '3.70'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2049,9 +2049,9 @@ function pickTricky(all) {
     const on0 = new Set(); // nothing is ticked at first
     const draw = () => {
       const allOn = on0.size === all.length;
-      h(`<div class="screen picktrick"><p class="msg">Which words would you like a mnemonic for?</p>
+      h(`<div class="screen picktrick"><p class="msg">Which words would you like a mnemonic for?</p>${all.some(x => x.mnem) ? '<p class="subtle">Your saved mnemonics are shown under the words. Tick a word to look at it again or change it.</p>' : ''}
         <button id="pkall" class="pkrow pkmaster${allOn ? ' on' : ''}"><span class="pkbox">${allOn ? '&#10003;' : ''}</span><span>All of them</span></button>
-        <div class="pkgrid">${all.map(x => `<button class="pkrow${on0.has(x.w) ? ' on' : ''}" data-w="${esc(x.w)}"><span class="pkbox">${on0.has(x.w) ? '&#10003;' : ''}</span><span>${esc(x.w)}</span></button>`).join('')}</div>
+        <div class="pkgrid">${all.map(x => `<button class="pkrow${on0.has(x.w) ? ' on' : ''}" data-w="${esc(x.w)}"><span class="pkbox">${on0.has(x.w) ? '&#10003;' : ''}</span><span class="pktext"><b>${esc(x.w)}</b>${x.mnem ? `<small>${esc(x.mnem)}</small>` : ''}</span></button>`).join('')}</div>
         <button id="pkgo" class="btn big"${on0.size ? '' : ' disabled'}>Make my mnemonics ${ico('next')}</button></div>`);
       on('#pkall', () => { if (on0.size === all.length) on0.clear(); else all.forEach(x => on0.add(x.w)); draw(); });
       document.querySelectorAll('.pkgrid .pkrow').forEach(b => { b.onclick = () => { const w = b.dataset.w; if (on0.has(w)) on0.delete(w); else on0.add(w); draw(); }; });
@@ -2065,12 +2065,7 @@ async function remember() {
   const wk = curWeek(), all = wk.words.slice();
   const list = await pickTricky(all); // she chooses which of the week's words she wants a mnemonic for
   if (!list) return home();
-  // For each tricky word: build a silly memory trick (each letter points to a silly word), then spell the word from memory with the usual helps. The word is never shown after the trick.
-  const sub = Object.assign({}, wk, { words: list });
-  ensureTools(wk);
-  await prep(spellTexts(sub), 'Getting your tricky words ready');
-  await loadPics(wk);
-  // First a memory trick for every tricky word, one after another, each one added underneath the last. Then, if she wants, she tests herself.
+  // A mnemonic for each word she ticked, one after another, each one added underneath the last. They are saved with the word.
   const made = [];
   { let i = 0;
     while (i < list.length) {
@@ -2081,28 +2076,10 @@ async function remember() {
     }
   }
   prog = '';
-  const test = await new Promise(res => {
-    h(`<div class="screen mnscreen"><p class="msg">Your mnemonics</p>${mnDoneHtml(made)}<div class="row"><button id="mntest" class="btn big">Test myself ${ico('next')}</button><button id="mnfin" class="btn">Finished</button></div></div>`);
-    on('#mntest', () => res(true)); on('#mnfin', () => res(false)); backBtn(() => res(BACK));
+  await new Promise(res => {
+    h(`<div class="screen mnscreen"><p class="msg">Your mnemonics</p>${mnDoneHtml(made)}<div class="row"><button id="mnfin" class="btn big">Done ${ico('check')}</button></div></div>`);
+    on('#mnfin', () => res()); backBtn(() => res());
   });
-  if (test === BACK) return remember();
-  if (!test) return home();
-  const firsts = {}, starred = new Set();
-  testMode = true;
-  try {
-    let i = 0;
-    while (i < list.length) {
-      const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
-      const r = await reviseWord(sub, { x, look: false, counts: true, mode: 'revise', context: true }, storySentence(sub, x.w), starred);
-      if (r === BACK) { if (i === 0) return home(); i--; continue; }
-      firsts[x.w] = r; i++;
-    }
-  } finally { testMode = false; }
-  prog = '';
-  const oldDue = (S.due && S.due[wk.id]) || [];
-  S.due = S.due || {}; S.due[wk.id] = oldDue.filter(w => !list.some(x => x.w === w)).concat(list.filter(x => firsts[x.w] && !firsts[x.w].ok).map(x => x.w)); save();
-  await reviseEnd(sub, firsts, true);
-  await ceiling();
   home();
 }
 const MNEM_AFTER = 3;
@@ -2503,7 +2480,7 @@ function adult() {
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemWords', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
