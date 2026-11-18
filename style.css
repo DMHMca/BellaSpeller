@@ -455,3 +455,12 @@ body:has(#wpanel:not([style*="none"])) .gapw, body:has(#wpanel:not([style*="none
 .wwrap canvas { border-radius: 0; }
 
 #vlabel { position: fixed; left: 12px; bottom: 28px; z-index: 90; background: rgba(0,0,0,.35); border: 0; border-radius: 10px; color: #fff; opacity: .9; font: inherit; font-size: 20px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
+
+/* writing mode: everything higher up, so the buttons stay on the screen */
+body:has(#wpanel:not([style*="none"])) #app { padding-top: 40px; padding-bottom: 12px; }
+body:has(#wpanel:not([style*="none"])) .writescreen { gap: 6px; padding-top: 0; }
+body:has(#wpanel:not([style*="none"])) .top { min-height: 44px; margin-bottom: 0; }
+.wpanel { gap: 6px; }
+.wread { min-height: 0; }
+.readback { font-size: 22px; margin-bottom: 4px; }
+body:has(#wpanel:not([style*="none"])) .writescreen .slots { display: none; }

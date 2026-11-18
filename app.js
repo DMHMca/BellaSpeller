@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.40'; // bump with every release
+const APP_VER = '3.41'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1161,7 +1161,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
       <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="modesw" class="btn small"></button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
-      <div id="wpanel" class="wpanel" style="display:none"><div id="wwrap" class="wwrap"><canvas id="wguide"></canvas><canvas id="wink"></canvas></div><div id="wread" class="wread"></div>
+      <div id="wpanel" class="wpanel" style="display:none"><div id="wread" class="wread"></div><div id="wwrap" class="wwrap"><canvas id="wguide"></canvas><canvas id="wink"></canvas></div>
         <div class="row"><button id="wclear" class="btn small">Clear</button><button id="wlines" class="btn small">Letter lines</button><button id="wdone" class="btn">Done ${ico('check')}</button></div></div>
       ${kbHtml()}</div>`);
     const draw = () => {
@@ -1215,12 +1215,12 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
-      W = Math.min(wrap.parentNode.clientWidth || 700, 1100); H = Math.max(190, Math.min(360, Math.round(innerHeight * 0.34)));
+      W = Math.min(wrap.parentNode.clientWidth || 700, 1100); H = Math.max(190, Math.min(360, Math.round(innerHeight * 0.3)));
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       paintGuide = () => {
-        const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.strokeStyle = '#c9c3e6'; gx.lineWidth = 2; gx.setLineDash([]); gx.beginPath(); gx.moveTo(14, H * 0.72); gx.lineTo(W - 14, H * 0.72); gx.stroke();
-        if (S.hwLines !== false) { gx.strokeStyle = '#ddd8f0'; gx.setLineDash([3, 9]); const n = Math.max(2, word.length); for (let i = 1; i < n; i++) { const x = W * i / n; gx.beginPath(); gx.moveTo(x, 12); gx.lineTo(x, H - 12); gx.stroke(); } gx.setLineDash([]); }
+        const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.lineWidth = 2;
+        if (S.hwLines !== false) { gx.strokeStyle = '#ddd8f0'; gx.setLineDash([3, 9]); const n = Math.max(2, word.length), x0 = W / 3, wd = W / 3; for (let i = 0; i <= n; i++) { const x = x0 + wd * i / n; gx.beginPath(); gx.moveTo(x, 12); gx.lineTo(x, H - 12); gx.stroke(); } gx.setLineDash([]); }
       }; paintGuide();
       ix = ink.getContext('2d', { willReadFrequently: true }); ink.style.touchAction = 'none';
       const pos = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
