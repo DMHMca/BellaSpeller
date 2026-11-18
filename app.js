@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.78'; // bump with every release
+const APP_VER = '3.79'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,7 +28,11 @@ function migrateWords(s) {
 }
 // Mnemonics made before they had their own field were saved over the word's spelling trick. Move them across once.
 function migrateMnem(s) {
-  (s.weeks || []).forEach(wk => (wk.words || []).forEach(x => { if (x.mnemWords && x.mnemBy === 'bella' && x.mnem) { x.mnemonic = x.mnem; delete x.mnem; delete x.mnemBy; } }));
+  // A mnemonic is a sentence whose capitalised words start with the letters of the word, in order ("Big Elephants Can Always Understand Small Elephants" for because).
+  const isMnemonic = (w, t) => t && /^[A-Z]/.test(t) && !/[:;]/.test(t) && t.split(/\s+/).filter(z => /^[A-Z]/.test(z)).map(z => z[0].toLowerCase()).join('') === w;
+  (s.weeks || []).forEach(wk => (wk.words || []).forEach(x => {
+    if (x.mnem && (isMnemonic(x.w, x.mnem) || (x.mnemWords && x.mnemBy === 'bella'))) { if (!x.mnemonic) x.mnemonic = x.mnem; delete x.mnem; delete x.mnemBy; }
+  }));
   return s;
 }
 function fresh() {
@@ -2050,8 +2054,20 @@ function trickScreen(x) {
 }
 // She ticks the tricky words she wants a memory trick for, or ticks them all with the master tick. Returns the chosen words, or null for Back.
 // Each word of the week with its spelling trick, if it has one.
+const TIP_TABLE = {
+  many: 'Many is said "menny", but it is spelt with an a: m-a-n-y.',
+  enough: 'Enough ends with ough, which says "uff" here: e-n-ough.',
+  friend: 'Friend has ie in it: fr-ie-nd. A friend is there to the end.',
+  because: 'Because is be and cause joined together: be-cause.',
+  answer: 'Answer has a silent w after the s: ans-w-er.',
+  colour: 'Colour has a u before the r: colo-u-r.',
+  great: 'Great has ea, which says "ay" here: gr-ea-t.',
+  decide: 'The c says s in decide: de-c-ide.',
+  used: 'Used is use with a d on the end: u-s-e-d.',
+  special: 'Special has ci in the middle: spe-ci-al.'
+};
 function trickText(x) {
-  return x.mnem || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
+  return x.mnem || TIP_TABLE[x.w] || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
 }
 function tricksScreen(all) {
   return new Promise(res => {
