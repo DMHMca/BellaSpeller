@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.50'; // bump with every release
+const APP_VER = '3.51'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -318,8 +318,8 @@ function toolContent(x, stage) {
 const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + ', ' + word + '.';
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
-function helpsFor(x) { return ['family', 'sure', 'choice']; } // the three main helps, in this order; none shows the word
-const HELP_LABEL = { family: 'The spelling rule', sure: "I will tell you if a letter doesn't look right", voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Multiple choice' };
+function helpsFor(x) { return ['family', 'hint', 'sure', 'choice']; } // the main helps, in this order; none shows the word
+const HELP_LABEL = { family: 'The spelling rule', hint: 'A hint', sure: "I will tell you if a letter doesn't look right", voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Multiple choice' };
 // Empty boxes, one per letter, so she can see how long the word is and where the tricky bit is, without seeing any letters.
 function boxesHtml(x, marks, groups) {
   const w = x.w, hi = x.hard ? w.indexOf(x.hard) : -1; let i = 0, out = '';
@@ -420,9 +420,19 @@ function phonicsRule(w, typed) {
 const famOf = x => { const ph = phonicsRule(x.w, lastTyped.get(x.w)); return ph || { rule: x.rule || '', family: x.family || [] }; };
 // What is said aloud for Words like it: the rule and the similar words, never the word itself.
 const wordAgain = x => ' Now spell the word: ' + x.w + '.'; // every spoken help ends by saying the word again
+// A hint is not a spelling rule: it is about what she wrote (how many letters, which one to look at), or, before she has tried, how many letters and the first one.
+function hintFor(x) {
+  const w = x.w, typed = lastTyped.get(w), err = errorSpan(w, typed);
+  if (!typed || !err) return 'The word has ' + w.length + ' letters and it starts with ' + w[0] + '.';
+  const nth = ORD[err[0]] || ('number ' + (err[0] + 1));
+  if (typed.length > w.length) return 'The word has ' + w.length + ' letters, and you wrote ' + typed.length + '. There is one letter too many.';
+  if (typed.length < w.length) return 'The word has ' + w.length + ' letters, and you wrote ' + typed.length + '. A letter is missing.';
+  return 'The word has ' + w.length + ' letters. Look again at the ' + nth + ' letter.';
+}
 const familyText = x => { const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return (body || 'Listen carefully, and say it slowly, sound by sound.') + wordAgain(x); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
+  if (id === 'hint') { const t = hintFor(x); return { html: '<div class="helpline"><b>A hint:</b> ' + esc(t) + '</div><button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the hint again</span></button>', say: t + wordAgain(x) }; }
   if (id === 'family') { const f = famOf(x); return { html: '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling rule again</span></button>', say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say + '.' + wordAgain(x) };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
