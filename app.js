@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.79'; // bump with every release
+const APP_VER = '3.80'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2069,11 +2069,37 @@ const TIP_TABLE = {
 function trickText(x) {
   return x.mnem || TIP_TABLE[x.w] || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
 }
+// Asks the AI for one short, accurate spelling tip for each word that has none. Needs this device to have the key.
+async function aiTips(words) {
+  aiNeedKey();
+  const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+  if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Reply with JSON only, like {"word": "tip"}.' }] }) });
+  if (!r.ok) throw aiFail(r.status);
+  const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
+  const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}'); if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a list of tips.');
+  const o = JSON.parse(t.slice(i0, i1 + 1)), out = {};
+  words.forEach(w => { const v = String(o[w] || '').trim(); if (v && v.length <= 140) out[w] = v; });
+  return out;
+}
 function tricksScreen(all) {
   return new Promise(res => {
-    h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tips</p>
-      <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt${trickText(x) ? '' : ' none'}">${esc(trickText(x) || 'No spelling tip yet.')}</span>`).join('')}</div></div>`);
-    backBtn(() => res());
+    const draw = (note) => {
+      const missing = all.filter(x => !trickText(x));
+      h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tips</p>
+        <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt${trickText(x) ? '' : ' none'}">${esc(trickText(x) || 'No spelling tip yet.')}</span>`).join('')}</div>
+        ${missing.length ? '<div class="row"><button id="trfind" class="btn small">Look up the missing spelling tips</button></div>' : ''}${note ? `<p class="subtle">${esc(note)}</p>` : ''}</div>`);
+      on('#trfind', async () => {
+        const b = $('#trfind'); if (b) { b.disabled = true; b.textContent = 'Looking them up...'; }
+        try {
+          const tips = await aiTips(missing.map(x => x.w));
+          missing.forEach(x => { if (tips[x.w]) { x.mnem = tips[x.w]; x.mnemBy = 'ai'; } }); save();
+          draw(Object.keys(tips).length ? 'The AI suggested these. A grown-up can change any of them under Grown-ups.' : 'No tips came back. Try again in a moment.');
+        } catch (e) { draw(e.message || 'Could not look them up.'); }
+      });
+      backBtn(() => res());
+    };
+    draw();
   });
 }
 function pickTricky(all) {
