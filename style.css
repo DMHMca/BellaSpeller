@@ -520,3 +520,18 @@ body.inkmode .wwrap { margin: 0 auto; }
 /* logo in the top left corner of the home screen: it does not push anything down */
 .logocorner { position: absolute; left: 16px; top: 6px; width: clamp(150px, 20vw, 250px); z-index: 3; pointer-events: none; }
 .logocorner .logo { width: 100%; max-height: none; display: block; }
+
+/* memory trick screen: the word along the top, an arrow from each letter to a silly word */
+.mnscreen { gap: 10px; }
+.mngrid { width: 100%; display: grid; gap: 6px; align-items: start; }
+.mncol { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.mnletter { width: 100%; max-width: 84px; text-align: center; background: var(--paper, #fdf8ec); color: var(--ink, #2a2154); font-size: clamp(34px, 7vh, 62px); font-weight: 700; line-height: 1.1; padding: 2px 0 6px; border-radius: 14px; border-bottom: 5px solid var(--amber, #ffc83d); }
+.mnarr { height: clamp(26px, 5vh, 44px); color: #ffb3d9; opacity: 0; transform: translateY(-8px); transition: opacity .35s, transform .35s; }
+.mnarr.on { opacity: 1; transform: none; }
+.mnarrow { height: 100%; width: auto; }
+.mnword { width: 100%; min-height: clamp(40px, 7vh, 58px); border: 0; border-radius: 14px; background: linear-gradient(150deg, #ff7bbf, #c93c93); color: #fff; font: inherit; font-weight: 700; font-size: clamp(13px, 1.8vw, 22px); line-height: 1.15; padding: 6px 4px; overflow-wrap: break-word; hyphens: none; opacity: 0; transform: scale(.7) rotate(-4deg); transition: opacity .35s, transform .35s; cursor: pointer; }
+.mnword.on { opacity: 1; transform: rotate(-1.5deg); }
+.mncol:nth-child(even) .mnword.on { transform: rotate(1.5deg); background: linear-gradient(150deg, #ffbd3d, #e0801a); }
+.mntrick { min-height: 1.4em; font-size: clamp(24px, 3.8vw, 34px); font-weight: 700; color: #ffd1ea; text-align: center; line-height: 1.25; max-width: 900px; }
+
+body.onmn #app { max-width: 1100px; }

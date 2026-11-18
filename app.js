@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.57'; // bump with every release
+const APP_VER = '3.59'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -980,7 +980,7 @@ function h(html, opts) {
   keyHandler = null;
   const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div>${testMode ? '' : sndBtn}<span class="prog">${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
-  { const cl = document.body.classList; cl.toggle('onshelf', html.includes('shelfscreen')); cl.toggle('onwrite', html.includes('writescreen')); cl.remove('inkmode'); }
+  { const cl = document.body.classList; cl.toggle('onshelf', html.includes('shelfscreen')); cl.toggle('onwrite', html.includes('writescreen')); cl.toggle('onmn', html.includes('mnscreen')); cl.remove('inkmode'); }
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
   const ts = $('#topSnd'); if (ts) { ts.onclick = toggleSound; paintSound(); }
   window.scrollTo(0, 0);
@@ -1919,6 +1919,70 @@ const trickyWords = wk => {
   ((S.due && S.due[wk.id]) || []).forEach(w => { miss[w] = (miss[w] || 0) + 1; });
   return wk.words.filter(x => miss[x.w]).sort((a, b) => miss[b.w] - miss[a.w]);
 };
+// ---------- Memory tricks: each letter of the word points to a silly word that starts with it ----------
+const MN_ADJ = { a: 'awesome', b: 'bouncy', c: 'cheeky', d: 'dizzy', e: 'enormous', f: 'fluffy', g: 'giggly', h: 'hairy', i: 'icky', j: 'jolly', k: 'kooky', l: 'lumpy', m: 'mighty', n: 'naughty', o: 'odd', p: 'purple', q: 'quirky', r: 'rubbery', s: 'silly', t: 'tickly', u: 'ugly', v: 'velvet', w: 'wobbly', x: 'xtra-spotty', y: 'yellow', z: 'zany' };
+const MN_NOUN = { a: 'aliens', b: 'bananas', c: 'crocodiles', d: 'dragons', e: 'elephants', f: 'frogs', g: 'goats', h: 'hippos', i: 'iguanas', j: 'jellyfish', k: 'kangaroos', l: 'llamas', m: 'monkeys', n: 'noodles', o: 'octopuses', p: 'penguins', q: 'queens', r: 'rabbits', s: 'sausages', t: 'trolls', u: 'unicorns', v: 'vultures', w: 'walruses', x: 'xylophones', y: 'yaks', z: 'zebras' };
+const MN_VERB = { a: 'annoy', b: 'bounce on', c: 'chase', d: 'dance with', e: 'eat', f: 'flip', g: 'giggle at', h: 'hug', i: 'itch', j: 'juggle', k: 'kick', l: 'leap over', m: 'munch', n: 'nibble', o: 'order', p: 'poke', q: 'quack at', r: 'race', s: 'sneeze on', t: 'tickle', u: 'unwrap', v: 'vanish with', w: 'wiggle at', x: 'x-ray', y: 'yell at', z: 'zoom past' };
+const MN_SETS = [[MN_ADJ, MN_NOUN, MN_VERB], [MN_NOUN, MN_VERB, MN_ADJ], [MN_VERB, MN_ADJ, MN_NOUN]];
+// A built-in silly set of words, one for each letter. The variant picks which kind of word each position gets, so "Another one" gives something different.
+function mnemonicWords(w, variant) {
+  return [...w].map((c, i) => { const set = MN_SETS[(variant + i) % 3]; return (set[0][c] || c); });
+}
+const mnCap = t => t.charAt(0).toUpperCase() + t.slice(1);
+// Asks the AI for something funnier, if this device has the key. Each word must start with the right letter, in order.
+async function aiMnemonic(w, notThese) {
+  if (!aiKey()) throw new Error('no key');
+  const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+  if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 200, temperature: 1, messages: [{ role: 'user', content: 'Make a silly, funny memory trick for a nine-year-old in England to spell the word "' + w + '". Give one short word for each letter, in order, starting with that exact letter, so the words read as one funny sentence (' + w.length + ' words). Kind and harmless, nothing rude or scary. British English. ' + (notThese ? 'Not this one: ' + notThese + '. ' : '') + 'Reply with JSON only: {"words": [' + [...w].map(c => '"' + c + '..."').join(', ') + ']}' }] }) });
+  if (!r.ok) throw aiFail(r.status);
+  const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
+  const a = t.indexOf('{'), b = t.lastIndexOf('}'); if (a < 0 || b <= a) throw new Error('bad');
+  const words = (JSON.parse(t.slice(a, b + 1)).words || []).map(z => String(z).trim().toLowerCase());
+  if (words.length !== w.length || !words.every((z, i) => /^[a-z' -]{2,22}$/.test(z) && z[0] === w[i])) throw new Error('bad');
+  return words;
+}
+// The memory trick screen for one word: the word along the top, an arrow from each letter, and the silly word it points to. They appear one by one, then the whole trick is written underneath.
+function mnemonicScreen(x) {
+  return new Promise(res => {
+    const w = x.w, n = w.length;
+    let words = (x.mnemWords && x.mnemWords.length === n && x.mnemWords.every((t, i) => t[0] === w[i])) ? x.mnemWords.slice() : null, variant = 0, custom = !words && x.mnem && x.mnemBy === 'bella' ? x.mnem : '', shown = 0, timer = null, gone = false, busy = false;
+    if (!words && !custom) words = mnemonicWords(w, variant);
+    const arrow = '<svg class="mnarrow" viewBox="0 0 24 40" aria-hidden="true"><path d="M12 2 V32 M4 24 L12 34 L20 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const sentence = () => custom || words.map(mnCap).join(' ') + '.';
+    const draw = () => {
+      const cols = words ? [...w].map((c, i) => `<div class="mncol"><div class="mnletter">${esc(c)}</div><div class="mnarr${i < shown ? ' on' : ''}">${arrow}</div><button class="mnword${i < shown ? ' on' : ''}" data-i="${i}" ${i < shown ? '' : 'tabindex="-1"'}>${i < shown ? esc(words[i]) : '&nbsp;'}</button></div>`).join('') : '';
+      h(`<div class="screen mnscreen"><p class="msg">Let us make a memory trick for this word.</p>
+        ${words ? `<div class="mngrid" style="grid-template-columns:repeat(${n}, minmax(0,1fr))">${cols}</div>` : `<div class="wordtile">${esc(w)}</div>`}
+        <div class="mntrick" id="mntrick">${(!words || shown >= n) ? esc(sentence()) : '&nbsp;'}</div>
+        <div class="row"><button id="mnhear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mnanother" class="btn small">Another one</button><button id="mnown" class="btn small">Write my own</button><button id="mnok" class="btn big">Got it ${ico('next')}</button></div>
+        ${words ? '<p class="subtle">Tap any word to change it.</p>' : ''}</div>`);
+      on('#mnhear', () => say(w + '. ' + sentence()));
+      on('#mnok', () => { gone = true; clearTimeout(timer); hush(); x.mnemWords = words ? words.slice() : undefined; x.mnem = sentence(); x.mnemBy = 'bella'; save(); res(); });
+      on('#mnanother', another); on('#mnown', own);
+      document.querySelectorAll('.mnword').forEach(b => { b.onclick = () => { if (!words || +b.dataset.i >= shown) return; const i = +b.dataset.i, c = w[i], opts = [MN_ADJ[c], MN_NOUN[c], MN_VERB[c]].filter(Boolean), at = opts.indexOf(words[i]); words[i] = opts[(at + 1) % opts.length]; draw(); }; });
+      backBtn(() => { gone = true; clearTimeout(timer); hush(); res(BACK); });
+    };
+    const reveal = () => { if (gone) return; if (shown < n) { shown++; draw(); timer = setTimeout(reveal, 650); } else { say(w + '. ' + sentence()); } };
+    const another = async () => {
+      if (busy) return; busy = true; clearTimeout(timer); const was = words ? words.join(' ') : '';
+      const t = $('#mnanother'); if (t) t.textContent = 'Thinking...';
+      try { words = await aiMnemonic(w, was); custom = ''; } catch (e) { variant++; words = mnemonicWords(w, variant % 3); custom = ''; }
+      busy = false; shown = 0; draw(); timer = setTimeout(reveal, 400);
+    };
+    const own = async () => {
+      clearTimeout(timer);
+      const t = await typeText({ title: 'Your memory trick for ' + w, initial: '', max: 140 });
+      if (t && t.trim()) {
+        const ws = t.trim().toLowerCase().split(/\s+/);
+        if (ws.length === n && ws.every((z, i) => z[0] === w[i])) { words = ws; custom = ''; shown = n; } else { words = null; custom = mnCap(t.trim()); }
+      }
+      draw();
+    };
+    shown = 0; draw(); timer = setTimeout(reveal, 500);
+    say('Let us make a memory trick for this word.');
+  });
+}
 function trickScreen(x) {
   return new Promise(res => {
     const msg = 'Let us remember this word.';
@@ -1937,14 +2001,24 @@ async function remember() {
     await gentle('No tricky words yet.', 'Do the story or the practice first. Any word that hides will come here.', 'Back home', 'No tricky words yet. Do the story or the practice first. Any word that hides will come here.');
     return home();
   }
-  // The same flow as the story and the practice: the sentence is said, she spells the word herself, and the same helps are there. The word is never shown.
+  // For each tricky word: build a silly memory trick (each letter points to a silly word), then spell the word from memory with the usual helps. The word is never shown after the trick.
   const sub = Object.assign({}, wk, { words: list });
   ensureTools(wk);
   await prep(spellTexts(sub), 'Getting your tricky words ready');
   await loadPics(wk);
-  const queue = list.map(x => ({ x, look: false, counts: true, mode: 'revise', context: true }));
-  const firsts = await runWords(sub, queue, new Set());
-  if (!firsts) return home();
+  const firsts = {}, starred = new Set();
+  testMode = true;
+  try {
+    let i = 0;
+    while (i < list.length) {
+      const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
+      const m = await mnemonicScreen(x);
+      if (m === BACK) { if (i === 0) return home(); i--; continue; }
+      const r = await reviseWord(sub, { x, look: false, counts: true, mode: 'revise', context: true }, storySentence(sub, x.w), starred);
+      if (r === BACK) continue;
+      firsts[x.w] = r; i++;
+    }
+  } finally { testMode = false; }
   prog = '';
   const oldDue = (S.due && S.due[wk.id]) || [];
   S.due = S.due || {}; S.due[wk.id] = oldDue.filter(w => !list.some(x => x.w === w)).concat(list.filter(x => firsts[x.w] && !firsts[x.w].ok).map(x => x.w)); save();
