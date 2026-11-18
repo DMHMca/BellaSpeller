@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.11'; // bump with every release
+const APP_VER = '3.13'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -913,11 +913,19 @@ const ICONS = {
   star: '<path fill="currentColor" stroke="none" d="M12 2.2l2.95 6.1 6.7.95-4.85 4.7 1.15 6.65L12 17.4l-5.95 3.2 1.15-6.65L2.35 9.25l6.7-.95z"/>'
 };
 const ico = n => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]}</svg>`;
+const sndBtn = '<button id="topSnd" class="iconbtn sndtop" aria-label="Voice"></button>';
+function paintSound() {
+  const on = soundOn(), lab = on ? 'Voice on' : 'Voice off';
+  const t = $('#topSnd'); if (t) { t.innerHTML = ico(on ? 'speaker' : 'muted') + '<span>' + lab + '</span>'; t.classList.toggle('off', !on); t.setAttribute('aria-label', lab); }
+  const b = $('#snd'); if (b) { b.innerHTML = ico(on ? 'speaker' : 'muted'); b.classList.toggle('off', !on); b.title = lab; }
+}
+function toggleSound() { S.sound = !soundOn(); save(); if (!soundOn()) { hush(); keepAwake(false); } paintSound(); }
 function h(html, opts) {
   keyHandler = null;
-  const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div><span class="prog">${esc(prog)}</span></div>`;
+  const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div>${sndBtn}<span class="prog">${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
+  const ts = $('#topSnd'); if (ts) { ts.onclick = toggleSound; paintSound(); }
   window.scrollTo(0, 0);
 }
 const on = (sel, fn) => { const e = $(sel); if (e) e.onclick = fn; };
@@ -950,7 +958,7 @@ function narrate(text, label, hl) {
     on('#next', () => { hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
     backBtn(res);
-    say(text);
+    if (S.readAloud) say(text);
   });
 }
 // The story is a run of short sentences. A page is as many sentences as fit, broken at a sentence end. Each test word is highlighted in its own sentence.
@@ -972,9 +980,9 @@ const chunkText = c => c.map(q => q.t).join(' ');
 function storyScroll(items) {
   const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen storyscreen"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div>
+    h(`<div class="screen storyscreen"><div class="readrow"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div>
       <div class="storypic" id="spic"></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Read it to me again">${ico('speaker')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
+      <div class="row"><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
     // The picture under the box follows the story: the latest word paragraph the voice (or her scrolling) has reached.
     let shownPic = '';
     const showPic = () => {
@@ -991,7 +999,7 @@ function storyScroll(items) {
     let run = 0;
     const play = async () => {
       const my = ++run; hush();
-      if (!soundOn()) return;
+      if (!soundOn() || !S.readAloud) return;
       for (let i = 0; i < chunks.length; i++) {
         if (my !== run) return;
         const el = document.querySelector(`.chunk[data-i="${i}"]`), sp = $('#sp');
@@ -1003,7 +1011,12 @@ function storyScroll(items) {
         if (my !== run) return;
       }
     };
-    on('#hear', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: 0 }); play(); });
+    on('#readtoggle', () => {
+      S.readAloud = !S.readAloud; if (S.readAloud && !soundOn()) S.sound = true; save(); paintSound();
+      $('#readtoggle').classList.toggle('on', !!S.readAloud);
+      if (S.readAloud) { chunks.forEach(c => { const t = chunkText(c); getClipUrl(t).then(u => { if (!u && ttsOn() && sendable(t)) fetchClip(t).catch(() => { }); }); }); const sp = $('#sp'); if (sp) sp.scrollTo({ top: 0 }); play(); }
+      else { run++; hush(); document.querySelectorAll('.chunk.now').forEach(x => x.classList.remove('now')); }
+    });
     on('#next', () => { run++; hush(); res(); });
     keyHandler = e => { if (e.key === 'Enter') { run++; hush(); res(); } };
     backBtn(r => { run++; res(r); });
@@ -1029,7 +1042,7 @@ function choose(q, opts) {
     on('#hear', () => say(q + ' ' + opts.join('. Or. ')));
     opts.forEach((o, i) => on('#o' + i, () => { hush(); res(i); }));
     backBtn(res);
-    say(q + ' ' + opts.join('. Or. '));
+    if (S.readAloud) say(q + ' ' + opts.join('. Or. '));
   });
 }
 function learnCard(week, wobj) {
@@ -1528,10 +1541,9 @@ async function storyDay() {
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
   const steps = storySegments(beats);
   prepShown = false;
-  await prep([].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Your story is ready!', true);
+  await prep((S.readAloud ? [].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk)) : []).concat(spellTexts(wk)), 'Your story is ready!', true);
   if (justWritten) { justWritten = false; if (!prepShown) await storyReadyScreen(); }
   prog = ep.title;
-  if ((await gentle('Some words in this story are highlighted in yellow.', 'They are this week\'s words. We will have a little go at them afterwards.', 'Start the story', STORY_INTRO)) === BACK) return home();
   let i = 0;
   while (i < steps.length) {
     const st0 = steps[i];
@@ -1548,7 +1560,7 @@ async function storyDay() {
     if (r === BACK) { if (i === 0) return home(); i--; } else i++;
   }
   // The story is over. Now each word is said in its sentence, in the order it came, and she spells it.
-  const go = await gentle('That was the story!', 'Now let us see which of the yellow words you remember. I will say each one, and you can have a go at spelling it.', 'Ready', SPELL_INTRO);
+  const go = await pauseScreen('That was the story!', 'Now let us see which of the yellow words you remember. I will say each one, and you can have a go at spelling it.', 3500);
   if (go === BACK) return home();
   await loadPics(wk);
   const queue = order.map(w => wk.words.find(q => q.w === w)).filter(Boolean).map(x => ({ x, look: false, counts: true, mode: 'story', context: true }));
@@ -1657,6 +1669,16 @@ function hintText(x) {
   if (x.parts && x.parts.includes('|')) return 'It has these parts: ' + x.parts.split('|').join(', ') + '. Have another go.';
   if (x.hard) return 'The tricky part has these letters in it: ' + x.hard.split('').join(', ') + '. Have another go.';
   return 'It starts with ' + x.w[0] + ' and has ' + x.w.length + ' letters. Have another go.';
+}
+// A message that stays for a few seconds and then moves on by itself (or sooner if she taps Ready). Back goes back. Not spoken.
+function pauseScreen(msg, sub, ms) {
+  return new Promise(res => {
+    h(`<div class="screen"><p class="msg">${esc(msg)}</p>${sub ? `<p class="subtle">${esc(sub)}</p>` : ''}<button id="next" class="btn big">Ready ${ico('next')}</button></div>`);
+    let done = false, tm = null; const go = v => { if (done) return; done = true; clearTimeout(tm); res(v); };
+    tm = setTimeout(() => go(), ms || 3000);
+    on('#next', () => go()); keyHandler = e => { if (e.key === 'Enter') go(); };
+    backBtn(r => go(r));
+  });
 }
 // A kind screen with one button. Back goes back a step.
 function gentle(msg, sub, btn, spoken) {
@@ -1875,7 +1897,7 @@ function home() {
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : 'Carry on';
   const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s story" : "My story"}</b><small>${esc(sub)}</small></div></button>`;
-  h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span></div>
+  h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span>${sndBtn}</div>
     <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}
     <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s practice" : "My practice"}</b><small>Just the ${wk.words.length} words</small></div></button>
@@ -2149,10 +2171,9 @@ function debugUI() {
   document.body.appendChild(b);
   const sb = document.createElement('button');
   sb.id = 'snd'; sb.className = 'dbgbtn snd';
-  const paint = () => { sb.innerHTML = ico(soundOn() ? 'speaker' : 'muted'); sb.setAttribute('aria-label', soundOn() ? 'Sound on' : 'Sound off'); sb.title = soundOn() ? 'Sound on' : 'Sound off'; sb.classList.toggle('off', !soundOn()); };
-  sb.onclick = () => { S.sound = !soundOn(); save(); if (!soundOn()) hush(); paint(); };
-  paint();
+  sb.onclick = toggleSound;
   document.body.appendChild(sb);
+  paintSound();
   const v = document.createElement('div');
   v.id = 'vtag'; v.textContent = 'BellaSpeller v' + APP_VER;
   document.body.appendChild(v);

@@ -396,3 +396,9 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .btn.small, .iconbtn { background-color: rgba(30, 26, 90, .92); }
 .adult .btn.small, .pickcard .btn.small { background-color: transparent; }
 .msg, .subtle, .cue, .waitline { text-shadow: 0 0 8px rgba(24, 20, 80, .95), 0 0 2px rgba(24, 20, 80, .9); }
+
+/* voice button in the top bar, and the read-it-to-me row */
+.top .sndtop { margin-left: auto; }
+.top .sndtop.off { opacity: .75; }
+.readrow { display: flex; align-items: center; gap: 14px; width: 100%; flex-wrap: wrap; }
+.storycap { font-size: 16px; margin: 0; }
