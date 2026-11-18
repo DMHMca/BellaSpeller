@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.42'; // bump with every release
+const APP_VER = '3.43'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1791,6 +1791,7 @@ async function reviseWord(week, it, sentence, starred) {
     if (a.askHelp) { // she asked for help before trying
       const id = await helpMenu(it.x); if (id === BACK) continue;
       a = await writeWord(word, false, null, it.x, false, cue, id); if (a === BACK) continue;
+      if (id === 'choice' && a.typed === word) { const b = await writeWord(word, false, null, it.x, false, cue, null, false, false, 'Well done! Now write the word yourself.'); if (b === BACK) continue; a = { typed: b.typed, hints: (a.hints || 0) + (b.hints || 0), reminded: a.reminded || b.reminded, tools: a.tools.concat(b.tools.filter(t => !a.tools.includes(t))), aided: true }; }
     }
     noteTyped(word, a.typed);
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
@@ -1848,8 +1849,9 @@ function showAnswer(word) {
 // She got it wrong. She is asked whether she wants another go or some help, and if help, which one. One help at a time.
 // Returns 'again', 'show', {help: id}, or BACK.
 // The spelling rule button is greyed out for a word that has no built-in rule.
+// Are you sure? needs the letters as she types them, so it is greyed out when she writes by hand.
 const hasRule = x => !!phonicsRule(x.w);
-const helpBtns = x => helpsFor(x).map(id => { const off = id === 'family' && !hasRule(x); return `<button class="choice${off ? ' off' : ''}" data-h="${id}"${off ? ' disabled aria-disabled="true"' : ''}>${esc(HELP_LABEL[id])}</button>`; }).join('');
+const helpBtns = x => helpsFor(x).map(id => { const off = (id === 'family' && !hasRule(x)) || (id === 'sure' && S.input === 'write'); return `<button class="choice${off ? ' off' : ''}" data-h="${id}"${off ? ' disabled aria-disabled="true"' : ''}>${esc(HELP_LABEL[id])}</button>`; }).join('');
 function helpMenu(x) {
   return new Promise(r => {
     h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpBtns(x)}</div></div>`);
@@ -1964,6 +1966,10 @@ async function hintLadder(week, x, mode, sentence, usedFamily) {
     const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help, false, sureOn);
     if (a === BACK) continue;
     tryLog(a, help, ++n);
+    if (help === 'choice' && a.typed === word) { // she picked it: now she writes it herself before moving on
+      const b = await writeWord(word, false, null, x, false, sentence, null, false, sureOn, 'Well done! Now write the word yourself.'); if (b === BACK) continue;
+      tryLog(b, null, ++n); if (b.typed === word) return true; else continue;
+    }
     if (a.typed === word) return true;
   }
 }
