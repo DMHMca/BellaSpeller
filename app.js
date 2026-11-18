@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.82'; // bump with every release
+const APP_VER = '3.83'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2082,6 +2082,24 @@ async function aiTips(words) {
   words.forEach(w => { const v = String(o[w] || '').trim(); if (v && v.length <= 140) out[w] = v; });
   return out;
 }
+// One word and its spelling tip at a time, large, with Previous and Next.
+function tipsOneByOne(all) {
+  return new Promise(res => {
+    let i = 0;
+    const draw = () => {
+      const x = all[i], tip = trickText(x), last = i === all.length - 1;
+      prog = `Word ${i + 1} of ${all.length}`;
+      h(`<div class="screen onetip"><div class="wordtile">${esc(x.w)}</div>
+        <p class="tipbig${tip ? '' : ' none'}">${esc(tip || 'No spelling tip yet.')}</p>
+        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
+      on('#tphear', () => say(x.w + '. ' + (tip || '')));
+      on('#tpprev', () => { hush(); i--; draw(); });
+      on('#tpnext', () => { hush(); if (last) { prog = ''; res(); } else { i++; draw(); } });
+      backBtn(() => { hush(); prog = ''; res(); });
+    };
+    draw();
+  });
+}
 function tricksScreen(all) {
   return new Promise(res => {
     const draw = (note) => {
@@ -2130,7 +2148,14 @@ async function remember() {
       on('#rvmn', () => res('mn')); on('#rvtr', () => res('tr')); backBtn(() => res(null));
     });
     if (!way) return home();
-    if (way === 'tr') { await tricksScreen(all); continue; }
+    if (way === 'tr') {
+      const how = await new Promise(res => {
+        h(`<div class="screen"><p class="msg">Spelling tips</p><div class="choices menu"><button class="choice" id="tpall">Show me all of them</button><button class="choice" id="tpone">Show me one at a time</button></div></div>`);
+        on('#tpall', () => res('all')); on('#tpone', () => res('one')); backBtn(() => res(null));
+      });
+      if (how === 'all') await tricksScreen(all); else if (how === 'one') await tipsOneByOne(all);
+      continue;
+    }
     for (;;) {
       list = await pickTricky(all); // she chooses which of the week's words she wants a mnemonic for
       if (list === 'mine') { await mineScreen(all); continue; }
