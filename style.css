@@ -502,3 +502,6 @@ body.inkmode .writescreen .slots { display: none; }
 body.inkmode .writescreen { min-height: calc(100vh - 100px); justify-content: space-evenly; gap: 10px; }
 body.inkmode .wpanel { gap: 14px; }
 body.inkmode .wwrap { margin: 0 auto; }
+
+/* multiple choice: every option looks the same, so the colour never gives the answer away */
+.mcbox .choice, .mcbox .choice:nth-child(n) { border-left-color: var(--mint); }
