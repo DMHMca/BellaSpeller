@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.13'; // bump with every release
+const APP_VER = '3.14'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -370,7 +370,7 @@ function phonicsRule(w) {
     const place = where === 'start' ? 'It starts with ' + pat : where === 'end' ? 'It ends with ' + pat : 'It has ' + pat + ' in it';
     const letters = pat.split('').join(' ');
     const snd = PSOUND[pat];
-    const spoken = (where === 'start' ? 'It starts with ' : where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. ' + 'Listen: ' + listOf(family) + '. ' : 'the letters ' + letters + ', like ' + listOf(family) + '. ') + (PNOTE[pat] || '') + (pat.length === 2 && !['ly', 'ed', 'le'].includes(pat) ? ' That is called a digraph: two letters, one sound.' : '');
+    const spoken = (where === 'start' ? 'It starts with ' : where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. ' + 'Listen: ' + listOf(family) + '. ' : 'the letters ' + letters + ', like ' + listOf(family) + '. ') + (PNOTE[pat] || (pat.length === 2 && !['ly', 'ed', 'le'].includes(pat) ? 'That is called a digraph: two letters, one sound.' : ''));
     return { rule: place + ', like ' + listOf(family) + '.', spoken, family };
   }
   const sp = w.match(/([aeiou])[^aeiouwy]e$/);
@@ -383,11 +383,12 @@ function phonicsRule(w) {
 // The rule and words like it for a word: from the built-in spelling patterns first, then from the AI's suggestion.
 const famOf = x => { const ph = phonicsRule(x.w); return ph || { rule: x.rule || '', family: x.family || [] }; };
 // What is said aloud for Words like it: the rule and the similar words, never the word itself.
-const familyText = x => { const f = famOf(x); return (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); };
+const wordAgain = x => ' Now spell the word: ' + x.w + '.'; // every spoken help ends by saying the word again
+const familyText = x => { const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return body ? body + wordAgain(x) : ''; };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
   if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling rule again</span></button>', say: familyText(x) }; }
-  if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say };
+  if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say + '.' + wordAgain(x) };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
   if (id === 'letters') return { html: L('', 'Say each letter out loud as you type it.') };
@@ -464,7 +465,7 @@ function misspellings(x, weekWords) {
   const add = t => { t = String(t || '').toLowerCase().trim(); if (!t || seen.has(t) || !/^[a-z'-]+$/.test(t) || Math.abs(t.length - w.length) > 3 || t.length < Math.min(4, w.length) || (weekWords || []).includes(t)) return false; seen.add(t); out.push(t); return true; };
   S.log.slice().reverse().filter(l => l.w === w && !l.ok && l.typed).forEach(l => { if (out.length < 3) add(l.typed); });
   shuffle((x.wrong || []).slice()).forEach(t => { if (out.length < 3) add(t); });
-  const SW = [['ea', 'ee'], ['ee', 'ea'], ['ai', 'ay'], ['ay', 'ai'], ['oa', 'ow'], ['ow', 'oa'], ['ou', 'ow'], ['ow', 'ou'], ['oo', 'u'], ['ie', 'ei'], ['ei', 'ie'], ['au', 'aw'], ['aw', 'au'], ['er', 'ur'], ['ur', 'er'], ['ir', 'er'], ['or', 'ar'], ['igh', 'ie'], ['ough', 'uff'], ['ough', 'ow'], ['ph', 'f'], ['ck', 'k'], ['tion', 'shun'], ['cial', 'shul'], ['ge', 'dge'], ['dge', 'ge'], ['c', 's'], ['s', 'c'], ['i', 'y'], ['y', 'i'], ['e', 'a'], ['a', 'e'], ['o', 'u'], ['u', 'o'], ['kn', 'n'], ['wr', 'r'], ['wh', 'w'], ['gh', ''], ['ss', 's'], ['s', 'ss'], ['ll', 'l'], ['l', 'll'], ['tt', 't'], ['t', 'tt'], ['nn', 'n'], ['n', 'nn'], ['rr', 'r'], ['r', 'rr']];
+  const SW = [['ere', 'ear'], ['ere', 'eir'], ['ear', 'ere'], ['eir', 'ere'], ['e', 'ea'], ['ea', 'e'], ['ea', 'ee'], ['ee', 'ea'], ['ai', 'ay'], ['ay', 'ai'], ['oa', 'ow'], ['ow', 'oa'], ['ou', 'ow'], ['ow', 'ou'], ['oo', 'u'], ['ie', 'ei'], ['ei', 'ie'], ['au', 'aw'], ['aw', 'au'], ['er', 'ur'], ['ur', 'er'], ['ir', 'er'], ['or', 'ar'], ['igh', 'ie'], ['ough', 'uff'], ['ough', 'ow'], ['ph', 'f'], ['ck', 'k'], ['tion', 'shun'], ['cial', 'shul'], ['ge', 'dge'], ['dge', 'ge'], ['c', 's'], ['s', 'c'], ['i', 'y'], ['y', 'i'], ['e', 'a'], ['a', 'e'], ['o', 'u'], ['u', 'o'], ['kn', 'n'], ['wr', 'r'], ['wh', 'w'], ['gh', ''], ['ss', 's'], ['s', 'ss'], ['ll', 'l'], ['l', 'll'], ['tt', 't'], ['t', 'tt'], ['nn', 'n'], ['n', 'nn'], ['rr', 'r'], ['r', 'rr']];
   const cands = [];
   SW.forEach(([a, b]) => { let i = w.indexOf(a); while (i >= 0) { cands.push(w.slice(0, i) + b + w.slice(i + a.length)); i = w.indexOf(a, i + 1); } });
   cands.push(w.endsWith('e') ? w.slice(0, -1) : w + 'e');
@@ -1833,7 +1834,7 @@ function reviseEnd(wk, firsts, sound) {
 // Everything the spelling steps need spoken, fetched ahead so nothing waits.
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
-  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say); if (familyText(x)) texts.push(familyText(x)); texts.push(hintText(x)); });
+  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say + '.' + wordAgain(x)); if (familyText(x)) texts.push(familyText(x)); texts.push(hintText(x)); });
   for (let i = 1; i <= wk.words.length; i++) { texts.push(celebrateText(i, wk.words.length, true)); texts.push(celebrateText(i, wk.words.length, false)); }
   OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
