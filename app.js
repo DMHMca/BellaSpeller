@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.84'; // bump with every release
+const APP_VER = '3.85'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2082,42 +2082,24 @@ async function aiTips(words) {
   words.forEach(w => { const v = String(o[w] || '').trim(); if (v && v.length <= 140) out[w] = v; });
   return out;
 }
-// Resolves when the voice has finished the line it is saying (or after a time based on the length of the line if the voice is off).
-function speechDone(text) {
-  return new Promise(res => {
-    if (QUIET || (!soundOn() && !testMode)) return setTimeout(res, 2500 + String(text).length * 55);
-    const t0 = Date.now(), tick = () => {
-      const left = speechUntil - Date.now();
-      if ((Date.now() - t0 > 900 && left < 3000) || Date.now() - t0 > 30000) return res();
-      setTimeout(tick, 200);
-    };
-    setTimeout(tick, 600);
-  });
-}
-// The spelling tips one at a time: each word and its tip appear, the voice says them, and the next one comes by itself, until the end.
+// The spelling tips one at a time: each word and its tip appear and are said once, then she looks at it for as long as she likes and taps Next.
 function tipsOneByOne(all) {
   return new Promise(res => {
     const list = all.filter(x => trickText(x)); // words with no tip are left out
     if (!list.length) { res(); return; }
-    let i = 0, gone = false, tok = 0;
-    const finish = () => { gone = true; tok++; hush(); prog = ''; res(); };
-    const show = async () => {
-      if (gone) return;
-      const x = list[i], tip = trickText(x), last = i === list.length - 1, my = ++tok;
+    let i = 0;
+    const finish = () => { hush(); prog = ''; res(); };
+    const show = () => {
+      const x = list[i], tip = trickText(x), last = i === list.length - 1;
       prog = `Word ${i + 1} of ${list.length}`;
       h(`<div class="screen onetip"><div class="wordtile">${esc(x.w)}</div>
         <p class="tipbig">${esc(tip)}</p>
-        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button><button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
+        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
       on('#tphear', () => say(x.w + '. ' + tip));
-      on('#tpnext', () => { if (last) finish(); else { i++; show(); } });
+      on('#tpprev', () => { hush(); i--; show(); });
+      on('#tpnext', () => { hush(); if (last) finish(); else { i++; show(); } });
       backBtn(finish);
-      const line = x.w + '. ' + tip;
-      say(line);
-      await speechDone(line);
-      if (gone || my !== tok) return;
-      await new Promise(r => setTimeout(r, 1200));
-      if (gone || my !== tok) return;
-      if (!last) { i++; show(); }
+      say(x.w + '. ' + tip);
     };
     show();
   });
