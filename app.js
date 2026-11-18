@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.38'; // bump with every release
+const APP_VER = '3.39'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2327,6 +2327,10 @@ function initUpdater() {
   b.innerHTML = '<span class="updico">&#8635;</span><span>Update</span><small id="updver"></small>';
   b.onclick = async () => { b.disabled = true; b.querySelector('span:nth-child(2)').textContent = 'Updating...'; await freshReload(); };
   document.body.appendChild(b);
+  // a small version label on every screen; tapping it fetches the newest files and reloads, whatever the check says
+  const v = document.createElement('button'); v.id = 'vlabel'; v.textContent = 'v' + APP_VER; v.setAttribute('aria-label', 'Version ' + APP_VER + '. Tap to update.');
+  v.onclick = async () => { v.textContent = 'updating...'; await freshReload(); };
+  document.body.appendChild(v);
   const check = async () => {
     try {
       const t = await (await fetch('app.js?chk=' + Date.now(), { cache: 'no-store' })).text();
@@ -2336,7 +2340,8 @@ function initUpdater() {
     } catch (e) { }
   };
   check();
-  setInterval(check, 120000);
+  setInterval(check, 30000);
+  window.addEventListener('focus', check); window.addEventListener('online', check);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 }
 const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
