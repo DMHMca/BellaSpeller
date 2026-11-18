@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.71'; // bump with every release
+const APP_VER = '3.72'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2059,6 +2059,13 @@ function trickText(x) {
   if (x.hard) return 'The tricky letters are ' + [...x.hard].join(', ') + '.';
   return '';
 }
+// Only the words she has made a mnemonic for.
+function mineScreen(all) {
+  return new Promise(res => {
+    h(`<div class="screen mnscreen"><p class="msg">Your mnemonics</p>${mnDoneHtml(all.filter(x => x.mnemonic).map(x => ({ w: x.w, sentence: x.mnemonic })))}<div class="row"><button id="mndone" class="btn big">Done ${ico('check')}</button></div></div>`);
+    on('#mndone', () => res()); backBtn(() => res());
+  });
+}
 function tricksScreen(all) {
   return new Promise(res => {
     h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tricks</p>
@@ -2072,11 +2079,11 @@ function pickTricky(all) {
     const on0 = new Set(); // nothing is ticked at first
     const draw = () => {
       const allOn = on0.size === all.length;
-      h(`<div class="screen picktrick"><p class="msg">Which words would you like a mnemonic for?</p>${all.some(x => x.mnemonic) ? '<p class="subtle">Your saved mnemonics are shown under the words. Tick a word to look at it again or change it.</p>' : ''}
+      h(`<div class="screen picktrick"><p class="msg">Which words would you like a mnemonic for?</p>
         <button id="pkall" class="pkrow pkmaster${allOn ? ' on' : ''}"><span class="pkbox">${allOn ? '&#10003;' : ''}</span><span>All of them</span></button>
-        <div class="pkgrid">${all.map(x => `<button class="pkrow${on0.has(x.w) ? ' on' : ''}" data-w="${esc(x.w)}"><span class="pkbox">${on0.has(x.w) ? '&#10003;' : ''}</span><span class="pktext"><b>${esc(x.w)}</b>${x.mnemonic ? `<small>${esc(x.mnemonic)}</small>` : ''}</span></button>`).join('')}</div>
-        <button id="pkgo" class="btn big"${on0.size ? '' : ' disabled'}>Make my mnemonics ${ico('next')}</button><button id="pktricks" class="btn small">Show the words and the spelling tricks</button></div>`);
-      on('#pktricks', () => res('tricks'));
+        <div class="pkgrid">${all.map(x => `<button class="pkrow${on0.has(x.w) ? ' on' : ''}" data-w="${esc(x.w)}"><span class="pkbox">${on0.has(x.w) ? '&#10003;' : ''}</span><span class="pktext"><b>${esc(x.w)}</b></span></button>`).join('')}</div>
+        <button id="pkgo" class="btn big"${on0.size ? '' : ' disabled'}>Make my mnemonics ${ico('next')}</button><div class="row">${all.some(x => x.mnemonic) ? '<button id="pkmine" class="btn small">Show my mnemonics</button>' : ''}<button id="pktricks" class="btn small">Show the words and the spelling tricks</button></div></div>`);
+      on('#pktricks', () => res('tricks')); on('#pkmine', () => res('mine'));
       on('#pkall', () => { if (on0.size === all.length) on0.clear(); else all.forEach(x => on0.add(x.w)); draw(); });
       document.querySelectorAll('.pkgrid .pkrow').forEach(b => { b.onclick = () => { const w = b.dataset.w; if (on0.has(w)) on0.delete(w); else on0.add(w); draw(); }; });
       on('#pkgo', () => { if (on0.size) res(all.filter(x => on0.has(x.w))); });
@@ -2091,6 +2098,7 @@ async function remember() {
   for (;;) {
     list = await pickTricky(all); // she chooses which of the week's words she wants a mnemonic for
     if (list === 'tricks') { await tricksScreen(all); continue; }
+    if (list === 'mine') { await mineScreen(all); continue; }
     break;
   }
   if (!list) return home();
