@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.03'; // bump with every release
+const APP_VER = '3.04'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -793,8 +793,8 @@ function wakeAudio() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     wakeCtx = wakeCtx || new AC(); const c = wakeCtx; if (c.state === 'suspended') c.resume();
-    const len = Math.floor(c.sampleRate * 0.9), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.004;
+    const len = Math.floor(c.sampleRate * 0.6), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.0007;
     const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start();
   } catch (e) { }
 }
@@ -808,12 +808,12 @@ function say(t) {
   getClipUrl(t).then(url => {
     if (tok !== sayTok) return;
     if (url) {
-      audioEl = new Audio(url); audioEl.playbackRate = 0.9; // a little slower than the voice's own pace
+      audioEl = new Audio(url);
       audioEl.onended = () => { speechUntil = Date.now() + 2500; };
       audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
       const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
       el.preload = 'auto';
-      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, 700);
+      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, 550);
     } else {
       builtinSay(t);
       if (ttsFails < 3 && sendable(t)) fetchClip(t).then(() => { ttsFails = 0; }, e => { ttsFails++; lastTtsErr = e.message; });
@@ -831,7 +831,7 @@ function builtinSay(t) {
     const u = new SpeechSynthesisUtterance(t);
     if (voice) u.voice = voice;
     u.lang = voice ? voice.lang : 'en-GB';
-    u.rate = 0.82;
+    u.rate = 0.9;
     u.onend = u.onerror = () => { speechUntil = Date.now() + 2500; };
     keepUtt = u; // stops the browser discarding it before it has finished
     speechSynthesis.speak(u);
