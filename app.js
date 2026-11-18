@@ -5,7 +5,7 @@ const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.21'; // bump with every release
+const APP_VER = '3.23'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -317,17 +317,8 @@ function toolContent(x, stage) {
 const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + ', ' + word + '.';
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
-function helpsFor(x) {
-  // The three main helps first, then the smaller ones. None of them shows the word.
-  const out = [];
-  { const f = famOf(x); if (f.rule || f.family.length) out.push('family'); }
-  out.push('sure', 'choice');
-  if (x.say) out.push('voice');
-  if (x.hard) out.push('hard');
-  if (x.parts && x.parts.includes('|')) out.push('parts');
-  return out;
-}
-const HELP_LABEL = { sure: 'Are you sure?', voice: 'Spelling voice', family: 'Words like it', hard: 'Hard part', parts: 'Word parts', choice: 'Pick the right spelling' };
+function helpsFor(x) { return ['family', 'sure']; } // the two main helps; neither shows the word
+const HELP_LABEL = { family: 'The spelling rule', sure: 'Are you sure?', voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Pick the right spelling' };
 // Empty boxes, one per letter, so she can see how long the word is and where the tricky bit is, without seeing any letters.
 function boxesHtml(x, marks, groups) {
   const w = x.w, hi = x.hard ? w.indexOf(x.hard) : -1; let i = 0, out = '';
@@ -345,6 +336,7 @@ const PHONICS = [
   ['ck', 'end', ['back', 'pack', 'duck', 'kick']], ['ful', 'end', ['careful', 'helpful', 'playful', 'cheerful']], ['ous', 'end', ['famous', 'nervous', 'serious', 'curious']], ['ly', 'end', ['slowly', 'quickly', 'gladly', 'kindly']],
   ['ing', 'end', ['going', 'playing', 'jumping', 'singing']], ['ed', 'end', ['jumped', 'played', 'wanted', 'helped']], ['le', 'end', ['little', 'table', 'bubble', 'puzzle']],
   ['ere', 'end', ['where', 'there', 'here', 'were']], ['ear', 'any', ['hear', 'near', 'year', 'dear']], ['are', 'end', ['care', 'share', 'dare', 'spare']], ['air', 'any', ['hair', 'pair', 'chair', 'fair']],
+  ['y', 'end', ['happy', 'funny', 'windy', 'sunny'], w => w.length >= 4 && !/[aeiou]y$/.test(w)],
   ['ph', 'any', ['phone', 'photo', 'graph', 'elephant']], ['ea', 'any', ['read', 'beat', 'team', 'speak', 'seat']], ['ee', 'any', ['tree', 'green', 'sleep', 'need']], ['oa', 'any', ['boat', 'road', 'coat', 'soap']],
   ['ai', 'any', ['rain', 'train', 'wait', 'paint']], ['ay', 'any', ['day', 'play', 'stay', 'way']], ['oo', 'any', ['moon', 'room', 'school', 'cool']], ['ie', 'any', ['field', 'piece', 'chief', 'brief']], ['ei', 'any', ['ceiling', 'receive', 'neighbour', 'eight']],
   ['ou', 'any', ['house', 'cloud', 'mouth', 'round']], ['ow', 'any', ['down', 'town', 'flower', 'brown']], ['oy', 'any', ['boy', 'toy', 'enjoy', 'royal']], ['oi', 'any', ['coin', 'noise', 'point', 'voice']],
@@ -363,23 +355,28 @@ const PNOTE = {
   au: 'The letters a u say or.', aw: 'The letters a w say or.', ar: 'The letters a r say ar, as in car.', or: 'The letters o r say or.', er: 'E r, i r and u r all say er.', ir: 'I r, e r and u r all say er.', ur: 'U r, e r and i r all say er.',
   ss: 'At the end of a short word, we often double the s, the l and the f.', ll: 'At the end of a short word, we often double the l, the s and the f.', ff: 'At the end of a short word, we often double the f, the l and the s.',
   ere: 'The letters e r e at the end can say air, as in where, or eer, as in here.', ear: 'The letters e a r usually say eer, as in hear.', are: 'The letters a r e at the end say air, as in care.', air: 'The letters a i r say air, as in hair.',
+  y: 'The letter y at the end of a longer word usually says ee.',
   ould: 'The letters o u l d say ood.', le: 'The letters l e at the end of a word say ul.', ie: 'The letters i e can say ee, as in field, or eye, as in pie.'
 };
 // The sound each pattern makes, written the way a speech voice will say it as a sound, not as letter names. Not checked by ear yet.
-const PSOUND = { th: 'thhh', sh: 'shhh', ch: 'chhh', wh: 'wuh', kn: 'nnn', wr: 'rrr', qu: 'kwuh', ph: 'fff', ck: 'kuh', tion: 'shun', tch: 'chhh', dge: 'juh', ight: 'ite', ea: 'ee', ee: 'ee', oa: 'oh', ai: 'ay', ay: 'ay', oo: 'oo', ie: 'ee', ei: 'ay', ou: 'ow', ow: 'ow', oy: 'oy', oi: 'oy', au: 'or', aw: 'or', ar: 'ar', or: 'or', er: 'er', ir: 'er', ur: 'er', ss: 'sss', ll: 'lll', ff: 'fff', ould: 'ood', le: 'ul' };
+const PSOUND = { y: 'ee', th: 'thhh', sh: 'shhh', ch: 'chhh', wh: 'wuh', kn: 'nnn', wr: 'rrr', qu: 'kwuh', ph: 'fff', ck: 'kuh', tion: 'shun', tch: 'chhh', dge: 'juh', ight: 'ite', ea: 'ee', ee: 'ee', oa: 'oh', ai: 'ay', ay: 'ay', oo: 'oo', ie: 'ee', ei: 'ay', ou: 'ow', ow: 'ow', oy: 'oy', oi: 'oy', au: 'or', aw: 'or', ar: 'ar', or: 'or', er: 'er', ir: 'er', ur: 'er', ss: 'sss', ll: 'lll', ff: 'fff', ould: 'ood', le: 'ul' };
 const listOf = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
 // Which letters of the word did she get wrong? Uses the best match between what she typed and the word.
 const lastTyped = new Map();
 const noteTyped = (w, typed) => { if (typed && typed !== w) lastTyped.set(w, typed); else lastTyped.delete(w); };
 function errorSpan(w, typed) {
   if (!typed || typed === w) return null;
-  const mk = matchMask(w, typed), idx = mk.map((m, i) => m ? -1 : i).filter(i => i >= 0);
+  let pre = 0; while (pre < w.length && pre < typed.length && w[pre] === typed[pre]) pre++;
+  let suf = 0; while (suf < w.length - pre && suf < typed.length - pre && w[w.length - 1 - suf] === typed[typed.length - 1 - suf]) suf++;
+  const idx = []; for (let i = pre; i < w.length - suf; i++) idx.push(i);
+  if (!idx.length) { if (pre > 0) idx.push(pre - 1); if (pre < w.length) idx.push(pre); } // an extra letter: the place it went in
   return idx.length ? idx : null;
 }
 const whereInWord = (w, idx) => { const m = idx.reduce((a, b) => a + b, 0) / idx.length / w.length; return m < 0.34 ? 'at the start' : m > 0.66 ? 'near the end' : 'in the middle'; };
 function phonicsRule(w, typed) {
   const err = errorSpan(w, typed), cands = [];
-  for (const [pat, where, ex] of PHONICS) {
+  for (const [pat, where, ex, test] of PHONICS) {
+    if (test && !test(w)) continue;
     let at = [];
     if (where === 'start') { if (w.startsWith(pat)) at = [0]; }
     else if (where === 'end') { if (w.endsWith(pat) && w.length > pat.length) at = [w.length - pat.length]; }
@@ -390,8 +387,9 @@ function phonicsRule(w, typed) {
     const hit = err ? at.find(p => err.some(i => i >= p && i < p + pat.length)) : undefined;
     cands.push({ pat, where, family, hits: hit !== undefined, p0: hit !== undefined ? hit : at[0] });
   }
-  // the rule for the part she got wrong comes first; with no attempt to go on, the first pattern that fits
-  const c = (err && cands.find(x => x.hits)) || cands[0];
+  // the rule for the part she got wrong; with no attempt to go on, the first pattern that fits. If what she got wrong is covered by no pattern, say only where it is.
+  const c = err ? cands.find(x => x.hits) : cands[0];
+  if (err && !c) return { rule: '', spoken: 'The tricky part is ' + whereInWord(w, err) + '.', family: [] };
   if (c) {
     const place = c.where === 'start' ? 'It starts with ' + c.pat : c.where === 'end' ? 'It ends with ' + c.pat : 'It has ' + c.pat + ' in it';
     const letters = c.pat.split('').join(' '), snd = PSOUND[c.pat];
@@ -410,10 +408,10 @@ function phonicsRule(w, typed) {
 const famOf = x => { const ph = phonicsRule(x.w, lastTyped.get(x.w)); return ph || { rule: x.rule || '', family: x.family || [] }; };
 // What is said aloud for Words like it: the rule and the similar words, never the word itself.
 const wordAgain = x => ' Now spell the word: ' + x.w + '.'; // every spoken help ends by saying the word again
-const familyText = x => { const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return body ? body + wordAgain(x) : ''; };
+const familyText = x => { const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return (body || 'Listen carefully, and say it slowly, sound by sound.') + wordAgain(x); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'family') { const f = famOf(x); if (f.rule || f.family.length) return { html: '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling rule again</span></button>', say: familyText(x) }; }
+  if (id === 'family') { const f = famOf(x); return { html: '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling rule again</span></button>', say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say + '.' + wordAgain(x) };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
@@ -1681,7 +1679,7 @@ async function reviseWord(week, it, sentence, starred) {
     let a = await writeWord(word, false, it.look || it.context ? null : remind, it.x, false, cue, null, true);
     if (a === BACK) { if (it.look) continue; return BACK; }
     if (a.askHelp) { // she asked for help before trying
-      const id = helpsFor(it.x).includes('family') ? 'family' : await helpMenu(it.x); if (id === BACK) continue;
+      const id = await helpMenu(it.x); if (id === BACK) continue;
       a = await writeWord(word, false, null, it.x, false, cue, id); if (a === BACK) continue;
     }
     noteTyped(word, a.typed);
@@ -1757,7 +1755,6 @@ function helpChoice(x, first) {
       });
       if (c === BACK) return res(BACK);
       if (c === 'again') return res('again');
-      if (first && helpsFor(x).includes('family')) return res({ help: 'family' }); // the first help is always the spoken rule
       const m = await new Promise(r => {
         h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}</div></div>`);
         document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
@@ -1839,19 +1836,18 @@ async function hintLadder(week, x, mode, sentence, usedFamily) {
   const tryLog = (a, help, n) => { noteTyped(word, a.typed); S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
   let n = 0;
   for (;;) {
-    // After the first miss she is not asked anything: the spoken rule comes straight away, and Are you sure? is on for every go from here.
-    const auto = !usedFamily && helpsFor(x).includes('family');
-    const c = n >= 3 ? 'show' : auto ? { help: 'family', auto: true } : await helpChoice(x, !usedFamily);
+    // After a wrong go she chooses: another go on her own, or help (the spelling rule, or Are you sure?).
+    const c = n >= 3 ? 'show' : await helpChoice(x);
     if (c === BACK) return BACK;
     if (c === 'show') {
       if ((await showAnswer(word)) === BACK) { n = 0; continue; } // last resort: she sees the word, then writes it from memory
-      const a = await writeWord(word, false, null, x, false, sentence, null, false, true); if (a === BACK) continue; tryLog(a, null, ++n);
+      const a = await writeWord(word, false, null, x, false, sentence); if (a === BACK) continue; tryLog(a, null, ++n);
       return true;
     }
     const help = c === 'again' ? null : c.help;
     if (help === 'family') usedFamily = true;
     if (help === 'trace') { const t = await traceFlow(word); if (t === BACK) continue; }
-    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help, false, true, c.auto ? 'Not quite. Listen to the rule, then have another go.' : '');
+    const a = await writeWord(word, false, null, x, false, sentence, help === 'trace' ? null : help);
     if (a === BACK) continue;
     tryLog(a, help, ++n);
     if (a.typed === word) return true;
