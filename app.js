@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.89'; // bump with every release
+const APP_VER = '3.90'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2074,7 +2074,7 @@ const TIP_TABLE = {
 const LETTER_NAMES = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'ef', g: 'jee', h: 'aitch', i: 'eye', j: 'jay', k: 'kay', l: 'el', m: 'em', n: 'en', o: 'oh', p: 'pee', q: 'queue', r: 'ar', s: 'ess', t: 'tee', u: 'you', v: 'vee', w: 'double you', x: 'ex', y: 'why', z: 'zed' };
 // The sound each letter makes, written so that a voice says it as a sound and not as a name (a short sound for a vowel, a short puff for a stop).
 const LETTER_SOUNDS = { a: 'ah', b: 'buh', c: 'kuh', d: 'duh', e: 'eh', f: 'fff', g: 'guh', h: 'huh', i: 'ih', j: 'juh', k: 'kuh', l: 'lll', m: 'mmm', n: 'nnn', o: 'oh', p: 'puh', q: 'kwuh', r: 'rrr', s: 'sss', t: 'tuh', u: 'uh', v: 'vvv', w: 'wuh', x: 'ks', y: 'yuh', z: 'zzz' };
-const letterSayMode = () => S.letterSay === 'phonics' ? 'phonics' : 'names'; // letter names are the default: the voice cannot say bare phonics sounds properly (tried 3.88)
+const letterSayMode = () => 'names'; // letter names are the default: the voice cannot say bare phonics sounds properly (tried 3.88)
 // Letters to be spoken are written in curly braces, for example {o,u,g,h}; they are said as phonics sounds or as letter names, whichever is chosen.
 const speakLetters = t => String(t).replace(/\{([a-z, ]+)\}/gi, (m, g) => g.toLowerCase().split(/[\s,]+/).filter(Boolean).map(c => (letterSayMode() === 'names' ? LETTER_NAMES : LETTER_SOUNDS)[c] || c).join(', '));
 // What the voice says for a tip. A voice reads a letter group such as "ough" as a word and a sound such as "uff" as nonsense, so the spoken version puts the letters in braces and spells the sounds the way they are said.
@@ -2119,9 +2119,8 @@ function tipsOneByOne(all) {
       prog = `Word ${i + 1} of ${list.length}`;
       h(`<div class="screen onetip"><div class="wordtile">${esc(x.w)}</div>
         <p class="tipbig">${esc(tip)}</p>
-        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button><button id="tpmode" class="btn small">Letters: ${letterSayMode() === 'names' ? 'names' : 'sounds'}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
+        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
       on('#tphear', () => say(x.w + '. ' + spokenTip(x)));
-      on('#tpmode', () => { S.letterSay = letterSayMode() === 'names' ? 'phonics' : 'names'; save(); show(); });
       on('#tpprev', () => { hush(); i--; show(); });
       on('#tpnext', () => { hush(); if (last) finish(); else { i++; show(); } });
       backBtn(finish);
@@ -2478,7 +2477,6 @@ function adult() {
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
-    <label>In the spelling tips, say letters as</label><select id="lsay"><option value="names" ${letterSayMode() === 'names' ? 'selected' : ''}>Letter names (em, ay, en)</option><option value="phonics" ${letterSayMode() === 'phonics' ? 'selected' : ''}>Phonics sounds (the voice does not say these well)</option></select>
     <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${effVp() === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
