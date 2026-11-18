@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.65'; // bump with every release
+const APP_VER = '3.66'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2279,7 +2279,7 @@ function adult() {
     ${wk.words.map((x, i) => `<div class="wl"><input type="checkbox" class="redtick" data-i="${i}" ${x.red ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('')}
     <div style="margin-top:10px"><button id="chWords" class="btn small">Change the words</button></div>
     <div id="chBox" hidden>
-      <label>One word per line. To change, add or remove words, edit the list.</label>
+      <label>Type or paste the words, separated by spaces, commas or new lines. To change, add or remove words, edit the list.</label>
       <textarea id="cw" spellcheck="false">${esc(wk.words.map(x => x.w + (x.say ? ' | ' + x.say : '')).join('\n'))}</textarea>
       <p class="note">${epOf(wk) ? 'The story for this week was written for the old words, so it will be removed. Her stars and past answers are kept.' : ''}</p>
       <button id="saveWords" class="btn">Save the new words</button>
@@ -2288,7 +2288,7 @@ function adult() {
     <h2>Add a new week</h2>
     <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
     <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
-    <label>Paste the words here, one per line or separated by commas</label><textarea id="nw" spellcheck="false"></textarea>
+    <label>Paste the words here, separated by spaces, commas or new lines</label><textarea id="nw" spellcheck="false"></textarea>
     <p class="note">To add a spelling voice for a tricky word, write it after a bar, like this: every | ev-er-y</p>
     <button id="read" class="btn">Add these words</button>
     <div id="preview"></div>
