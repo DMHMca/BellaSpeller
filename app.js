@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.33'; // bump with every release
+const APP_VER = '3.34'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -390,7 +390,14 @@ function phonicsRule(w, typed) {
   }
   // the rule for the part she got wrong; with no attempt to go on, the first pattern that fits. If what she got wrong is covered by no pattern, say only where it is.
   const c = err ? cands.find(x => x.hits) : cands[0];
-  if (err && !c) return { rule: '', spoken: 'The tricky part is ' + whereInWord(w, err) + '.', family: [] };
+  if (err && !c) {
+    const ord = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+    const k = err[0], nth = ord[k] || ('number ' + (k + 1));
+    const msg = typed.length > w.length ? 'The word has ' + w.length + ' letters, and you have written ' + typed.length + '. There is one letter too many.'
+      : typed.length < w.length ? 'The word has ' + w.length + ' letters, and you have written ' + typed.length + '. A letter is missing.'
+      : 'The word has ' + w.length + ' letters. Look again at the ' + nth + ' letter.';
+    return { rule: msg, spoken: msg, family: [] };
+  }
   if (c) {
     const place = c.where === 'start' ? 'It starts with ' + c.pat : c.where === 'end' ? 'It ends with ' + c.pat : 'It has ' + c.pat + ' in it';
     const letters = c.pat.split('').join(' '), snd = PSOUND[c.pat];
