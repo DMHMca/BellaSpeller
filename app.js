@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.70'; // bump with every release
+const APP_VER = '3.71'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -26,6 +26,13 @@ function migrateWords(s) {
   }
   return s;
 }
+// Mnemonics made before they had their own field were saved over the word's spelling trick. Move them across once.
+function migrateMnem(s) {
+  if (s.mnemMigrated) return s;
+  s.mnemMigrated = 1;
+  (s.weeks || []).forEach(wk => (wk.words || []).forEach(x => { if (x.mnemWords && x.mnemBy === 'bella' && x.mnem) { x.mnemonic = x.mnem; delete x.mnem; delete x.mnemBy; } }));
+  return s;
+}
 function fresh() {
   return {
     pin: null, name: '', girls: ['Imogen', 'Persephone', 'Florence', 'Tabitha'], meIn: false,
@@ -38,7 +45,7 @@ function fresh() {
     cur: 'w1', log: [], stars: 0, story: {}
   };
 }
-function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return migrateWords(s); } } catch (e) { } loadedFresh = true; return fresh(); }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return migrateMnem(migrateWords(s)); } } catch (e) { } loadedFresh = true; return fresh(); }
 let loadedFresh = false;
 function save() {
   const j = JSON.stringify(S);
@@ -539,13 +546,13 @@ function toolsPane(wk) {
     <td><input type="text" class="tf" data-i="${i}" data-f="say" value="${esc(x.say || '')}" placeholder="w-hen" autocomplete="off"></td>
     <td>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</td>
     <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a memory trick" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
+    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling trick" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
   return `<h2>Support tools</h2>
     <p class="note">Bella chooses which tools to use, with the Tools button on the revision pages. Each use is recorded, so the Progress tab can show what she tries. This page sets what each tool shows for each word. The evidence for every tool is a bet, not a finding.</p>
     ${TOOLS.map(t => `<div class="wl"><div><b>${esc(t.label)}.</b> <span class="note">${esc(t.note)}</span></div></div>`).join('')}
     <h2>Tool details for this week's words</h2>
     <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word. Common wrong spellings are used by Pick the right spelling, after her own past mistakes.</p>
-    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Same-pattern words (untick to remove)</th><th>Common wrong spellings</th><th>Memory trick</th></tr>${rows}</table>
+    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Same-pattern words (untick to remove)</th><th>Common wrong spellings</th><th>Spelling trick</th></tr>${rows}</table>
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }
@@ -1995,7 +2002,7 @@ const mnDoneHtml = made => (made && made.length) ? `<div class="mndone">${made.m
 function mnemonicScreen(x, made) {
   return new Promise(res => {
     const w = x.w, n = w.length;
-    let words = (x.mnemWords && x.mnemWords.length === n && x.mnemWords.every((t, i) => t[0] === w[i])) ? x.mnemWords.slice() : null, variant = w.length % 3, custom = !words && x.mnem && x.mnemBy === 'bella' ? x.mnem : '', shown = 0, timer = null, gone = false, busy = false;
+    let words = (x.mnemWords && x.mnemWords.length === n && x.mnemWords.every((t, i) => t[0] === w[i])) ? x.mnemWords.slice() : null, variant = w.length % 3, custom = '', shown = 0, timer = null, gone = false, busy = false;
     if (!words && !custom) words = mnemonicWords(w, variant);
     const arrow = '<svg class="mnarrow" viewBox="0 0 24 40" aria-hidden="true"><path d="M12 2 V32 M4 24 L12 34 L20 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const sentence = () => custom || words.map(mnCap).join(' ') + '.';
@@ -2007,7 +2014,7 @@ function mnemonicScreen(x, made) {
         <div class="row"><button id="mnhear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mnanother" class="btn small">Another one</button><button id="mnok" class="btn big">Got it ${ico('next')}</button></div>
         ${words ? '<p class="subtle">Tap any word to change it.</p>' : ''}${mnDoneHtml(made)}</div>`);
       on('#mnhear', () => say(w + '. ' + sentence()));
-      on('#mnok', () => { gone = true; clearTimeout(timer); hush(); x.mnemWords = words ? words.slice() : undefined; x.mnem = sentence(); x.mnemBy = 'bella'; save(); res(); });
+      on('#mnok', () => { gone = true; clearTimeout(timer); hush(); x.mnemWords = words ? words.slice() : undefined; x.mnemonic = sentence(); save(); res(); });
       on('#mnanother', another);
       document.querySelectorAll('.mnword').forEach(b => { b.onclick = () => { if (!words || +b.dataset.i >= shown) return; const i = +b.dataset.i, c = w[i], role = mnRoleOf(c, words[i]) || mnSkeleton(n)[i], opts = mnOptions(c, role), at = opts.indexOf(words[i]); if (opts.length > 1) { words[i] = opts[(at + 1) % opts.length]; draw(); } }; });
       backBtn(() => { gone = true; clearTimeout(timer); hush(); res(BACK); });
@@ -2044,15 +2051,32 @@ function trickScreen(x) {
   });
 }
 // She ticks the tricky words she wants a memory trick for, or ticks them all with the master tick. Returns the chosen words, or null for Back.
+// Each word of the week with its spelling trick: the one written for the word, or else the phonics rule that fits it.
+function trickText(x) {
+  if (x.mnem) return x.mnem;
+  const f = phonicsRule(x.w);
+  if (f && f.rule) return f.rule + (f.family && f.family.length ? '' : '');
+  if (x.hard) return 'The tricky letters are ' + [...x.hard].join(', ') + '.';
+  return '';
+}
+function tricksScreen(all) {
+  return new Promise(res => {
+    h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tricks</p>
+      <div class="mndone">${all.map(x => `<div class="mncard"><b>${esc(x.w)}</b><span>${esc(trickText(x) || 'No spelling trick yet.')}</span></div>`).join('')}</div>
+      <div class="row"><button id="trdone" class="btn big">Done ${ico('check')}</button></div></div>`);
+    on('#trdone', () => res()); backBtn(() => res());
+  });
+}
 function pickTricky(all) {
   return new Promise(res => {
     const on0 = new Set(); // nothing is ticked at first
     const draw = () => {
       const allOn = on0.size === all.length;
-      h(`<div class="screen picktrick"><p class="msg">Which words would you like a mnemonic for?</p>${all.some(x => x.mnem) ? '<p class="subtle">Your saved mnemonics are shown under the words. Tick a word to look at it again or change it.</p>' : ''}
+      h(`<div class="screen picktrick"><p class="msg">Which words would you like a mnemonic for?</p>${all.some(x => x.mnemonic) ? '<p class="subtle">Your saved mnemonics are shown under the words. Tick a word to look at it again or change it.</p>' : ''}
         <button id="pkall" class="pkrow pkmaster${allOn ? ' on' : ''}"><span class="pkbox">${allOn ? '&#10003;' : ''}</span><span>All of them</span></button>
-        <div class="pkgrid">${all.map(x => `<button class="pkrow${on0.has(x.w) ? ' on' : ''}" data-w="${esc(x.w)}"><span class="pkbox">${on0.has(x.w) ? '&#10003;' : ''}</span><span class="pktext"><b>${esc(x.w)}</b>${x.mnem ? `<small>${esc(x.mnem)}</small>` : ''}</span></button>`).join('')}</div>
-        <button id="pkgo" class="btn big"${on0.size ? '' : ' disabled'}>Make my mnemonics ${ico('next')}</button></div>`);
+        <div class="pkgrid">${all.map(x => `<button class="pkrow${on0.has(x.w) ? ' on' : ''}" data-w="${esc(x.w)}"><span class="pkbox">${on0.has(x.w) ? '&#10003;' : ''}</span><span class="pktext"><b>${esc(x.w)}</b>${x.mnemonic ? `<small>${esc(x.mnemonic)}</small>` : ''}</span></button>`).join('')}</div>
+        <button id="pkgo" class="btn big"${on0.size ? '' : ' disabled'}>Make my mnemonics ${ico('next')}</button><button id="pktricks" class="btn small">Show the words and the spelling tricks</button></div>`);
+      on('#pktricks', () => res('tricks'));
       on('#pkall', () => { if (on0.size === all.length) on0.clear(); else all.forEach(x => on0.add(x.w)); draw(); });
       document.querySelectorAll('.pkgrid .pkrow').forEach(b => { b.onclick = () => { const w = b.dataset.w; if (on0.has(w)) on0.delete(w); else on0.add(w); draw(); }; });
       on('#pkgo', () => { if (on0.size) res(all.filter(x => on0.has(x.w))); });
@@ -2063,7 +2087,12 @@ function pickTricky(all) {
 }
 async function remember() {
   const wk = curWeek(), all = wk.words.slice();
-  const list = await pickTricky(all); // she chooses which of the week's words she wants a mnemonic for
+  let list;
+  for (;;) {
+    list = await pickTricky(all); // she chooses which of the week's words she wants a mnemonic for
+    if (list === 'tricks') { await tricksScreen(all); continue; }
+    break;
+  }
   if (!list) return home();
   // A mnemonic for each word she ticked, one after another, each one added underneath the last. They are saved with the word.
   const made = [];
@@ -2072,7 +2101,7 @@ async function remember() {
       const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
       const m = await mnemonicScreen(x, made);
       if (m === BACK) { if (i === 0) return home(); i--; made.pop(); continue; }
-      made[i] = { w: x.w, sentence: x.mnem }; made.length = i + 1; i++;
+      made[i] = { w: x.w, sentence: x.mnemonic }; made.length = i + 1; i++;
     }
   }
   prog = '';
@@ -2480,7 +2509,7 @@ function adult() {
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemWords', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemonic', 'mnemWords', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
