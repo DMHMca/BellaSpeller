@@ -3,9 +3,10 @@
 
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
-function soundOn() { return S.sound === undefined ? true : S.sound === true; } // on by default
+const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
+function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.26'; // bump with every release
+const APP_VER = '3.28'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -843,7 +844,7 @@ async function decodeClip(url) {
 function say(t) {
   const tok = ++sayTok;
   stopAll();
-  if (!soundOn() && !testMode) { keepAwake(false); return; }
+  if (QUIET || (!soundOn() && !testMode)) { keepAwake(false); return; }
   if (ttsOn()) keepAwake(true);
   const warm = Date.now() - lastAudioEnd < 2500; // already talking a moment ago: no need to wake the speaker again
   speechUntil = Date.now() + 120000;
@@ -1210,7 +1211,7 @@ function celebrateText(n, N, clean) {
 }
 let fanCtx = null;
 function fanfare() {
-  if (!soundOn()) return;
+  if (QUIET || !soundOn()) return;
   try {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     fanCtx = fanCtx || new AC(); const c = fanCtx; if (c.state === 'suspended') c.resume();
