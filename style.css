@@ -464,3 +464,29 @@ body:has(#wpanel:not([style*="none"])) .top { min-height: 44px; margin-bottom: 0
 .wread { min-height: 0; }
 .readback { font-size: 22px; margin-bottom: 4px; }
 body:has(#wpanel:not([style*="none"])) .writescreen .slots { display: none; }
+
+/* story choice screen on a wide screen: Home and Back in the side margins, the options down the left, thinner story cards */
+.shelfgrid { width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.shelfmain { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+@media (min-width: 900px) {
+  #app:has(.shelfscreen) { max-width: 1000px; padding-top: 30px; }
+  body:has(.shelfscreen) .top { min-height: 0; height: 0; margin: 0; }
+  body:has(.shelfscreen) #goHome { position: fixed; left: 14px; top: 28px; z-index: 50; }
+  body:has(.shelfscreen) .backbtn { position: fixed; right: 14px; top: 28px; z-index: 50; }
+  body:has(.shelfscreen) #topSnd { position: fixed; left: 14px; top: 100px; z-index: 50; }
+  body:has(.shelfscreen) .prog { display: none; }
+  .shelfscreen { gap: 8px; padding-top: 0; }
+  .shelfscreen h1 { font-size: 28px; margin: 0; }
+  .shelfgrid { flex-direction: row; align-items: flex-start; gap: 18px; }
+  .shelfside { flex: 0 0 210px; }
+  .shelfside .optrow { flex-direction: column; align-items: stretch; gap: 10px; }
+  .shelfside .optchip { font-size: 18px; padding: 12px 14px; border-radius: 18px; text-align: left; }
+  .shelfmain { flex: 1; min-width: 0; }
+  .shelfscreen .shelfcard { min-height: 66px; padding: 8px 14px; border-radius: 18px; gap: 12px; }
+  .shelfscreen .shelfcard.wide { min-height: 66px; }
+  .shelfscreen .shelfcard b { font-size: 19px; }
+  .shelfscreen .shelfcard small { font-size: 14px; }
+  .shelfscreen .shelfcard .ticon { width: 44px; height: 44px; border-radius: 14px; }
+  .shelfscreen .shelfcard .ticon .ico { width: 24px; height: 24px; }
+  .shelfscreen .shelf { gap: 10px; }
+}
