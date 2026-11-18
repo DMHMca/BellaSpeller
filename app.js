@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.51'; // bump with every release
+const APP_VER = '3.52'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1230,12 +1230,12 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
-      W = Math.min(wrap.parentNode.clientWidth || 700, 1100); H = Math.max(135, Math.min(250, Math.round(innerHeight * 0.21)));
+      W = Math.max(380, Math.min(Math.round((wrap.parentNode.clientWidth || 800) * 0.5), 640)); H = Math.max(150, Math.min(300, Math.round(innerHeight * 0.27)));
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       paintGuide = () => {
         const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.lineWidth = 2;
-        if (S.hwLines !== false) { gx.strokeStyle = '#ddd8f0'; gx.setLineDash([3, 9]); const n = Math.max(2, word.length), x0 = W / 3, wd = W / 3; for (let i = 0; i <= n; i++) { const x = x0 + wd * i / n; gx.beginPath(); gx.moveTo(x, 12); gx.lineTo(x, H - 12); gx.stroke(); } gx.setLineDash([]); }
+        if (S.hwLines !== false) { gx.strokeStyle = '#ddd8f0'; gx.setLineDash([3, 9]); const n = Math.max(2, word.length), x0 = W * 0.15, wd = W * 0.7; for (let i = 0; i <= n; i++) { const x = x0 + wd * i / n; gx.beginPath(); gx.moveTo(x, 12); gx.lineTo(x, H - 12); gx.stroke(); } gx.setLineDash([]); }
       }; paintGuide();
       ix = ink.getContext('2d', { willReadFrequently: true }); ink.style.touchAction = 'none';
       const pos = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };

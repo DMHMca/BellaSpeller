@@ -497,3 +497,8 @@ body.inkmode .writescreen .slots { display: none; }
 .readback { display: flex; align-items: baseline; justify-content: center; gap: 14px; font-size: 26px; margin: 2px 0 6px; }
 .readback .readword { font-size: clamp(52px, 11vh, 84px); line-height: 1.05; letter-spacing: .06em; background: var(--paper, #fdf8ec); color: var(--ink, #2a2154); padding: 2px 26px 6px; border-radius: 18px; border-bottom: 6px solid var(--amber, #ffc83d); }
 .wread .row { justify-content: center; }
+
+/* writing page: the box is about half the width and centred, and the parts are spread down the screen instead of crowded at the top */
+body.inkmode .writescreen { min-height: calc(100vh - 100px); justify-content: space-evenly; gap: 10px; }
+body.inkmode .wpanel { gap: 14px; }
+body.inkmode .wwrap { margin: 0 auto; }
