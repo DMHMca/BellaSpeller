@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.43'; // bump with every release
+const APP_VER = '3.44'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1386,15 +1386,14 @@ function shelf(ep, st) {
       hasStory = ep && st; done = hasStory && st.part >= ep.parts.length;
       const all = allIdeas(), unused = all.filter(t => !isUsed(t)).slice(0, SHELF_SIZE);
       const told = all.filter(isUsed).sort((x, y) => S.used[y.id] - S.used[x.id]);
-      h(`<div class="screen shelfscreen"><h1>Choose your story</h1><div class="shelfgrid"><div class="shelfside">
-      <div class="optrow"><button id="caststrip" class="optchip">Characters: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></button><button id="chtoggle" class="optchip">Choices: <b id="chstate">${nChoices() || 'off'}</b></button><button id="lentoggle" class="optchip">Length: <b id="lenstate">${curLen().label.toLowerCase()}</b></button></div>
+      h(`<div class="screen shelfscreen"><h1>Choose your story</h1>
       ${aiKey() ? '' : '<p class="subtle">Stories are written by AI. Add the AI key with the settings gear to use these.</p>'}
-      </div><div class="shelfmain">
       ${hasStory ? `<div class="againrow">${card('again', 'book', (done ? 'Play again: ' : st.part > 0 ? 'Carry on: ' : 'Play: ') + ep.title, done ? 'Tell this story again' : st.part > 0 ? 'Not finished yet' : 'Not played yet', 'wide')}<button id="resetstory" class="optchip">Reset</button></div>` : ''}
       <div class="shelf">${unused.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>
       ${card('own', 'pencil', 'Write my own story', 'Tell me your idea', 'wide own')}
+      <div class="optrow"><button id="caststrip" class="optchip">Characters: <b>${esc(S.girls.slice(0, castN()).join(', '))}</b></button><button id="chtoggle" class="optchip">Choices: <b id="chstate">${nChoices() || 'off'}</b></button><button id="lentoggle" class="optchip">Length: <b id="lenstate">${curLen().label.toLowerCase()}</b></button></div>
       ${told.length ? `<h2 class="shelfhead">Already told</h2><p class="subtle">Pick one to tell it again with this week's words.</p><div class="shelf told">${told.map(t => card('i' + all.indexOf(t), t.icon, t.title, t.blurb)).join('')}</div>` : ''}
-      </div></div></div>`);
+      </div>`);
       on('#own', () => { hush(); res({ kind: 'own' }); });
       on('#caststrip', () => { hush(); res({ kind: 'cast' }); });
       on('#lentoggle', () => { const k = Object.keys(LENGTHS), n = k[(k.indexOf(S.len in LENGTHS ? S.len : 'standard') + 1) % k.length]; S.len = n; save(); $('#lenstate').textContent = LENGTHS[n].label.toLowerCase(); });
