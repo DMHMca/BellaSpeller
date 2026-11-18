@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.29'; // bump with every release
+const APP_VER = '3.30'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -318,8 +318,8 @@ function toolContent(x, stage) {
 const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + ', ' + word + '.';
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
-function helpsFor(x) { return ['family', 'sure']; } // the two main helps; neither shows the word
-const HELP_LABEL = { family: 'The spelling rule', sure: 'Are you sure?', voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Pick the right spelling' };
+function helpsFor(x) { return ['family', 'sure', 'choice']; } // the three main helps, in this order; none shows the word
+const HELP_LABEL = { family: 'The spelling rule', sure: "I will tell you if a letter doesn't look right", voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Multiple choice' };
 // Empty boxes, one per letter, so she can see how long the word is and where the tricky bit is, without seeing any letters.
 function boxesHtml(x, marks, groups) {
   const w = x.w, hi = x.hard ? w.indexOf(x.hard) : -1; let i = 0, out = '';
@@ -417,7 +417,7 @@ function helpContent(x, id) {
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
   if (id === 'letters') return { html: L('', 'Say each letter out loud as you type it.') };
-  if (id === 'sure') return { html: L('', 'I will tell you if a letter does not look right.') };
+  if (id === 'sure') return { html: L('', "I will tell you if a letter doesn't look right.") };
   return { html: '' };
 }
 function toolsPanel() {
