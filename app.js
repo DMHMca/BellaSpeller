@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.73'; // bump with every release
+const APP_VER = '3.76'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,8 +28,6 @@ function migrateWords(s) {
 }
 // Mnemonics made before they had their own field were saved over the word's spelling trick. Move them across once.
 function migrateMnem(s) {
-  if (s.mnemMigrated) return s;
-  s.mnemMigrated = 1;
   (s.weeks || []).forEach(wk => (wk.words || []).forEach(x => { if (x.mnemWords && x.mnemBy === 'bella' && x.mnem) { x.mnemonic = x.mnem; delete x.mnem; delete x.mnemBy; } }));
   return s;
 }
@@ -2069,9 +2067,8 @@ function mineScreen(all) {
 function tricksScreen(all) {
   return new Promise(res => {
     h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tricks</p>
-      <div class="mndone">${all.map(x => `<div class="mncard"><b>${esc(x.w)}</b><span>${esc(trickText(x) || 'No spelling trick yet.')}</span></div>`).join('')}</div>
-      <div class="row"><button id="trdone" class="btn big">Done ${ico('check')}</button></div></div>`);
-    on('#trdone', () => res()); backBtn(() => res());
+      <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt">${esc(trickText(x) || 'No spelling trick yet.')}</span>`).join('')}</div></div>`);
+    backBtn(() => res());
   });
 }
 function pickTricky(all) {

@@ -573,3 +573,16 @@ body.onmn #app { max-width: 1100px; }
 .pktext small { font-size: 16px; font-weight: 400; letter-spacing: 0; color: #a02a76; line-height: 1.25; }
 
 #pktricks { margin-top: 4px; }
+
+/* the words down the left, their spelling tricks down the right, both big */
+.trgrid { width: 100%; max-width: 1000px; display: grid; grid-template-columns: max-content 1fr; column-gap: 28px; align-items: center; }
+.trgrid > * { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.14); }
+.trw { font-size: clamp(26px, 4.4vh, 38px); letter-spacing: .05em; color: #fff; text-align: left; }
+.trt { font-size: clamp(22px, 3.7vh, 32px); color: #ffd1ea; text-align: left; line-height: 1.25; }
+
+.trgrid > * { padding: 4px 0; }
+.trw { font-size: clamp(24px, 4.3vh, 36px); }
+.trt { font-size: clamp(20px, 3.6vh, 30px); }
+.trgrid > * { padding: 3px 0; }
+.trw { font-size: clamp(22px, 3.9vh, 32px); }
+.trt { font-size: clamp(18px, 3.3vh, 28px); }
