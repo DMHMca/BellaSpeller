@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.44'; // bump with every release
+const APP_VER = '3.45'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2188,7 +2188,8 @@ function adult() {
     <label>Or type another model name (optional)</label><input id="orModelOther" type="text" autocomplete="off" placeholder="for example openai/gpt-6.1-sol">
     <label>Story AI address (leave blank for OpenRouter; any OpenAI-style service works, for example Z.ai)</label><input id="aiBase" type="text" autocomplete="off" placeholder="https://openrouter.ai/api/v1" value="${esc(S.aiBase || '')}">
     <label>Story AI key (leave blank to use the OpenRouter key)</label><input id="aiKey" type="password" autocomplete="off" value="${esc(S.aiKey || '')}">
-    <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button></div>
+    <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button> <button id="restore" class="btn small">Load a backup file</button><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
+    <p class="note">To move everything to another device (told stories, words, settings, her answers): save a backup file here, send it to the other device (email or Google Drive), then press Load a backup file there. This device keeps its own OpenRouter key.</p>
     <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div></div>`);
   adultFlash = '';
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
@@ -2276,6 +2277,18 @@ function adult() {
     a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.assign({}, S, { orKey: undefined, aiKey: undefined }), null, 1)], { type: 'application/json' }));
     a.download = 'bellaspeller-backup-' + today() + '.json'; a.click();
   });
+  on('#restore', () => $('#restoreFile').click());
+  const rf = $('#restoreFile'); if (rf) rf.onchange = async () => {
+    const f = rf.files && rf.files[0]; if (!f) return;
+    try {
+      const n = JSON.parse(await f.text());
+      if (!n || !Array.isArray(n.weeks) || !n.weeks.length) throw new Error('bad');
+      if (!confirm('Replace everything on this device with the contents of this backup (' + n.weeks.length + ' weeks of words, ' + Object.keys(n.used || {}).length + ' stories told)? The OpenRouter key on this device is kept.')) { rf.value = ''; return; }
+      const keep = { orKey: S.orKey, aiKey: S.aiKey, aiBase: S.aiBase };
+      S = Object.assign({}, n); Object.keys(keep).forEach(k => { if (keep[k]) S[k] = keep[k]; });
+      save(); alert('Done. This device now has everything from the backup.'); location.reload();
+    } catch (e) { alert('That file is not a BellaSpeller backup.'); rf.value = ''; }
+  };
   document.querySelectorAll('.redtick').forEach(c => { c.onchange = () => { wk.words[+c.dataset.i].red = c.checked || undefined; save(); }; });
   document.querySelectorAll('.toolsw').forEach(c => { c.onchange = () => { S.tools = S.tools || {}; S.tools[c.dataset.t] = c.checked; save(); }; });
   on('#tsave', () => {
