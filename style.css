@@ -465,8 +465,11 @@ body:has(#wpanel:not([style*="none"])) .top { min-height: 44px; margin-bottom: 0
 .readback { font-size: 22px; margin-bottom: 4px; }
 body:has(#wpanel:not([style*="none"])) .writescreen .slots { display: none; }
 
-/* story choice screen: compact, with the options below the stories */
+/* story choice screen: compact; on a wide screen Home, Back and the options go down the left and the stories are narrower */
 .shelfscreen { gap: 10px; }
+.shelfmain { display: contents; }
+.shelfside { order: 1; width: 100%; }
+.toldblock { order: 2; width: 100%; }
 .shelfscreen h1 { font-size: 26px; margin: 0; }
 .shelfscreen .shelfcard, .shelfscreen .shelfcard.wide { min-height: 64px; padding: 8px 14px; border-radius: 18px; gap: 12px; }
 .shelfscreen .shelfcard b { font-size: 19px; }
@@ -474,6 +477,18 @@ body:has(#wpanel:not([style*="none"])) .writescreen .slots { display: none; }
 .shelfscreen .shelfcard .ticon { width: 42px; height: 42px; border-radius: 14px; }
 .shelfscreen .shelfcard .ticon .ico { width: 22px; height: 22px; }
 .shelfscreen .shelf { gap: 10px; }
-.shelfscreen .shelfhead { margin: 10px 0 0; font-size: 18px; }
-.shelfscreen .shelfhead + .subtle { display: none; }
-@media (min-width: 900px) { #app:has(.shelfscreen) { max-width: 1000px; } body:has(.shelfscreen) .top { min-height: 44px; margin-bottom: 0; } }
+.shelfscreen .shelfhead { margin: 10px 0 6px; font-size: 18px; }
+@media (min-width: 900px) {
+  #app:has(.shelfscreen) { max-width: 940px; display: grid; grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 18px; align-items: start; }
+  #app:has(.shelfscreen) .top { grid-column: 1; grid-row: 1; flex-direction: column; align-items: stretch; margin: 0; min-height: 0; gap: 8px; }
+  #app:has(.shelfscreen) .top .lhs { flex-direction: column; align-items: stretch; gap: 8px; }
+  #app:has(.shelfscreen) .top .iconbtn, #app:has(.shelfscreen) .top .sndtop { justify-content: flex-start; margin: 0; }
+  #app:has(.shelfscreen) .prog { display: none; }
+  .shelfscreen { display: contents; }
+  .shelfmain { display: flex; flex-direction: column; align-items: center; gap: 10px; grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
+  .shelfmain > * { width: 100%; }
+  .shelfside { grid-column: 1; grid-row: 2; order: 0; }
+  .toldblock { order: 0; }
+  .shelfside .optrow { flex-direction: column; align-items: stretch; gap: 8px; }
+  .shelfside .optchip { font-size: 17px; padding: 10px 12px; border-radius: 16px; text-align: left; }
+}
