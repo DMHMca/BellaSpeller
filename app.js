@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.34'; // bump with every release
+const APP_VER = '3.35'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1138,9 +1138,9 @@ async function readHandwriting(strokes, ink, W, H) {
   for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (data[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   if (x1 <= x0) return '';
   x0 = Math.max(0, x0 - 24); y0 = Math.max(0, y0 - 24); x1 = Math.min(W, x1 + 24); y1 = Math.min(H, y1 + 24);
-  const outW = Math.min(700, Math.max(240, x1 - x0)), k = outW / (x1 - x0), c = document.createElement('canvas'); c.width = outW; c.height = Math.max(8, Math.round((y1 - y0) * k));
+  const outW = Math.min(420, Math.max(200, x1 - x0)), k = outW / (x1 - x0), c = document.createElement('canvas'); c.width = outW; c.height = Math.max(8, Math.round((y1 - y0) * k));
   const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height); cx.drawImage(ink, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' }, body: JSON.stringify({ model: S.hwModel || 'anthropic/claude-haiku-5.5', max_tokens: 200, temperature: 0, messages: [{ role: 'user', content: [{ type: 'text', text: 'This image shows a word handwritten by a child. Transcribe exactly the letters that are written, in order, including any spelling mistakes. Do not correct the spelling and do not complete the word. If a letter is unclear, give your best single guess for that letter. Reply with JSON only: {"letters": ["x", "y"]}' }, { type: 'image_url', image_url: { url: c.toDataURL('image/png') } }] }] }) });
+  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' }, body: JSON.stringify({ model: S.hwModel || 'anthropic/claude-haiku-5.5', max_tokens: 60, temperature: 0, messages: [{ role: 'user', content: [{ type: 'text', text: 'This image shows a word handwritten by a child. Transcribe exactly the letters that are written, in order, including any spelling mistakes. Do not correct the spelling and do not complete the word. If a letter is unclear, give your best single guess for that letter. Reply with JSON only: {"letters": ["x", "y"]}' }, { type: 'image_url', image_url: { url: c.toDataURL('image/png') } }] }] }) });
   if (!r.ok) throw aiFail(r.status);
   const j = await r.json(), t = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
   const txt = typeof t === 'string' ? t : Array.isArray(t) ? t.map(z => z.text || '').join('') : '', a = txt.indexOf('{'), b = txt.lastIndexOf('}');
@@ -1210,11 +1210,12 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     }
     on('#remind', () => { reminded = true; $('#remindbox').innerHTML = `<div class="page small"><p class="story">${remind.html}</p></div>`; say(remind.spoken); });
     // ----- keyboard or writing: she (or a grown-up) chooses, and the choice is remembered -----
+    const pre = { t: 0, n: 0, p: null };
     let mode = S.input === 'write' ? 'write' : 'keyboard', inkReady = false, strokes = [], cur = null, penSeen = 0, W = 0, H = 0, ix = null;
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
-      W = Math.min(wrap.parentNode.clientWidth || 700, 1000); H = Math.max(130, Math.min(240, Math.round(innerHeight * 0.22)));
+      W = Math.min(wrap.parentNode.clientWidth || 500, 460); H = Math.max(240, Math.min(400, Math.round(innerHeight * 0.46)));
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.strokeStyle = '#c9c3e6'; gx.lineWidth = 2; gx.beginPath(); gx.moveTo(14, H * 0.72); gx.lineTo(W - 14, H * 0.72); gx.stroke();
@@ -1232,11 +1233,15 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
         const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
         (evs.length ? evs : [e]).forEach(ev => { const [x, y] = pos(ev), p = cur.pts[cur.pts.length - 1], pr = ev.pressure || 0.5; ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineWidth = 3 + pr * 4; ix.beginPath(); ix.moveTo(p.x, p.y); ix.lineTo(x, y); ix.stroke(); cur.pts.push({ x, y, t: Date.now() }); });
       };
-      ink.onpointerup = ink.onpointercancel = () => { cur = null; };
+      // start reading as soon as the pen pauses, so the answer is usually ready by the time she presses Done
+      ink.onpointerup = ink.onpointercancel = () => {
+        cur = null; clearTimeout(pre.t);
+        pre.t = setTimeout(() => { if (!strokes.length || done) return; const n = strokes.length; pre.n = n; pre.p = readHandwriting(strokes, ink, W, H); pre.p.catch(() => { }); }, 700);
+      };
       ink.oncontextmenu = e => e.preventDefault();
     };
     const wrow = () => document.querySelector('#wpanel > .row');
-    const clearInk = () => { if (ix) ix.clearRect(0, 0, W, H); strokes = []; cur = null; $('#wread').innerHTML = ''; const r = wrow(); if (r) r.style.display = ''; };
+    const clearInk = () => { clearTimeout(pre.t); pre.n = 0; pre.p = null; if (ix) ix.clearRect(0, 0, W, H); strokes = []; cur = null; $('#wread').innerHTML = ''; const r = wrow(); if (r) r.style.display = ''; };
     const setMode = m => {
       mode = m; S.input = m; save();
       const kb = document.querySelector('.kb'), wp = $('#wpanel'), sw = $('#modesw');
@@ -1254,7 +1259,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       if (!strokes.length) { $('#wread').textContent = 'Write the word first.'; return; }
       $('#wread').textContent = 'Reading...';
       let text = '';
-      try { text = await readHandwriting(strokes, $('#wink'), W, H); }
+      try { try { text = (pre.p && pre.n === strokes.length) ? await pre.p : await readHandwriting(strokes, $('#wink'), W, H); } catch (e0) { pre.p = null; text = await readHandwriting(strokes, $('#wink'), W, H); } }
       catch (e) { $('#wread').textContent = e.message || 'I could not read that.'; return; }
       if (!text) { $('#wread').textContent = 'I could not read that. Please write it again.'; return; }
       typed = text.slice(0, Math.min(24, word.length + 3)); draw();
@@ -1837,9 +1842,12 @@ function showAnswer(word) {
 }
 // She got it wrong. She is asked whether she wants another go or some help, and if help, which one. One help at a time.
 // Returns 'again', 'show', {help: id}, or BACK.
+// The spelling rule button is greyed out for a word that has no built-in rule.
+const hasRule = x => !!phonicsRule(x.w);
+const helpBtns = x => helpsFor(x).map(id => { const off = id === 'family' && !hasRule(x); return `<button class="choice${off ? ' off' : ''}" data-h="${id}"${off ? ' disabled aria-disabled="true"' : ''}>${esc(HELP_LABEL[id])}</button>`; }).join('');
 function helpMenu(x) {
   return new Promise(r => {
-    h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}</div></div>`);
+    h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpBtns(x)}</div></div>`);
     document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
     backBtn(() => r(BACK)); say(HELP_MENU);
   });
@@ -1856,7 +1864,7 @@ function helpChoice(x, first) {
       if (c === BACK) return res(BACK);
       if (c === 'again') return res('again');
       const m = await new Promise(r => {
-        h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpsFor(x).map(id => `<button class="choice" data-h="${id}">${esc(HELP_LABEL[id])}</button>`).join('')}</div></div>`);
+        h(`<div class="screen"><p class="msg">Which help would you like?</p><div class="choices menu">${helpBtns(x)}</div></div>`);
         document.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { hush(); r(b.dataset.h); }; });
         backBtn(() => r(BACK)); say(HELP_MENU);
       });

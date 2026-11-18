@@ -445,3 +445,5 @@ body.hasupdate #app { padding-right: 116px; }
 .wwrap canvas { position: absolute; left: 0; top: 0; border-radius: 16px; }
 .wread { min-height: 28px; color: #fff; font-size: 20px; }
 .readback { font-size: 26px; margin-bottom: 6px; }
+
+.choice.off { opacity: .35; filter: grayscale(1); cursor: default; box-shadow: none; }
