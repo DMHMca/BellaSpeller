@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.60'; // bump with every release
+const APP_VER = '3.62'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1943,10 +1943,12 @@ async function aiMnemonic(w, notThese) {
   return words;
 }
 // The memory trick screen for one word: the word along the top, an arrow from each letter, and the silly word it points to. They appear one by one, then the whole trick is written underneath.
-function mnemonicScreen(x) {
+// The memory tricks made so far, in rows of two, shown underneath.
+const mnDoneHtml = made => (made && made.length) ? `<div class="mndone">${made.map(m => `<div class="mncard"><b>${esc(m.w)}</b><span>${esc(m.sentence)}</span></div>`).join('')}</div>` : '';
+function mnemonicScreen(x, made) {
   return new Promise(res => {
     const w = x.w, n = w.length;
-    let words = (x.mnemWords && x.mnemWords.length === n && x.mnemWords.every((t, i) => t[0] === w[i])) ? x.mnemWords.slice() : null, variant = 0, custom = !words && x.mnem && x.mnemBy === 'bella' ? x.mnem : '', shown = 0, timer = null, gone = false, busy = false;
+    let words = (x.mnemWords && x.mnemWords.length === n && x.mnemWords.every((t, i) => t[0] === w[i])) ? x.mnemWords.slice() : null, variant = w.length % 3, custom = !words && x.mnem && x.mnemBy === 'bella' ? x.mnem : '', shown = 0, timer = null, gone = false, busy = false;
     if (!words && !custom) words = mnemonicWords(w, variant);
     const arrow = '<svg class="mnarrow" viewBox="0 0 24 40" aria-hidden="true"><path d="M12 2 V32 M4 24 L12 34 L20 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const sentence = () => custom || words.map(mnCap).join(' ') + '.';
@@ -1956,7 +1958,7 @@ function mnemonicScreen(x) {
         ${words ? `<div class="mngrid" style="grid-template-columns:repeat(${n}, minmax(0,1fr))">${cols}</div>` : `<div class="wordtile">${esc(w)}</div>`}
         <div class="mntrick" id="mntrick">${(!words || shown >= n) ? esc(sentence()) : '&nbsp;'}</div>
         <div class="row"><button id="mnhear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mnanother" class="btn small">Another one</button><button id="mnok" class="btn big">Got it ${ico('next')}</button></div>
-        ${words ? '<p class="subtle">Tap any word to change it.</p>' : ''}</div>`);
+        ${words ? '<p class="subtle">Tap any word to change it.</p>' : ''}${mnDoneHtml(made)}</div>`);
       on('#mnhear', () => say(w + '. ' + sentence()));
       on('#mnok', () => { gone = true; clearTimeout(timer); hush(); x.mnemWords = words ? words.slice() : undefined; x.mnem = sentence(); x.mnemBy = 'bella'; save(); res(); });
       on('#mnanother', another);
@@ -2006,16 +2008,31 @@ async function remember() {
   ensureTools(wk);
   await prep(spellTexts(sub), 'Getting your tricky words ready');
   await loadPics(wk);
+  // First a memory trick for every tricky word, one after another, each one added underneath the last. Then, if she wants, she tests herself.
+  const made = [];
+  { let i = 0;
+    while (i < list.length) {
+      const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
+      const m = await mnemonicScreen(x, made);
+      if (m === BACK) { if (i === 0) return home(); i--; made.pop(); continue; }
+      made[i] = { w: x.w, sentence: x.mnem }; made.length = i + 1; i++;
+    }
+  }
+  prog = '';
+  const test = await new Promise(res => {
+    h(`<div class="screen mnscreen"><p class="msg">Your memory tricks</p>${mnDoneHtml(made)}<div class="row"><button id="mntest" class="btn big">Test myself ${ico('next')}</button><button id="mnfin" class="btn">Finished</button></div></div>`);
+    on('#mntest', () => res(true)); on('#mnfin', () => res(false)); backBtn(() => res(BACK));
+  });
+  if (test === BACK) return remember();
+  if (!test) return home();
   const firsts = {}, starred = new Set();
   testMode = true;
   try {
     let i = 0;
     while (i < list.length) {
       const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
-      const m = await mnemonicScreen(x);
-      if (m === BACK) { if (i === 0) return home(); i--; continue; }
       const r = await reviseWord(sub, { x, look: false, counts: true, mode: 'revise', context: true }, storySentence(sub, x.w), starred);
-      if (r === BACK) continue;
+      if (r === BACK) { if (i === 0) return home(); i--; continue; }
       firsts[x.w] = r; i++;
     }
   } finally { testMode = false; }
