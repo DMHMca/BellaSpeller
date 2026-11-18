@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.86'; // bump with every release
+const APP_VER = '3.87'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -890,13 +890,14 @@ function say(t) {
   const warm = Date.now() - lastAudioEnd < 2500; // already talking a moment ago: no need to wake the speaker again
   speechUntil = Date.now() + 120000;
   if (!ttsOn()) return builtinSay(t);
+  let began = false; // set once something is actually playing; if nothing starts, the device voice takes over
   const playTag = url => { // plain audio element (used if the audio channel is not running)
     audioEl = new Audio(url);
     audioEl.onended = () => { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); };
     audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
     const el = audioEl;
     el.preload = 'auto';
-    setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, warm ? 60 : 350);
+    setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().then(() => { began = true; }, () => { if (tok === sayTok) builtinSay(t); }); }, warm ? 60 : 350);
   };
   // The recording is decoded and started on the audio channel that is already running, a fraction of a second ahead, so the first word is not lost.
   const play = url => {
@@ -907,7 +908,7 @@ function say(t) {
       if (tok !== sayTok || w.paused) return;
       const src = wakeCtx.createBufferSource(); src.buffer = buf; src.connect(wakeCtx.destination); w.src = src;
       src.onended = () => { w.ended = true; if (!w.paused) { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); } };
-      src.start(wakeCtx.currentTime + (warm ? 0.1 : 0.3));
+      src.start(wakeCtx.currentTime + (warm ? 0.1 : 0.3)); began = true;
     }).catch(() => { if (tok === sayTok) playTag(url); });
   };
   getClipUrl(t).then(async url => {
@@ -919,8 +920,10 @@ function say(t) {
       if (tok !== sayTok) return;
       if (got) return play(got);
     }
-    builtinSay(t);
-  });
+    began = true; builtinSay(t);
+  }).catch(() => { if (tok === sayTok) { began = true; builtinSay(t); } });
+  // If nothing has started after a few seconds (a stuck download, a sleeping speaker), the device's own voice says it instead.
+  setTimeout(() => { if (tok === sayTok && !began) { began = true; builtinSay(t); } }, 7000);
 }
 function builtinSay(t) {
   if (!('speechSynthesis' in window)) return;
@@ -1194,7 +1197,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="modesw" class="btn small"></button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
+      <div class="row"><button id="hear" class="btn small" aria-label="Hear it again">${ico('speaker')}<span>Hear it again</span></button><button id="modesw" class="btn small"></button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
       <div id="wpanel" class="wpanel" style="display:none"><div id="wread" class="wread"></div><div id="wwrap" class="wwrap"><canvas id="wguide"></canvas><canvas id="wink"></canvas></div>
         <div class="row"><button id="wclear" class="btn small">Clear</button><button id="wlines" class="btn small">Letter lines</button><button id="wdone" class="btn">Done ${ico('check')}</button></div></div>
       ${kbHtml()}</div>`);
