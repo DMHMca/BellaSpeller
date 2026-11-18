@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.17'; // bump with every release
+const APP_VER = '3.18'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -587,6 +587,13 @@ const HW_MODELS = ['anthropic/claude-haiku-5.5', 'google/gemini-2.5-flash-lite',
 const hwResults = [];
 function wireHandwriting() {
   const wrap = $('#hwWrap'); if (!wrap) return;
+  const det = $('#hwDetect');
+  if ('createHandwritingRecognizer' in navigator) {
+    det.textContent = 'This browser offers the built-in handwriting recognizer.';
+    try { if (navigator.queryHandwritingRecognizerSupport) navigator.queryHandwritingRecognizerSupport({ languages: ['en'] }).then(r => { det.textContent += ' English support: ' + (r && r.languages ? 'yes' : 'no') + '.'; }, () => { }); } catch (e) { }
+  } else det.textContent = 'This browser does not offer the built-in handwriting recognizer, so use the AI vision modes here.';
+  const nat = $('#hwNative');
+  if (nat) nat.oninput = () => { const want = $('#hwWord').value.trim().toLowerCase(), got = nat.value.trim().toLowerCase(); $('#hwOut').textContent = 'The keyboard gave: "' + got + '"' + (want ? (got === want ? ' (matches)' : ' (you wrote "' + want + '")') : ''); };
   const guide = $('#hwGuide'), ink = $('#hwInk'), W = Math.min(wrap.clientWidth || 700, 900), H = 220;
   [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
   wrap.style.height = H + 'px'; wrap.style.width = W + 'px';
@@ -2028,6 +2035,8 @@ function adult() {
     <label>The word you will write, exactly as you write it</label><input id="hwWord" type="text" autocomplete="off" spellcheck="false" placeholder="for example because">
     <label>How to read it</label><select id="hwMode"><option value="word">The whole word at once (AI vision)</option><option value="boxes">One letter per box (AI vision)</option><option value="builtin">The device's own recognizer, if it has one</option></select>
     <label>AI vision model</label><select id="hwModel">${HW_MODELS.map(m => `<option value="${m}">${esc(m)}</option>`).join('')}</select>
+    <p id="hwDetect" class="note"></p>
+    <label>Or try the device's own handwriting keyboard: tap in this box, switch the on-screen keyboard to handwriting, and write the word</label><input id="hwNative" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <div id="hwWrap" class="hwwrap"><canvas id="hwGuide"></canvas><canvas id="hwInk"></canvas></div>
     <div><button id="hwClear" class="btn small">Clear</button> <button id="hwRead" class="btn small">Read it</button> <button id="hwCopy" class="btn small">Copy the results</button></div>
     <p id="hwOut" class="note"></p><div id="hwLog"></div>
