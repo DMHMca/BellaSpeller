@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.36'; // bump with every release
+const APP_VER = '3.37'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1219,7 +1219,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.strokeStyle = '#c9c3e6'; gx.lineWidth = 2; gx.beginPath(); gx.moveTo(14, H * 0.72); gx.lineTo(W - 14, H * 0.72); gx.stroke();
-      ix = ink.getContext('2d', { willReadFrequently: true }); ink.style.touchAction = 'none';
+      ix = ink.getContext('2d', { desynchronized: true, willReadFrequently: true }); ink.style.touchAction = 'none';
       const pos = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
       ink.onpointerdown = e => {
         if (!armed) return;
