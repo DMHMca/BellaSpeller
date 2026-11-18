@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.35'; // bump with every release
+const APP_VER = '3.36'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1219,11 +1219,11 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.strokeStyle = '#c9c3e6'; gx.lineWidth = 2; gx.beginPath(); gx.moveTo(14, H * 0.72); gx.lineTo(W - 14, H * 0.72); gx.stroke();
-      ix = ink.getContext('2d'); ink.style.touchAction = 'none';
+      ix = ink.getContext('2d', { willReadFrequently: true }); ink.style.touchAction = 'none';
       const pos = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
       ink.onpointerdown = e => {
         if (!armed) return;
-        if (e.pointerType === 'pen') penSeen = Date.now(); else if (e.pointerType === 'touch' && (Date.now() - penSeen < 4000 || cur || e.width > 45 || e.height > 45)) return; // a palm, or a second contact
+        if (e.pointerType === 'pen') penSeen = Date.now(); else if (e.pointerType === 'touch' && (Date.now() - penSeen < 600 || (cur && Date.now() - cur.pts[cur.pts.length - 1].t < 400) || e.width > 60 || e.height > 60)) return; // a palm, or a second contact; a stroke left open by a lost pen-up never blocks for long
         try { ink.setPointerCapture(e.pointerId); } catch (x) { }
         const [x, y] = pos(e); cur = { id: e.pointerId, pts: [{ x, y, t: Date.now() }] }; strokes.push(cur);
         ix.fillStyle = '#111'; ix.beginPath(); ix.arc(x, y, 2.5, 0, 7); ix.fill();
@@ -1236,7 +1236,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       // start reading as soon as the pen pauses, so the answer is usually ready by the time she presses Done
       ink.onpointerup = ink.onpointercancel = () => {
         cur = null; clearTimeout(pre.t);
-        pre.t = setTimeout(() => { if (!strokes.length || done) return; const n = strokes.length; pre.n = n; pre.p = readHandwriting(strokes, ink, W, H); pre.p.catch(() => { }); }, 700);
+        pre.t = setTimeout(() => { if (!strokes.length || done) return; const n = strokes.length; pre.n = n; pre.p = readHandwriting(strokes, ink, W, H); pre.p.catch(() => { }); }, 1500);
       };
       ink.oncontextmenu = e => e.preventDefault();
     };
