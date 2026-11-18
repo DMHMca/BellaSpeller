@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.00'; // bump with every release
+const APP_VER = '3.01'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -555,6 +555,95 @@ function picPrompt(scene) {
   return PIC_STYLE + ' ' + txt + ' Cosy, kind, nothing frightening. No text, no letters, no words, no signs, no food or drink in the picture.';
 }
 let picErr = '';
+// ---------- handwriting test: pen input, read by an AI vision model or the device's own recognizer ----------
+const HW_MODELS = ['anthropic/claude-haiku-5.5', 'google/gemini-2.5-flash-lite', 'openai/gpt-5-nano', 'qwen/qwen3.5-flash-02-23', 'google/gemma-4-26b-a4b-it'];
+const hwResults = [];
+function wireHandwriting() {
+  const wrap = $('#hwWrap'); if (!wrap) return;
+  const guide = $('#hwGuide'), ink = $('#hwInk'), W = Math.min(wrap.clientWidth || 700, 900), H = 220;
+  [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
+  wrap.style.height = H + 'px'; wrap.style.width = W + 'px';
+  const gx = guide.getContext('2d'), ix = ink.getContext('2d');
+  let strokes = [], cur = null, penSeen = 0;
+  const boxesN = () => Math.max(2, Math.min(14, ($('#hwWord').value.trim().length) || 6));
+  const drawGuide = () => {
+    gx.clearRect(0, 0, W, H); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H);
+    gx.strokeStyle = '#c9c3e6'; gx.lineWidth = 2;
+    if ($('#hwMode').value === 'boxes') { const n = boxesN(), bw = W / n; for (let i = 0; i < n; i++) { gx.strokeRect(i * bw + 4, 12, bw - 8, H - 24); } }
+    else { gx.beginPath(); gx.moveTo(10, H * 0.7); gx.lineTo(W - 10, H * 0.7); gx.stroke(); }
+  };
+  const clear = () => { ix.clearRect(0, 0, W, H); strokes = []; cur = null; };
+  drawGuide();
+  $('#hwMode').onchange = () => { drawGuide(); clear(); };
+  $('#hwWord').oninput = () => { if ($('#hwMode').value === 'boxes') { drawGuide(); clear(); } };
+  const pos = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  ink.style.touchAction = 'none';
+  ink.onpointerdown = e => {
+    if (e.pointerType === 'pen') penSeen = Date.now();
+    else if (e.pointerType === 'touch' && Date.now() - penSeen < 4000) return; // a palm resting while the pen is in use
+    try { ink.setPointerCapture(e.pointerId); } catch (x) { }
+    const [x, y] = pos(e); cur = { id: e.pointerId, pts: [{ x, y, t: Date.now() }] }; strokes.push(cur);
+    ix.fillStyle = '#111'; ix.beginPath(); ix.arc(x, y, 2.5, 0, 7); ix.fill();
+  };
+  ink.onpointermove = e => {
+    if (!cur || e.pointerId !== cur.id) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    (evs.length ? evs : [e]).forEach(ev => {
+      const [x, y] = pos(ev), p = cur.pts[cur.pts.length - 1], pr = ev.pressure || 0.5;
+      ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineWidth = 3 + pr * 4; ix.beginPath(); ix.moveTo(p.x, p.y); ix.lineTo(x, y); ix.stroke();
+      cur.pts.push({ x, y, t: Date.now() });
+    });
+  };
+  ink.onpointerup = ink.onpointercancel = () => { cur = null; };
+  ink.oncontextmenu = e => e.preventDefault();
+  $('#hwClear').onclick = () => { clear(); $('#hwOut').textContent = ''; };
+  // a white picture of the ink, optionally just one part of it
+  const snap = (sx, sy, sw, sh, outW) => {
+    const c = document.createElement('canvas'), k = outW / sw; c.width = outW; c.height = Math.max(8, Math.round(sh * k));
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(ink, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    return c.toDataURL('image/png');
+  };
+  const inkBounds = () => { const d = ix.getImageData(0, 0, W, H).data; let x0 = W, y0 = H, x1 = 0, y1 = 0; for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (d[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } return x1 > x0 ? [Math.max(0, x0 - 24), Math.max(0, y0 - 24), Math.min(W, x1 + 24), Math.min(H, y1 + 24)] : null; };
+  const ask = async (model, content) => {
+    const key = S.orKey || aiKey(); if (!key) throw new Error('No OpenRouter key saved.');
+    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' }, body: JSON.stringify({ model, max_tokens: 300, temperature: 0, messages: [{ role: 'user', content }] }) });
+    const txt = await r.text(); if (!r.ok) throw new Error(r.status + ' ' + txt.slice(0, 160));
+    const j = JSON.parse(txt), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
+    const a = t.indexOf('{'), b = t.lastIndexOf('}'); if (a < 0 || b <= a) throw new Error('The reply was not usable: ' + t.slice(0, 120));
+    return JSON.parse(t.slice(a, b + 1));
+  };
+  $('#hwRead').onclick = async () => {
+    const out = $('#hwOut'), mode = $('#hwMode').value, model = $('#hwModel').value, want = $('#hwWord').value.trim().toLowerCase();
+    if (!strokes.length) { out.textContent = 'Write something first.'; return; }
+    out.textContent = 'Reading...'; const t0 = Date.now(); let read = '', note = '';
+    try {
+      if (mode === 'builtin') {
+        if (!('createHandwritingRecognizer' in navigator)) throw new Error('This device\'s browser has no built-in handwriting recognizer.');
+        const rec = await navigator.createHandwritingRecognizer({ languages: ['en'] }), d = rec.startDrawing({ recognitionType: 'text', inputType: 'stylus' });
+        strokes.forEach(s0 => { const st = new HandwritingStroke(); const t00 = s0.pts[0].t; s0.pts.forEach(p => st.addPoint({ x: p.x, y: p.y, t: p.t - t00 })); d.addStroke(st); });
+        const pr = await d.getPrediction(); rec.finish();
+        read = pr && pr[0] ? pr[0].text.toLowerCase().replace(/\s+/g, '') : ''; note = 'other guesses: ' + (pr || []).slice(1, 4).map(p => p.text).join(', ');
+      } else if (mode === 'word') {
+        const bb = inkBounds(); const [x0, y0, x1, y1] = bb || [0, 0, W, H];
+        const img = snap(x0, y0, x1 - x0, y1 - y0, Math.min(700, Math.max(240, x1 - x0)));
+        const o = await ask(model, [{ type: 'text', text: 'This image shows a word handwritten by a child. Transcribe exactly the letters that are written, in order, including any spelling mistakes. Do not correct the spelling and do not complete the word. If a letter is unclear, give your best single guess for that letter. Reply with JSON only: {"letters": ["x", "y"]}' }, { type: 'image_url', image_url: { url: img } }]);
+        read = (o.letters || []).join('').toLowerCase();
+      } else {
+        const n = boxesN(), bw = W / n, content = [{ type: 'text', text: 'Each of the ' + n + ' images below is one box holding at most one handwritten letter, written by a child. Identify the letter in each box on its own. The boxes are not a word, so do not use context or spelling to decide. Use "" for an empty box. Reply with JSON only: {"letters": [one entry per box, in order]}' }];
+        for (let i = 0; i < n; i++) { content.push({ type: 'text', text: 'Box ' + (i + 1) + ':' }); content.push({ type: 'image_url', image_url: { url: snap(i * bw, 0, bw, H, 160) } }); }
+        const o = await ask(model, content);
+        read = (o.letters || []).map(x => String(x || '').toLowerCase().slice(0, 1)).join('');
+      }
+    } catch (e) { out.textContent = 'Problem: ' + e.message; return; }
+    const secs = ((Date.now() - t0) / 1000).toFixed(1), same = want && read === want;
+    const diff = want ? [...Array(Math.max(want.length, read.length))].map((_, i) => (want[i] || '') === (read[i] || '') ? '' : (i + 1)).filter(Boolean) : [];
+    out.textContent = 'It read: "' + read + '"' + (want ? (same ? ' (matches)' : ' (you wrote "' + want + '"; differs at letter ' + diff.join(', ') + ')') : '') + ' · ' + secs + ' s' + (note ? ' · ' + note : '');
+    hwResults.push({ mode, model: mode === 'builtin' ? 'device' : model, wrote: want, read, match: !!same, secs });
+    $('#hwLog').innerHTML = '<table><tr><th>Mode</th><th>Model</th><th>Wrote</th><th>Read</th><th>Match</th><th>Seconds</th></tr>' + hwResults.map(r => `<tr><td>${esc(r.mode)}</td><td>${esc(r.model)}</td><td>${esc(r.wrote)}</td><td>${esc(r.read)}</td><td>${r.match ? 'yes' : 'NO'}</td><td>${r.secs}</td></tr>`).join('') + '</table>';
+  };
+  $('#hwCopy').onclick = async () => { const txt = hwResults.map(r => [r.mode, r.model, r.wrote, r.read, r.match ? 'match' : 'DIFFERENT', r.secs + 's'].join(' | ')).join('\n'); try { await navigator.clipboard.writeText(txt); $('#hwOut').textContent = 'Copied. Paste it to me.'; } catch (e) { $('#hwOut').textContent = txt || 'No results yet.'; } };
+}
 async function genImage(model, prompt) {
   const key = S.orKey || aiKey();
   if (!key) throw new Error('No OpenRouter key.');
@@ -1855,6 +1944,13 @@ function adult() {
     <label>Picture model</label><select id="imgSel">${IMG_MODELS.map(m => `<option value="${m}" ${imgModel() === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
     <div><button id="imgTry" class="btn small">Try a sample with every model</button> <button id="drawPics" class="btn small">${epOf(wk) ? 'Draw pictures for this story' : 'No story yet'}</button></div>
     <p id="picStat" class="note"></p><div id="imgOut"></div>` : ''}
+    <h2>Handwriting test</h2><p class="note">A test of reading handwriting from a pen. Type the word you are going to write, write it below with the pen, and press Read it. To see whether the AI "corrects" mistakes, write a word with a deliberate misspelling and type it exactly as you wrote it. Nothing here is saved except the results list below.</p>
+    <label>The word you will write, exactly as you write it</label><input id="hwWord" type="text" autocomplete="off" spellcheck="false" placeholder="for example because">
+    <label>How to read it</label><select id="hwMode"><option value="word">The whole word at once (AI vision)</option><option value="boxes">One letter per box (AI vision)</option><option value="builtin">The device's own recognizer, if it has one</option></select>
+    <label>AI vision model</label><select id="hwModel">${HW_MODELS.map(m => `<option value="${m}">${esc(m)}</option>`).join('')}</select>
+    <div id="hwWrap" class="hwwrap"><canvas id="hwGuide"></canvas><canvas id="hwInk"></canvas></div>
+    <div><button id="hwClear" class="btn small">Clear</button> <button id="hwRead" class="btn small">Read it</button> <button id="hwCopy" class="btn small">Copy the results</button></div>
+    <p id="hwOut" class="note"></p><div id="hwLog"></div>
     </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
@@ -1885,6 +1981,7 @@ function adult() {
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
+  wireHandwriting();
   if ($('#picsOn')) $('#picsOn').onchange = e => { S.pics = e.target.checked; save(); };
   if ($('#imgSel')) $('#imgSel').onchange = e => { S.imgModel = e.target.value; save(); };
   if ($('#drawPics')) $('#drawPics').onclick = async () => {
