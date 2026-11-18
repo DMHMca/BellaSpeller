@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.16'; // bump with every release
+const APP_VER = '3.17'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -171,6 +171,9 @@ const castDesc = () => [0, 1, 2, 3].slice(0, castN()).map(i => { const m = (S.ca
 const storyBrief = extra => '\nCharacters: ' + castDesc() + '.' + (extra && extra.idea ? '\nStory idea from the author: ' + extra.idea : '') + (familyRules() ? '\nFamily rules to follow: ' + familyRules() : '');
 const aiBase = () => (S.aiBase || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 const aiKey = () => S.aiKey || S.orKey;
+// The key is stored only in each device's own browser, so a new device has none until a grown-up adds it. These messages never include the key.
+function aiNeedKey() { if (!aiKey()) throw new Error('This device does not have the AI key yet. A grown-up needs to add it: Grown-ups, then Settings, then paste the OpenRouter key and press Save settings.'); }
+const aiFail = status => new Error(status === 401 || status === 403 ? 'The AI key on this device was refused. A grown-up should check it under Grown-ups, then Settings.' : 'The AI service answered ' + status + '. Please try again.');
 async function askAI(wk, problems, model, extra) {
   const words = wk.words.map(x => x.w);
   let ask = 'This week\'s spelling words: ' + words.join(', ') + '.';
@@ -178,6 +181,7 @@ async function askAI(wk, problems, model, extra) {
   ask += '\nWrite ' + plan.length + ' part' + (plan.length === 1 ? '' : 's') + ', with ' + plan.join(', ') + ' word paragraph' + (plan.length === 1 && plan[0] === 1 ? '' : 's') + ' in each (' + words.length + ' words in all).';
   ask += storyBrief(extra);
   if (problems && problems.length) ask += '\n\nYour last draft had these problems. Write a new story that avoids them:\n- ' + problems.join('\n- ');
+  aiNeedKey();
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
   const t0 = Date.now();
@@ -185,7 +189,7 @@ async function askAI(wk, problems, model, extra) {
     method: 'POST', headers,
     body: JSON.stringify({ model: model || S.orModel || DEFAULT_MODEL, max_tokens: 8000, messages: [{ role: 'system', content: storyRules() }, { role: 'user', content: ask }] })
   });
-  if (!r.ok) throw new Error('The AI service answered ' + r.status + '. ' + (await r.text()).slice(0, 200));
+  if (!r.ok) throw aiFail(r.status);
   const j = await r.json();
   const c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
@@ -432,10 +436,11 @@ function wireTools(x, stage, after) {
   body();
 }
 async function aiJSON(sys, user, maxTokens) {
+  aiNeedKey();
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
   const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: maxTokens || 3000, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }] }) });
-  if (!r.ok) throw new Error('The AI service answered ' + r.status);
+  if (!r.ok) throw aiFail(r.status);
   const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
   const t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x.text || '').join('') : '';
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
