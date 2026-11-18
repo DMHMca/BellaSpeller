@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.77'; // bump with every release
+const APP_VER = '3.78'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -544,13 +544,13 @@ function toolsPane(wk) {
     <td><input type="text" class="tf" data-i="${i}" data-f="say" value="${esc(x.say || '')}" placeholder="w-hen" autocomplete="off"></td>
     <td>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</td>
     <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling trick" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
+    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
   return `<h2>Support tools</h2>
     <p class="note">Bella chooses which tools to use, with the Tools button on the revision pages. Each use is recorded, so the Progress tab can show what she tries. This page sets what each tool shows for each word. The evidence for every tool is a bet, not a finding.</p>
     ${TOOLS.map(t => `<div class="wl"><div><b>${esc(t.label)}.</b> <span class="note">${esc(t.note)}</span></div></div>`).join('')}
     <h2>Tool details for this week's words</h2>
     <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word. Common wrong spellings are used by Pick the right spelling, after her own past mistakes.</p>
-    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Same-pattern words (untick to remove)</th><th>Common wrong spellings</th><th>Spelling trick</th></tr>${rows}</table>
+    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Same-pattern words (untick to remove)</th><th>Common wrong spellings</th><th>Spelling tip</th></tr>${rows}</table>
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }
@@ -2055,8 +2055,8 @@ function trickText(x) {
 }
 function tricksScreen(all) {
   return new Promise(res => {
-    h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tricks</p>
-      <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt${trickText(x) ? '' : ' none'}">${esc(trickText(x) || 'No spelling trick yet.')}</span>`).join('')}</div></div>`);
+    h(`<div class="screen mnscreen"><p class="msg">The words and their spelling tips</p>
+      <div class="trgrid">${all.map(x => `<b class="trw">${esc(x.w)}</b><span class="trt${trickText(x) ? '' : ' none'}">${esc(trickText(x) || 'No spelling tip yet.')}</span>`).join('')}</div></div>`);
     backBtn(() => res());
   });
 }
@@ -2084,7 +2084,7 @@ async function remember() {
   let list;
   for (;;) {
     const way = await new Promise(res => {
-      h(`<div class="screen"><p class="msg">What would you like to do?</p><div class="choices menu"><button class="choice" id="rvmn">Mnemonics</button><button class="choice" id="rvtr">Spelling tricks</button></div></div>`);
+      h(`<div class="screen"><p class="msg">What would you like to do?</p><div class="choices menu"><button class="choice" id="rvmn">Mnemonics</button><button class="choice" id="rvtr">Spelling tips</button></div></div>`);
       on('#rvmn', () => res('mn')); on('#rvtr', () => res('tr')); backBtn(() => res(null));
     });
     if (!way) return home();
@@ -2262,7 +2262,7 @@ function home() {
     <div class="screen">
     <div class="tiles">${storyBtn}
     <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s practice" : "My practice"}</b><small>Just the words</small></div></button>
-    <button id="remember" class="tile t-rem"><span class="ticon">${ico('bulb')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Make mnemonics</small></div></button>
+    <button id="remember" class="tile t-rem"><span class="ticon">${ico('bulb')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Mnemonics and spelling tips</small></div></button>
     <button id="grown" class="tile t-grown"><span class="ticon">${ico('users')}</span><div class="tt"><b>Grown-ups</b><small>This week's words and story</small></div></button></div></div>`, { noTop: true });
   on('#story', storyDay); on('#quick', revise); on('#remember', remember); on('#grown', adultGate);
 }
