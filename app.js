@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.59'; // bump with every release
+const APP_VER = '3.60'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1955,11 +1955,11 @@ function mnemonicScreen(x) {
       h(`<div class="screen mnscreen"><p class="msg">Let us make a memory trick for this word.</p>
         ${words ? `<div class="mngrid" style="grid-template-columns:repeat(${n}, minmax(0,1fr))">${cols}</div>` : `<div class="wordtile">${esc(w)}</div>`}
         <div class="mntrick" id="mntrick">${(!words || shown >= n) ? esc(sentence()) : '&nbsp;'}</div>
-        <div class="row"><button id="mnhear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mnanother" class="btn small">Another one</button><button id="mnown" class="btn small">Write my own</button><button id="mnok" class="btn big">Got it ${ico('next')}</button></div>
+        <div class="row"><button id="mnhear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="mnanother" class="btn small">Another one</button><button id="mnok" class="btn big">Got it ${ico('next')}</button></div>
         ${words ? '<p class="subtle">Tap any word to change it.</p>' : ''}</div>`);
       on('#mnhear', () => say(w + '. ' + sentence()));
       on('#mnok', () => { gone = true; clearTimeout(timer); hush(); x.mnemWords = words ? words.slice() : undefined; x.mnem = sentence(); x.mnemBy = 'bella'; save(); res(); });
-      on('#mnanother', another); on('#mnown', own);
+      on('#mnanother', another);
       document.querySelectorAll('.mnword').forEach(b => { b.onclick = () => { if (!words || +b.dataset.i >= shown) return; const i = +b.dataset.i, c = w[i], opts = [MN_ADJ[c], MN_NOUN[c], MN_VERB[c]].filter(Boolean), at = opts.indexOf(words[i]); words[i] = opts[(at + 1) % opts.length]; draw(); }; });
       backBtn(() => { gone = true; clearTimeout(timer); hush(); res(BACK); });
     };
@@ -2170,8 +2170,8 @@ function home() {
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : 'Carry on';
   const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s story" : "My story"}</b><small>${esc(sub)}</small></div></button>`;
-  h(`<div class="top"><span></span>${sndBtn}</div><div class="logocorner">${logoSvg()}</div>
-    <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
+  h(`<div class="top homebar"><span class="homelogo">${logoSvg()}</span><div class="hello one"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>${sndBtn}</div>
+    <div class="screen">
     <div class="tiles">${storyBtn}
     <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s practice" : "My practice"}</b><small>Just the ${wk.words.length} words</small></div></button>
     <button id="remember" class="tile t-rem"><span class="ticon">${ico('bulb')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Remember the tricky words</small></div></button>
