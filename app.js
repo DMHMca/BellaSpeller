@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.49'; // bump with every release
+const APP_VER = '3.50'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -338,6 +338,7 @@ const PHONICS = [
   ['ing', 'end', ['going', 'playing', 'jumping', 'singing']], ['ed', 'end', ['jumped', 'played', 'wanted', 'helped']], ['le', 'end', ['little', 'table', 'bubble', 'puzzle']],
   ['ere', 'end', ['where', 'there', 'here', 'were']], ['ear', 'any', ['hear', 'near', 'year', 'dear']], ['are', 'end', ['care', 'share', 'dare', 'spare']], ['air', 'any', ['hair', 'pair', 'chair', 'fair']],
   ['y', 'end', ['happy', 'funny', 'windy', 'sunny'], w => w.length >= 4 && !/[aeiou]y$/.test(w)],
+  ['ce', 'end', ['race', 'face', 'ice', 'place', 'mice']], ['ci', 'any', ['city', 'circle', 'cinema', 'pencil']], ['cy', 'any', ['fancy', 'icy', 'cycle', 'mercy']], ['ge', 'end', ['age', 'page', 'stage', 'huge']],
   ['ph', 'any', ['phone', 'photo', 'graph', 'elephant']], ['ea', 'any', ['read', 'beat', 'team', 'speak', 'seat']], ['ee', 'any', ['tree', 'green', 'sleep', 'need']], ['oa', 'any', ['boat', 'road', 'coat', 'soap']],
   ['ai', 'any', ['rain', 'train', 'wait', 'paint']], ['ay', 'any', ['day', 'play', 'stay', 'way']], ['oo', 'any', ['moon', 'room', 'school', 'cool']], ['ie', 'any', ['field', 'piece', 'chief', 'brief']], ['ei', 'any', ['ceiling', 'receive', 'neighbour', 'eight']],
   ['ou', 'any', ['house', 'cloud', 'mouth', 'round']], ['ow', 'any', ['down', 'town', 'flower', 'brown']], ['oy', 'any', ['boy', 'toy', 'enjoy', 'royal']], ['oi', 'any', ['coin', 'noise', 'point', 'voice']],
@@ -356,6 +357,8 @@ const PNOTE = {
   au: 'The letters a u say or.', aw: 'The letters a w say or.', ar: 'The letters a r say ar, as in car.', or: 'The letters o r say or.', er: 'E r, i r and u r all say er.', ir: 'I r, e r and u r all say er.', ur: 'U r, e r and i r all say er.',
   ss: 'At the end of a short word, we often double the s, the l and the f.', ll: 'At the end of a short word, we often double the l, the s and the f.', ff: 'At the end of a short word, we often double the f, the l and the s.',
   ere: 'The letters e r e at the end can say air, as in where, or eer, as in here.', ear: 'The letters e a r usually say eer, as in hear.', are: 'The letters a r e at the end say air, as in care.', air: 'The letters a i r say air, as in hair.',
+  ce: 'Sometimes the s sound is made with the letter c. When a c comes before e, i or y, it says s, as in ice, city and fancy.', ci: 'Sometimes the s sound is made with the letter c. When a c comes before e, i or y, it says s, as in ice, city and fancy.', cy: 'Sometimes the s sound is made with the letter c. When a c comes before e, i or y, it says s, as in ice, city and fancy.',
+  ge: 'Sometimes the j sound is made with the letter g. When a g comes before e, i or y, it can say j, as in age, giant and gym.',
   y: 'The letter y at the end of a longer word usually says ee.',
   ould: 'The letters o u l d say ood.', le: 'The letters l e at the end of a word say ul.', ie: 'The letters i e can say ee, as in field, or eye, as in pie.'
 };
@@ -390,13 +393,14 @@ function phonicsRule(w, typed) {
   }
   // the rule for the part she got wrong; with no attempt to go on, the first pattern that fits. If what she got wrong is covered by no pattern, say only where it is.
   const c = err ? cands.find(x => x.hits) : cands[0];
-  if (err && !c) {
+  const sp0 = w.match(/([aeiou])[^aeiouwy]e$/);
+  if (err && !c && !sp0) {
     const ord = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
     const k = err[0], nth = ord[k] || ('number ' + (k + 1));
     const msg = typed.length > w.length ? 'The word has ' + w.length + ' letters, and you have written ' + typed.length + '. There is one letter too many.'
       : typed.length < w.length ? 'The word has ' + w.length + ' letters, and you have written ' + typed.length + '. A letter is missing.'
       : 'The word has ' + w.length + ' letters. Look again at the ' + nth + ' letter.';
-    return { rule: msg, spoken: msg, family: [] };
+    return { rule: '', hint: msg, spoken: 'There is no spelling rule for this one, but here is a hint. ' + msg, family: [] };
   }
   if (c) {
     const place = c.where === 'start' ? 'It starts with ' + c.pat : c.where === 'end' ? 'It ends with ' + c.pat : 'It has ' + c.pat + ' in it';
