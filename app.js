@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.04'; // bump with every release
+const APP_VER = '3.05'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -787,7 +787,7 @@ function stopAll() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (audioEl) { audioEl.onended = audioEl.onerror = null; audioEl.pause(); audioEl = null; }
 }
-let wakeCtx = null;
+let wakeCtx = null, lastAudioEnd = 0;
 // Speakers and Bluetooth often switch off in silence and swallow the first second of the next sound. A very quiet hiss just before each clip keeps them awake.
 function wakeAudio() {
   try {
@@ -802,18 +802,19 @@ function say(t) {
   const tok = ++sayTok;
   stopAll();
   if (!soundOn()) return;
-  if (ttsOn()) wakeAudio();
+  const warm = Date.now() - lastAudioEnd < 2500; // already talking a moment ago: no need to wake the speaker again
+  if (ttsOn() && !warm) wakeAudio();
   speechUntil = Date.now() + 120000;
   if (!ttsOn()) return builtinSay(t);
   getClipUrl(t).then(url => {
     if (tok !== sayTok) return;
     if (url) {
       audioEl = new Audio(url);
-      audioEl.onended = () => { speechUntil = Date.now() + 2500; };
+      audioEl.onended = () => { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); };
       audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
       const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
       el.preload = 'auto';
-      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, 550);
+      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, warm ? 60 : 550);
     } else {
       builtinSay(t);
       if (ttsFails < 3 && sendable(t)) fetchClip(t).then(() => { ttsFails = 0; }, e => { ttsFails++; lastTtsErr = e.message; });
@@ -941,6 +942,16 @@ function chunkItems(items) { // groups of sentences of about 40 words, for the v
   return out;
 }
 const chunkText = c => c.map(q => q.t).join(' ');
+// A little more air in the reading: a pause after each sentence, and a smaller one at commas. Set both to 0 to go back to one smooth reading.
+const SENTENCE_GAP = 650, COMMA_GAP = 220;
+function spokenPieces(chunk) {
+  const out = [];
+  chunk.forEach(q => {
+    const parts = q.t.replace(/,\s+/g, ',|').split('|').filter(Boolean); // (no look-behind, so older tablets can read it)
+    parts.forEach((t, i) => out.push({ text: t, gap: i === parts.length - 1 ? SENTENCE_GAP : COMMA_GAP }));
+  });
+  return out;
+}
 function storyScroll(items) {
   const chunks = chunkItems(items);
   return new Promise(res => {
@@ -969,10 +980,12 @@ function storyScroll(items) {
         const el = document.querySelector(`.chunk[data-i="${i}"]`), sp = $('#sp');
         document.querySelectorAll('.chunk.now').forEach(x => x.classList.remove('now'));
         if (el && sp) { el.classList.add('now'); sp.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop - 16), behavior: 'smooth' }); }
-        const ok = await sayDone(chunkText(chunks[i]));
-        if (!ok || my !== run) return;
-        await new Promise(r => setTimeout(r, 900)); // a breath between pieces, so it is not rushed
-        if (my !== run) return;
+        for (const pc of spokenPieces(chunks[i])) {
+          const ok = await sayDone(pc.text);
+          if (!ok || my !== run) return;
+          await new Promise(r => setTimeout(r, pc.gap));
+          if (my !== run) return;
+        }
       }
     };
     on('#hear', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: 0 }); play(); });
@@ -1500,7 +1513,7 @@ async function storyDay() {
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
   const steps = storySegments(beats);
   prepShown = false;
-  await prep([].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Your story is ready!', true);
+  await prep([].concat(...steps.filter(x => x.seg).map(x => [].concat(...chunkItems(x.seg).map(c => spokenPieces(c).map(pc => pc.text))))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Your story is ready!', true);
   if (justWritten) { justWritten = false; if (!prepShown) await storyReadyScreen(); }
   prog = ep.title;
   if ((await gentle('Some words in this story are highlighted in yellow.', 'They are this week\'s words. We will have a little go at them afterwards.', 'Start the story', STORY_INTRO)) === BACK) return home();
