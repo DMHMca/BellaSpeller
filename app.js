@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.55'; // bump with every release
+const APP_VER = '3.57'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1170,7 +1170,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const sayIt = () => say(help === 'family' && wobj && familyText(wobj) ? familyText(wobj) : sp ? cueSpoken(cue, word) : word);
     if (help) used.add(help);
     h(`<div class="screen writescreen">
-      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
+      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word'}</span></div>`}
       ${wobj ? picHtml(word) : ''}${note ? `<p class="msg smallmsg">${esc(note)}</p>` : ''}<div id="helpbox" class="helpbox"></div>
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
@@ -1819,7 +1819,13 @@ async function reviseWord(week, it, sentence, starred) {
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
     save();
-    if (!ok) { if ((await hintLadder(week, it.x, it.mode, it.context ? sentence : null, a.tools && a.tools.includes('family'))) === BACK) continue; }
+    let gaveUp = false;
+    if (!ok) {
+      const lr = await hintLadder(week, it.x, it.mode, it.context ? sentence : null, a.tools && a.tools.includes('family'));
+      if (lr === BACK) continue;
+      if (lr === false) { gaveUp = true; if ((await pauseScreen('That word is still hiding.', 'We will try it again in a little while.', 3500)) === BACK) continue; }
+    }
+    if (gaveUp) return { good: false, ok: false, typed: a.typed, aided: true };
     const sk = 'revise:' + word;
     if (!starred.has(sk)) { S.stars++; starred.add(sk); }
     save();
@@ -1926,34 +1932,25 @@ function trickScreen(x) {
   });
 }
 async function remember() {
-  testMode = true;
   const wk = curWeek(), list = trickyWords(wk);
   if (!list.length) {
     await gentle('No tricky words yet.', 'Do the story or the practice first. Any word that hides will come here.', 'Back home', 'No tricky words yet. Do the story or the practice first. Any word that hides will come here.');
-    { testMode = false; return home(); }
+    return home();
   }
+  // The same flow as the story and the practice: the sentence is said, she spells the word herself, and the same helps are there. The word is never shown.
+  const sub = Object.assign({}, wk, { words: list });
+  ensureTools(wk);
+  await prep(spellTexts(sub), 'Getting your tricky words ready');
   await loadPics(wk);
-  await prep(list.map(x => x.w).concat(list.filter(x => x.mnem).map(x => 'Let us remember this word. ' + x.w + '. ' + x.mnem), ['Let us remember this word.']), 'Getting your tricky words ready');
-  let i = 0; const starred = new Set();
-  while (i < list.length) {
-    const x = list[i]; prog = `Word ${i + 1} of ${list.length}`;
-    let ok = false, tries = 0;
-    while (!ok && tries < 3) {
-      tries++;
-      await trickScreen(x);
-      const t = await traceFlow(x.w); if (t === BACK) { if (i === 0 && tries === 1) { testMode = false; return home(); } continue; }
-      const a = await writeWord(x.w, false, null, x);
-      if (a === BACK) continue;
-      S.log.push({ t: Date.now(), d: today(), wk: wk.id, w: x.w, mode: 'remember', typed: a.typed, hints: 0, ok: a.typed === x.w, redo: true }); save();
-      ok = a.typed === x.w;
-    }
-    if (!starred.has(x.w)) { S.stars++; starred.add(x.w); save(); }
-    if ((await praise(x.w, ok)) === BACK) continue;
-    i++;
-  }
+  const queue = list.map(x => ({ x, look: false, counts: true, mode: 'revise', context: true }));
+  const firsts = await runWords(sub, queue, new Set());
+  if (!firsts) return home();
   prog = '';
-  await gentle('All done!', 'The more you do this, the easier those words get.', 'Home', 'All done! The more you do this, the easier those words get.');
-  testMode = false; home();
+  const oldDue = (S.due && S.due[wk.id]) || [];
+  S.due = S.due || {}; S.due[wk.id] = oldDue.filter(w => !list.some(x => x.w === w)).concat(list.filter(x => firsts[x.w] && !firsts[x.w].ok).map(x => x.w)); save();
+  await reviseEnd(sub, firsts, true);
+  await ceiling();
+  home();
 }
 const MNEM_AFTER = 3;
 async function memoryTrickStep(week, x) {
@@ -1976,6 +1973,7 @@ async function hintLadder(week, x, mode, sentence, usedFamily) {
   let n = 0, sureOn = false;
   for (;;) {
     // After a wrong go she chooses: another go on her own, or help (the spelling rule, or Are you sure?).
+    if (n >= 3 && mode === 'revise') return false; // in practice and revision the word is never shown: it comes back later
     const c = n >= 3 ? 'show' : await helpChoice(x);
     if (c === BACK) return BACK;
     if (c === 'show') {
@@ -2032,7 +2030,7 @@ async function runWordsInner(wk, queue, starred) {
     prog = `Word ${Math.min(i + 1, N)} of ${N}`;
     const r = await reviseWord(wk, it, storySentence(wk, it.x.w), starred);
     if (r === BACK) { if (i === 0) return null; i--; continue; }
-    if (it.counts) { firsts[it.x.w] = r; if (!r.good) queue.splice(Math.min(i + 3, queue.length), 0, { x: it.x, look: false, counts: false, mode: it.mode, context: false }); }
+    if (it.counts) { firsts[it.x.w] = r; if (!r.good) queue.splice(Math.min(i + 3, queue.length), 0, { x: it.x, look: false, counts: false, mode: it.mode, context: it.mode === 'revise' }); }
     i++;
   }
   return firsts;
@@ -2050,7 +2048,7 @@ async function revise() {
   const wk = curWeek(), sound = true;
   const met = w => S.log.some(l => l.wk === wk.id && l.w === w);
   const due = (S.due && S.due[wk.id]) || [];
-  const queue = shuffle(wk.words.slice()).sort((p, q) => (due.includes(q.w) ? 1 : 0) - (due.includes(p.w) ? 1 : 0)).map(x => ({ x, look: !sound || !met(x.w), counts: true, mode: 'revise' }));
+  const queue = shuffle(wk.words.slice()).sort((p, q) => (due.includes(q.w) ? 1 : 0) - (due.includes(p.w) ? 1 : 0)).map(x => ({ x, look: false, counts: true, mode: 'revise', context: true })); // the same flow as the story: the sentence, then she spells it. The word is never shown first.
   ensureTools(wk);
   await prep(spellTexts(wk), 'Getting the words ready');
   await loadPics(wk);
@@ -2098,8 +2096,8 @@ function home() {
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : 'Carry on';
   const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s story" : "My story"}</b><small>${esc(sub)}</small></div></button>`;
-  h(`<div class="top"><span></span>${sndBtn}</div>
-    <div class="screen"><div class="herorow"><div class="logowrap">${logoSvg()}</div><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div></div>
+  h(`<div class="top"><span></span>${sndBtn}</div><div class="logocorner">${logoSvg()}</div>
+    <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
     <div class="tiles">${storyBtn}
     <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s practice" : "My practice"}</b><small>Just the ${wk.words.length} words</small></div></button>
     <button id="remember" class="tile t-rem"><span class="ticon">${ico('bulb')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Remember the tricky words</small></div></button>
