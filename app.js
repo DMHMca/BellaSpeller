@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.81'; // bump with every release
+const APP_VER = '3.82'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2577,27 +2577,30 @@ function adult() {
 }
 
 // ---------- debug settings: a button on every screen, no PIN. Set DEBUG to false for release. ----------
-async function freshReload() {
+// Goes to the page under a new address that carries the version (?u=3.80). The server and the browser have never seen that address, so every file
+// (the page, the script, the styles) is fetched fresh and cannot come back from a saved copy of the old version.
+async function freshReload(ver) {
   try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch (e) { }
-  // refresh the browser's own saved copies too, or the reload could bring back the old files
-  try { await Promise.all(['./', 'index.html', 'style.css', 'app.js', 'episodes.js', 'manifest.json'].map(f => fetch(f + (f === './' ? '' : ''), { cache: 'reload' }))); } catch (e) { }
-  location.reload();
+  const q = new URLSearchParams(location.search); q.set('u', ver || Date.now());
+  location.replace(location.pathname + '?' + q.toString());
 }
 // A big square Update button in the top right corner. It is only there when a newer version is waiting.
 function initUpdater() {
   const b = document.createElement('button');
   b.id = 'updbtn'; b.hidden = true; b.setAttribute('aria-label', 'Update the app');
   b.innerHTML = '<span class="updico">&#8635;</span><span>Update</span><small id="updver"></small>';
-  b.onclick = async () => { b.disabled = true; b.querySelector('span:nth-child(2)').textContent = 'Updating...'; await freshReload(); };
+  b.onclick = async () => { b.disabled = true; b.querySelector('span:nth-child(2)').textContent = 'Updating...'; await freshReload(latest); };
   document.body.appendChild(b);
   // a small version label on every screen; tapping it fetches the newest files and reloads, whatever the check says
   const v = document.createElement('button'); v.id = 'vlabel'; v.textContent = 'v' + APP_VER; v.setAttribute('aria-label', 'Version ' + APP_VER + '. Tap to update.');
-  v.onclick = async () => { v.textContent = 'updating...'; await freshReload(); };
+  v.onclick = async () => { v.textContent = 'updating...'; await freshReload(latest); };
   document.body.appendChild(v);
+  let latest = null;
   const check = async () => {
     try {
       const t = await (await fetch('app.js?chk=' + Date.now(), { cache: 'no-store' })).text();
       const m = t.match(/const APP_VER = '([^']+)'/); if (!m) return;
+      latest = m[1];
       const show = newer(m[1], APP_VER);
       b.hidden = !show; document.body.classList.toggle('hasupdate', show); const uv = document.getElementById('updver'); if (uv) uv.textContent = 'version ' + m[1] + ' is ready';
     } catch (e) { }
