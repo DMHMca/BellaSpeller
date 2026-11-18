@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.53'; // bump with every release
+const APP_VER = '3.54'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1812,7 +1812,7 @@ async function reviseWord(week, it, sentence, starred) {
     if (a.askHelp) { // she asked for help before trying
       const id = await helpMenu(it.x); if (id === BACK) continue;
       a = await writeWord(word, false, null, it.x, false, cue, id); if (a === BACK) continue;
-      if (id === 'choice' && a.typed === word) { const b = await writeWord(word, false, null, it.x, false, cue, null, false, false, 'Well done! Now write the word yourself.'); if (b === BACK) continue; a = { typed: b.typed, hints: (a.hints || 0) + (b.hints || 0), reminded: a.reminded || b.reminded, tools: a.tools.concat(b.tools.filter(t => !a.tools.includes(t))), aided: true }; }
+      if (id === 'choice' && a.typed === word) { if ((await pickedRight()) === BACK) continue; const b = await writeWord(word, false, null, it.x, false, cue, null, false, false, 'Now spell it again by yourself.'); if (b === BACK) continue; a = { typed: b.typed, hints: (a.hints || 0) + (b.hints || 0), reminded: a.reminded || b.reminded, tools: a.tools.concat(b.tools.filter(t => !a.tools.includes(t))), aided: true }; }
     }
     noteTyped(word, a.typed);
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
@@ -1839,6 +1839,9 @@ function hintText(x) {
   return 'It starts with ' + x.w[0] + ' and has ' + x.w.length + ' letters. Have another go.';
 }
 // A message that stays for a few seconds and then moves on by itself (or sooner if she taps Ready). Back goes back. Not spoken.
+const PICKED_RIGHT = "Well done, that is the correct word. Now go and spell it again by yourself.";
+// She picked the right word from the choices: tell her so, then she writes it herself. Back goes back.
+async function pickedRight() { const p = pauseScreen("Well done, that's the correct word!", 'Now go and spell it again by yourself.', 6500); say(PICKED_RIGHT); const r = await p; hush(); return r; }
 function pauseScreen(msg, sub, ms) {
   return new Promise(res => {
     h(`<div class="screen"><p class="msg">${esc(msg)}</p>${sub ? `<p class="subtle">${esc(sub)}</p>` : ''}<button id="next" class="btn big">Ready ${ico('next')}</button></div>`);
@@ -1988,7 +1991,8 @@ async function hintLadder(week, x, mode, sentence, usedFamily) {
     if (a === BACK) continue;
     tryLog(a, help, ++n);
     if (help === 'choice' && a.typed === word) { // she picked it: now she writes it herself before moving on
-      const b = await writeWord(word, false, null, x, false, sentence, null, false, sureOn, 'Well done! Now write the word yourself.'); if (b === BACK) continue;
+      if ((await pickedRight()) === BACK) continue;
+      const b = await writeWord(word, false, null, x, false, sentence, null, false, sureOn, 'Now spell it again by yourself.'); if (b === BACK) continue;
       tryLog(b, null, ++n); if (b.typed === word) return true; else continue;
     }
     if (a.typed === word) return true;
@@ -2011,7 +2015,7 @@ function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
   wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say + '.' + wordAgain(x)); if (familyText(x)) texts.push(familyText(x)); texts.push(hintText(x)); });
   for (let i = 1; i <= wk.words.length; i++) { texts.push(celebrateText(i, wk.words.length, true)); texts.push(celebrateText(i, wk.words.length, false)); }
-  OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
+  OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(PICKED_RIGHT, CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
 }
 // Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.
