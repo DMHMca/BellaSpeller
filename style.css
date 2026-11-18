@@ -428,3 +428,13 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .writescreen .cuepic { max-height: clamp(70px, 11vh, 120px); }
 /* the spelling screen may use the full width, so the keys can be big */
 #app:has(.writescreen) { max-width: 1100px; }
+
+/* the Update button: big, square, top right, only when a newer version is waiting */
+#updbtn { position: fixed; top: 8px; right: 8px; z-index: 96; width: 96px; height: 96px; border: 0; border-radius: 20px; background: #d4276a; color: #fff; font: inherit; font-weight: 800; font-size: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; box-shadow: 0 5px 0 #8e1648, 0 8px 18px rgba(0,0,0,.35); animation: updpulse 1.6s ease-in-out infinite; }
+#updbtn[hidden] { display: none; }
+#updbtn .updico { font-size: 34px; line-height: 1; }
+#updbtn small { font-size: 11px; font-weight: 600; opacity: .9; line-height: 1.1; text-align: center; padding: 0 4px; }
+#updbtn:disabled { opacity: .7; animation: none; }
+@keyframes updpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+body.hasupdate #app { padding-right: 116px; }
+@media (prefers-reduced-motion: reduce) { #updbtn { animation: none; } }

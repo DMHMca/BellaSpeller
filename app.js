@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.30'; // bump with every release
+const APP_VER = '3.31'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2210,7 +2210,28 @@ function adult() {
 // ---------- debug settings: a button on every screen, no PIN. Set DEBUG to false for release. ----------
 async function freshReload() {
   try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch (e) { }
+  // refresh the browser's own saved copies too, or the reload could bring back the old files
+  try { await Promise.all(['./', 'index.html', 'style.css', 'app.js', 'episodes.js', 'manifest.json'].map(f => fetch(f + (f === './' ? '' : ''), { cache: 'reload' }))); } catch (e) { }
   location.reload();
+}
+// A big square Update button in the top right corner. It is only there when a newer version is waiting.
+function initUpdater() {
+  const b = document.createElement('button');
+  b.id = 'updbtn'; b.hidden = true; b.setAttribute('aria-label', 'Update the app');
+  b.innerHTML = '<span class="updico">&#8635;</span><span>Update</span><small id="updver"></small>';
+  b.onclick = async () => { b.disabled = true; b.querySelector('span:nth-child(2)').textContent = 'Updating...'; await freshReload(); };
+  document.body.appendChild(b);
+  const check = async () => {
+    try {
+      const t = await (await fetch('app.js?chk=' + Date.now(), { cache: 'no-store' })).text();
+      const m = t.match(/const APP_VER = '([^']+)'/); if (!m) return;
+      const show = newer(m[1], APP_VER);
+      b.hidden = !show; document.body.classList.toggle('hasupdate', show); const uv = document.getElementById('updver'); if (uv) uv.textContent = 'version ' + m[1] + ' is ready';
+    } catch (e) { }
+  };
+  check();
+  setInterval(check, 120000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 }
 const newer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d > 0; } return false; };
 function debugUI() {
@@ -2224,22 +2245,6 @@ function debugUI() {
   sb.onclick = toggleSound;
   document.body.appendChild(sb);
   paintSound();
-  const v = document.createElement('div');
-  v.id = 'vtag'; v.textContent = 'BellaSpeller v' + APP_VER;
-  document.body.appendChild(v);
-  const check = async () => {
-    try {
-      const t = await (await fetch('app.js?chk=' + Date.now(), { cache: 'no-store' })).text();
-      const m = t.match(/const APP_VER = '([^']+)'/); if (!m) return;
-      const latest = m[1];
-      if (latest === APP_VER) { v.className = 'ok'; v.textContent = 'BellaSpeller v' + APP_VER + ' ✓ latest'; v.onclick = null; }
-      else if (newer(latest, APP_VER)) { v.className = 'new'; v.textContent = 'v' + APP_VER + ' · v' + latest + ' available: tap to update'; v.onclick = freshReload; }
-      else { v.className = 'ok'; v.textContent = 'BellaSpeller v' + APP_VER + ' (ahead of the live site)'; v.onclick = null; }
-    } catch (e) { v.className = ''; v.textContent = 'BellaSpeller v' + APP_VER + ' (offline: cannot check)'; }
-  };
-  check();
-  setInterval(check, 120000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
 }
 function toggleDebug() {
   const old = $('#dbgPanel'); if (old) { old.remove(); return; }
@@ -2328,6 +2333,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   });
   navigator.serviceWorker.register('sw.js').catch(() => { });
 }
+initUpdater();
 home();
 // Ask the browser to keep the data permanently, and restore from the safety copy if the main store came back empty.
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { }
