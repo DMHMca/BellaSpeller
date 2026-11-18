@@ -402,3 +402,18 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .top .sndtop.off { opacity: .75; }
 .readrow { display: flex; align-items: center; gap: 14px; width: 100%; flex-wrap: wrap; }
 .storycap { font-size: 16px; margin: 0; }
+
+/* the story window: bigger, with a scroll bar that is easy to see and use by touch */
+.scrollwrap { display: flex; gap: 12px; width: 100%; align-items: stretch; }
+.scrollwrap .scrollpage { flex: 1; min-width: 0; height: clamp(190px, calc(100vh - 440px), 560px); }
+.scrollpage::-webkit-scrollbar { width: 28px; }
+.scrollpage::-webkit-scrollbar-track { background: #e4dcff; border-radius: 14px; }
+.scrollpage::-webkit-scrollbar-thumb { background: #f5a623; border-radius: 14px; border: 5px solid #e4dcff; min-height: 70px; }
+.scrollbtns { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
+.scrollbtn { width: 64px; height: 64px; border: 0; border-radius: 18px; background: #ffd54a; color: #2a1f5c; display: grid; place-items: center; cursor: pointer; box-shadow: 0 4px 0 #c99a1a; }
+.scrollbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #c99a1a; }
+.scrollbtn .ico { width: 30px; height: 30px; }
+.scrollbtns .scrollbtn:first-child .ico { transform: rotate(-90deg); }
+.scrollbtns .scrollbtn:last-child .ico { transform: rotate(90deg); }
+.storyimg { max-height: clamp(90px, 16vh, 180px); }
+.storypic { min-height: clamp(90px, 16vh, 180px); }

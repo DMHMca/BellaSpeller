@@ -5,7 +5,7 @@ const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.19'; // bump with every release
+const APP_VER = '3.21'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -314,7 +314,7 @@ function toolContent(x, stage) {
   return { html, shown };
 }
 // ---- help she asks for after a word did not go right: one at a time ----
-const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + '.';
+const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + ', ' + word + '.';
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) {
@@ -1015,7 +1015,7 @@ const chunkText = c => c.map(q => q.t).join(' ');
 function storyScroll(items) {
   const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen storyscreen"><div class="readrow"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div>
+    h(`<div class="screen storyscreen"><div class="readrow"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="scrollbtns"><button id="sup" class="scrollbtn" aria-label="Scroll up">${ico('next')}</button><button id="sdown" class="scrollbtn" aria-label="Scroll down">${ico('next')}</button></div></div>
       <div class="storypic" id="spic"></div>
       <div class="row"><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
     // The picture under the box follows the story: the latest word paragraph the voice (or her scrolling) has reached.
@@ -1046,6 +1046,8 @@ function storyScroll(items) {
         if (my !== run) return;
       }
     };
+    on('#sup', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: -sp.clientHeight * 0.8, behavior: 'smooth' }); });
+    on('#sdown', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: sp.clientHeight * 0.8, behavior: 'smooth' }); });
     on('#readtoggle', () => {
       S.readAloud = !S.readAloud; if (S.readAloud && !soundOn()) S.sound = true; save(); paintSound();
       $('#readtoggle').classList.toggle('on', !!S.readAloud);
