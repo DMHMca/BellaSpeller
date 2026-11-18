@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.31'; // bump with every release
+const APP_VER = '3.33'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -587,6 +587,7 @@ const HW_MODELS = ['anthropic/claude-haiku-5.5', 'google/gemini-2.5-flash-lite',
 const hwResults = [];
 function wireHandwriting() {
   const wrap = $('#hwWrap'); if (!wrap) return;
+  const he = $('#hwEngine'); if (he) { he.value = S.hwEngine || 'auto'; he.onchange = () => { S.hwEngine = he.value === 'vision' ? 'vision' : he.value; save(); }; }
   const det = $('#hwDetect');
   if ('createHandwritingRecognizer' in navigator) {
     det.textContent = 'This browser offers the built-in handwriting recognizer.';
@@ -1111,6 +1112,34 @@ function learnCard(week, wobj) {
 const KB = ['qwertyuiop', 'asdfghjkl', "zxcvbnm'-"];
 const kbHtml = () => `<div class="kb">${KB.map((r, i) => `<div>${[...r].map(c => `<button class="key" data-k="${esc(c)}">${esc(c)}</button>`).join('')}${i === 2 ? `<button class="key wide" data-k="del" aria-label="Delete">${ico('del')}</button><button class="key wide ok" data-k="ok" aria-label="Done">${ico('check')}</button>` : ''}</div>`).join('')}</div>`;
 
+// Turns what she wrote with the pen into letters. Which reader is used is a setting on the grown-ups page: AI vision, the device's own recognizer, or automatic.
+// The AI is told not to correct spelling, because the mistakes are what we are looking for.
+async function readHandwriting(strokes, ink, W, H) {
+  const engine = S.hwEngine || 'auto', key = S.orKey || aiKey();
+  const clean = t => String(t || '').toLowerCase().replace(/[^a-z'-]/g, '');
+  const useBuiltin = engine === 'builtin' || (engine === 'auto' && !key);
+  if (useBuiltin) {
+    if (!('createHandwritingRecognizer' in navigator)) throw new Error('This device has no handwriting recognizer. Use the keyboard, or ask a grown-up to add the AI key.');
+    const rec = await navigator.createHandwritingRecognizer({ languages: ['en'] }), d = rec.startDrawing({ recognitionType: 'text', inputType: 'stylus' });
+    strokes.forEach(s0 => { const st = new HandwritingStroke(); const t0 = s0.pts[0].t; s0.pts.forEach(p => st.addPoint({ x: p.x, y: p.y, t: p.t - t0 })); d.addStroke(st); });
+    const pr = await d.getPrediction(); rec.finish();
+    return clean(pr && pr[0] && pr[0].text);
+  }
+  if (!key) throw new Error('This device does not have the AI key yet, so writing cannot be read. Use the keyboard.');
+  // a white picture of just the ink
+  const data = ink.getContext('2d').getImageData(0, 0, W, H).data; let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (data[(y * W + x) * 4 + 3] > 20) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 <= x0) return '';
+  x0 = Math.max(0, x0 - 24); y0 = Math.max(0, y0 - 24); x1 = Math.min(W, x1 + 24); y1 = Math.min(H, y1 + 24);
+  const outW = Math.min(700, Math.max(240, x1 - x0)), k = outW / (x1 - x0), c = document.createElement('canvas'); c.width = outW; c.height = Math.max(8, Math.round((y1 - y0) * k));
+  const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height); cx.drawImage(ink, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
+  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'BellaSpeller' }, body: JSON.stringify({ model: S.hwModel || 'anthropic/claude-haiku-5.5', max_tokens: 200, temperature: 0, messages: [{ role: 'user', content: [{ type: 'text', text: 'This image shows a word handwritten by a child. Transcribe exactly the letters that are written, in order, including any spelling mistakes. Do not correct the spelling and do not complete the word. If a letter is unclear, give your best single guess for that letter. Reply with JSON only: {"letters": ["x", "y"]}' }, { type: 'image_url', image_url: { url: c.toDataURL('image/png') } }] }] }) });
+  if (!r.ok) throw aiFail(r.status);
+  const j = await r.json(), t = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  const txt = typeof t === 'string' ? t : Array.isArray(t) ? t.map(z => z.text || '').join('') : '', a = txt.indexOf('{'), b = txt.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new Error('I could not read that. Please try again.');
+  return clean((JSON.parse(txt.slice(a, b + 1)).letters || []).join(''));
+}
 function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, note) {
   return new Promise(res => {
     let typed = '', hints = 0, done = false, reminded = false;
@@ -1124,7 +1153,9 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
       <div id="slots" class="slots"></div>
-      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
+      <div class="row"><button id="hear" class="iconbtn big" aria-label="Hear it">${ico('speaker')}</button><button id="modesw" class="btn small"></button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
+      <div id="wpanel" class="wpanel" style="display:none"><div id="wwrap" class="wwrap"><canvas id="wguide"></canvas><canvas id="wink"></canvas></div><div id="wread" class="wread"></div>
+        <div class="row"><button id="wclear" class="btn small">Clear</button><button id="wdone" class="btn">Done ${ico('check')}</button></div></div>
       ${kbHtml()}</div>`);
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
@@ -1171,8 +1202,63 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       box.querySelectorAll('.choice').forEach(b => { b.onclick = () => { if (done) return; done = true; hush(); const tl = [...used]; res({ typed: b.dataset.o, hints: 0, reminded, tools: tl, aided: true }); }; });
     }
     on('#remind', () => { reminded = true; $('#remindbox').innerHTML = `<div class="page small"><p class="story">${remind.html}</p></div>`; say(remind.spoken); });
+    // ----- keyboard or writing: she (or a grown-up) chooses, and the choice is remembered -----
+    let mode = S.input === 'write' ? 'write' : 'keyboard', inkReady = false, strokes = [], cur = null, penSeen = 0, W = 0, H = 0, ix = null;
+    const initInk = () => {
+      if (inkReady) return; inkReady = true;
+      const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
+      W = Math.min(wrap.parentNode.clientWidth || 700, 1000); H = Math.max(130, Math.min(240, Math.round(innerHeight * 0.22)));
+      [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
+      wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
+      const gx = guide.getContext('2d'); gx.fillStyle = '#fff'; gx.fillRect(0, 0, W, H); gx.strokeStyle = '#c9c3e6'; gx.lineWidth = 2; gx.beginPath(); gx.moveTo(14, H * 0.72); gx.lineTo(W - 14, H * 0.72); gx.stroke();
+      ix = ink.getContext('2d'); ink.style.touchAction = 'none';
+      const pos = e => { const r = ink.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+      ink.onpointerdown = e => {
+        if (!armed) return;
+        if (e.pointerType === 'pen') penSeen = Date.now(); else if (e.pointerType === 'touch' && (Date.now() - penSeen < 4000 || cur || e.width > 45 || e.height > 45)) return; // a palm, or a second contact
+        try { ink.setPointerCapture(e.pointerId); } catch (x) { }
+        const [x, y] = pos(e); cur = { id: e.pointerId, pts: [{ x, y, t: Date.now() }] }; strokes.push(cur);
+        ix.fillStyle = '#111'; ix.beginPath(); ix.arc(x, y, 2.5, 0, 7); ix.fill();
+      };
+      ink.onpointermove = e => {
+        if (!cur || e.pointerId !== cur.id) return;
+        const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+        (evs.length ? evs : [e]).forEach(ev => { const [x, y] = pos(ev), p = cur.pts[cur.pts.length - 1], pr = ev.pressure || 0.5; ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineWidth = 3 + pr * 4; ix.beginPath(); ix.moveTo(p.x, p.y); ix.lineTo(x, y); ix.stroke(); cur.pts.push({ x, y, t: Date.now() }); });
+      };
+      ink.onpointerup = ink.onpointercancel = () => { cur = null; };
+      ink.oncontextmenu = e => e.preventDefault();
+    };
+    const wrow = () => document.querySelector('#wpanel > .row');
+    const clearInk = () => { if (ix) ix.clearRect(0, 0, W, H); strokes = []; cur = null; $('#wread').innerHTML = ''; const r = wrow(); if (r) r.style.display = ''; };
+    const setMode = m => {
+      mode = m; S.input = m; save();
+      const kb = document.querySelector('.kb'), wp = $('#wpanel'), sw = $('#modesw');
+      if (kb) kb.style.display = m === 'write' ? 'none' : '';
+      if (wp) wp.style.display = m === 'write' ? '' : 'none';
+      if (sw) sw.innerHTML = m === 'write' ? 'Use the keyboard' : 'Write it with the pen';
+      if (m === 'write') initInk();
+      typed = ''; draw(); clearInkIfReady();
+    };
+    const clearInkIfReady = () => { if (inkReady) clearInk(); };
+    on('#modesw', () => { if (armed) setMode(mode === 'write' ? 'keyboard' : 'write'); });
+    on('#wclear', () => { clearInk(); typed = ''; draw(); });
+    on('#wdone', async () => {
+      if (!armed || done) return;
+      if (!strokes.length) { $('#wread').textContent = 'Write the word first.'; return; }
+      $('#wread').textContent = 'Reading...';
+      let text = '';
+      try { text = await readHandwriting(strokes, $('#wink'), W, H); }
+      catch (e) { $('#wread').textContent = e.message || 'I could not read that.'; return; }
+      if (!text) { $('#wread').textContent = 'I could not read that. Please write it again.'; return; }
+      typed = text.slice(0, Math.min(24, word.length + 3)); draw();
+      $('#wread').innerHTML = '<div class="readback">I read: <b>' + esc(typed) + '</b></div><div class="row"><button id="wyes" class="btn">Yes, that is what I wrote</button><button id="wagain" class="btn small">Write it again</button></div>';
+      const r0 = wrow(); if (r0) r0.style.display = 'none'; // the read-back has its own buttons
+      on('#wyes', () => finish()); on('#wagain', () => { clearInk(); typed = ''; draw(); });
+    });
     if (!noBack) backBtn(res);
     draw(); sayIt();
+    if (!(wobj && (force || help === 'choice')) && mode === 'write') setMode('write'); else { const sw = $('#modesw'); if (sw) sw.innerHTML = 'Write it with the pen'; }
+    if (wobj && (force || help === 'choice')) { const sw = $('#modesw'); if (sw) sw.style.display = 'none'; }
   });
 }
 
@@ -2045,6 +2131,7 @@ function adult() {
     <div><button id="imgTry" class="btn small">Try a sample with every model</button> <button id="drawPics" class="btn small">${epOf(wk) ? 'Draw pictures for this story' : 'No story yet'}</button></div>
     <p id="picStat" class="note"></p><div id="imgOut"></div>` : ''}
     <h2>Handwriting test</h2><p class="note">A test of reading handwriting from a pen. Type the word you are going to write, write it below with the pen, and press Read it. To see whether the AI "corrects" mistakes, write a word with a deliberate misspelling and type it exactly as you wrote it. Nothing here is saved except the results list below.</p>
+    <label>When she writes with the pen on the spelling screen, read it with</label><select id="hwEngine"><option value="auto">Automatic (the AI if there is a key, otherwise the device)</option><option value="vision">The AI vision model</option><option value="builtin">The device's own recognizer</option></select>
     <label>The word you will write, exactly as you write it</label><input id="hwWord" type="text" autocomplete="off" spellcheck="false" placeholder="for example because">
     <label>How to read it</label><select id="hwMode"><option value="word">The whole word at once (AI vision)</option><option value="boxes">One letter per box (AI vision)</option><option value="builtin">The device's own recognizer, if it has one</option></select>
     <label>AI vision model</label><select id="hwModel">${HW_MODELS.map(m => `<option value="${m}">${esc(m)}</option>`).join('')}</select>

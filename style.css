@@ -438,3 +438,10 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 @keyframes updpulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
 body.hasupdate #app { padding-right: 116px; }
 @media (prefers-reduced-motion: reduce) { #updbtn { animation: none; } }
+
+/* writing with the pen on the spelling screen */
+.wpanel { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.wwrap { position: relative; background: #fff; border-radius: 16px; touch-action: none; max-width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+.wwrap canvas { position: absolute; left: 0; top: 0; border-radius: 16px; }
+.wread { min-height: 28px; color: #fff; font-size: 20px; }
+.readback { font-size: 26px; margin-bottom: 6px; }
