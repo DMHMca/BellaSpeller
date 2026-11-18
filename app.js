@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.85'; // bump with every release
+const APP_VER = '3.86'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2066,6 +2066,20 @@ const TIP_TABLE = {
   used: 'Used is use with a d on the end: u-s-e-d.',
   special: 'Special has ci in the middle: spe-ci-al.'
 };
+// What the voice says for a tip. A voice reads a letter group such as "ough" as a word and a sound such as "uff" as nonsense, so the spoken version names the letters one by one and spells the sounds the way they are said.
+const TIP_SAY = {
+  many: 'Many is said menny, but it is spelt with the letter a: m, a, n, y.',
+  enough: 'Enough ends with the letters o, u, g, h. Together they say uff, like in stuff: e, n, o, u, g, h.',
+  friend: 'Friend has the letters i and e in it: f, r, i, e, n, d. A friend is there to the end.',
+  because: 'Because is the word be and the word cause joined together: be, cause.',
+  answer: 'Answer has a silent w after the s: a, n, s, w, e, r. You do not say the w.',
+  colour: 'Colour has the letter u before the r: c, o, l, o, u, r.',
+  great: 'Great has the letters e and a, which say ay here, like in steak: g, r, e, a, t.',
+  decide: 'The letter c says s in decide: d, e, c, i, d, e.',
+  used: 'Used is the word use with a d on the end: u, s, e, d.',
+  special: 'Special has the letters c and i in the middle: s, p, e, c, i, a, l.'
+};
+const spokenTip = x => x.mnemSay || (!x.mnem && TIP_SAY[x.w]) || trickText(x);
 function trickText(x) {
   return x.mnem || TIP_TABLE[x.w] || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
 }
@@ -2074,12 +2088,12 @@ async function aiTips(words) {
   aiNeedKey();
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
-  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Reply with JSON only, like {"word": "tip"}.' }] }) });
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Also give a "say" version for a text-to-speech voice: the same tip, but name any letter group as separate letters (for example o, u, g, h, never ough) and write any sound the way it is said (for example uff), because the voice cannot read letter groups or sounds properly. Reply with JSON only, like {"word": {"tip": "...", "say": "..."}}.' }] }) });
   if (!r.ok) throw aiFail(r.status);
   const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
   const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}'); if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a list of tips.');
   const o = JSON.parse(t.slice(i0, i1 + 1)), out = {};
-  words.forEach(w => { const v = String(o[w] || '').trim(); if (v && v.length <= 140) out[w] = v; });
+  words.forEach(w => { const e = o[w], v = String(e && typeof e === 'object' ? e.tip : e || '').trim(); if (v && v.length <= 140) out[w] = { tip: v, say: e && typeof e === 'object' && e.say ? String(e.say).trim().slice(0, 300) : '' }; });
   return out;
 }
 // The spelling tips one at a time: each word and its tip appear and are said once, then she looks at it for as long as she likes and taps Next.
@@ -2095,11 +2109,11 @@ function tipsOneByOne(all) {
       h(`<div class="screen onetip"><div class="wordtile">${esc(x.w)}</div>
         <p class="tipbig">${esc(tip)}</p>
         <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
-      on('#tphear', () => say(x.w + '. ' + tip));
+      on('#tphear', () => say(x.w + '. ' + spokenTip(x)));
       on('#tpprev', () => { hush(); i--; show(); });
       on('#tpnext', () => { hush(); if (last) finish(); else { i++; show(); } });
       backBtn(finish);
-      say(x.w + '. ' + tip);
+      say(x.w + '. ' + spokenTip(x));
     };
     show();
   });
@@ -2115,7 +2129,7 @@ function tricksScreen(all) {
         const b = $('#trfind'); if (b) { b.disabled = true; b.textContent = 'Looking them up...'; }
         try {
           const tips = await aiTips(missing.map(x => x.w));
-          missing.forEach(x => { if (tips[x.w]) { x.mnem = tips[x.w]; x.mnemBy = 'ai'; } }); save();
+          missing.forEach(x => { if (tips[x.w]) { x.mnem = tips[x.w].tip; x.mnemSay = tips[x.w].say || undefined; x.mnemBy = 'ai'; } }); save();
           draw(Object.keys(tips).length ? 'The AI suggested these. A grown-up can change any of them under Grown-ups.' : 'No tips came back. Try again in a moment.');
         } catch (e) { draw(e.message || 'Could not look them up.'); }
       });
@@ -2568,7 +2582,7 @@ function adult() {
     document.querySelectorAll('.tf').forEach(f => { const x = wk.words[+f.dataset.i], v = f.value.trim().toLowerCase(); const k = f.dataset.f;
       const bad = (k === 'hard' && v && !x.w.includes(v)) || (k === 'parts' && v && v.replace(/\|/g, '') !== x.w) || (k === 'say' && v && v.replace(/-/g, '') !== x.w);
       if (k === 'wrong') { const list = f.value.split(',').map(t => t.trim().toLowerCase()).filter(t => /^[a-z'-]+$/.test(t) && t !== x.w).slice(0, 6); x.wrong = list.length ? list : undefined; return; }
-      if (k === 'mnem') { const t = f.value.trim(); if (t !== (x.mnem || '')) { x.mnem = t || undefined; x.mnemBy = t ? 'grown-up' : undefined; } return; }
+      if (k === 'mnem') { const t = f.value.trim(); if (t !== (x.mnem || '')) { x.mnem = t || undefined; x.mnemSay = undefined; x.mnemBy = t ? 'grown-up' : undefined; } return; }
       x[k] = bad ? x[k] : (v || undefined); });
     wk.words.forEach((x, i) => { if (x.family) { const keep = [...document.querySelectorAll('.fam')].filter(c => +c.dataset.i === i && c.checked).map(c => c.dataset.f); x.family = keep.length ? keep : undefined; } });
     save(); adultTab = 'tools'; adultFlash = 'Saved. A box that does not match its word (for example hard letters that are not in the word) is ignored.'; adult();
@@ -2583,7 +2597,7 @@ function adult() {
   on('#saveWords', () => {
     const nw = parseWords($('#cw').value);
     if (!nw.length) return;
-    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemonic', 'mnemWords', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
+    nw.forEach(x => { const old = wk.words.find(o => o.w === x.w); if (old) { x.red = old.red; if (!x.say) x.say = old.say; ['hard', 'parts', 'mnem', 'mnemSay', 'mnemonic', 'mnemWords', 'mnemBy', 'wrong', 'family', 'rule', 'ruleTried', 'sug'].forEach(k => { x[k] = old[k]; }); } });
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
