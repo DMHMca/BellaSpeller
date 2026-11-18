@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.87'; // bump with every release
+const APP_VER = '3.88'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -626,6 +626,7 @@ let picErr = '';
 const HW_MODELS = ['anthropic/claude-haiku-5.5', 'google/gemini-2.5-flash-lite', 'openai/gpt-5-nano', 'qwen/qwen3.5-flash-02-23', 'google/gemma-4-26b-a4b-it'];
 const hwResults = [];
 function wireHandwriting() {
+  const ls = $('#lsay'); if (ls) ls.onchange = () => { S.letterSay = ls.value === 'names' ? 'names' : 'phonics'; save(); };
   const wrap = $('#hwWrap'); if (!wrap) return;
   const he = $('#hwEngine'); if (he) { he.value = S.hwEngine || 'auto'; he.onchange = () => { S.hwEngine = he.value === 'vision' ? 'vision' : he.value; save(); }; }
   const det = $('#hwDetect');
@@ -2070,19 +2071,26 @@ const TIP_TABLE = {
   special: 'Special has ci in the middle: spe-ci-al.'
 };
 // What the voice says for a tip. A voice reads a letter group such as "ough" as a word and a sound such as "uff" as nonsense, so the spoken version names the letters one by one and spells the sounds the way they are said.
+const LETTER_NAMES = { a: 'ay', b: 'bee', c: 'see', d: 'dee', e: 'ee', f: 'ef', g: 'jee', h: 'aitch', i: 'eye', j: 'jay', k: 'kay', l: 'el', m: 'em', n: 'en', o: 'oh', p: 'pee', q: 'queue', r: 'ar', s: 'ess', t: 'tee', u: 'you', v: 'vee', w: 'double you', x: 'ex', y: 'why', z: 'zed' };
+// The sound each letter makes, written so that a voice says it as a sound and not as a name (a short sound for a vowel, a short puff for a stop).
+const LETTER_SOUNDS = { a: 'ah', b: 'buh', c: 'kuh', d: 'duh', e: 'eh', f: 'fff', g: 'guh', h: 'huh', i: 'ih', j: 'juh', k: 'kuh', l: 'lll', m: 'mmm', n: 'nnn', o: 'oh', p: 'puh', q: 'kwuh', r: 'rrr', s: 'sss', t: 'tuh', u: 'uh', v: 'vvv', w: 'wuh', x: 'ks', y: 'yuh', z: 'zzz' };
+const letterSayMode = () => S.letterSay === 'names' ? 'names' : 'phonics'; // phonics sounds are the default
+// Letters to be spoken are written in curly braces, for example {o,u,g,h}; they are said as phonics sounds or as letter names, whichever is chosen.
+const speakLetters = t => String(t).replace(/\{([a-z, ]+)\}/gi, (m, g) => g.toLowerCase().split(/[\s,]+/).filter(Boolean).map(c => (letterSayMode() === 'names' ? LETTER_NAMES : LETTER_SOUNDS)[c] || c).join(', '));
+// What the voice says for a tip. A voice reads a letter group such as "ough" as a word and a sound such as "uff" as nonsense, so the spoken version puts the letters in braces and spells the sounds the way they are said.
 const TIP_SAY = {
-  many: 'Many is said menny, but it is spelt with the letter a: m, a, n, y.',
-  enough: 'Enough ends with the letters o, u, g, h. Together they say uff, like in stuff: e, n, o, u, g, h.',
-  friend: 'Friend has the letters i and e in it: f, r, i, e, n, d. A friend is there to the end.',
+  many: 'Many is said menny, but it is spelt with the letter {a}: {m,a,n,y}.',
+  enough: 'Enough ends with the letters {o,u,g,h}. Together they say uff, like in stuff: {e,n,o,u,g,h}.',
+  friend: 'Friend has the letters {i} and {e} in it: {f,r,i,e,n,d}. A friend is there to the end.',
   because: 'Because is the word be and the word cause joined together: be, cause.',
-  answer: 'Answer has a silent w after the s: a, n, s, w, e, r. You do not say the w.',
-  colour: 'Colour has the letter u before the r: c, o, l, o, u, r.',
-  great: 'Great has the letters e and a, which say ay here, like in steak: g, r, e, a, t.',
-  decide: 'The letter c says s in decide: d, e, c, i, d, e.',
-  used: 'Used is the word use with a d on the end: u, s, e, d.',
-  special: 'Special has the letters c and i in the middle: s, p, e, c, i, a, l.'
+  answer: 'Answer has a silent {w} after the {s}: {a,n,s,w,e,r}. You do not say the {w}.',
+  colour: 'Colour has the letter {u} before the {r}: {c,o,l,o,u,r}.',
+  great: 'Great has the letters {e} and {a}, which say ay here, like in steak: {g,r,e,a,t}.',
+  decide: 'The letter {c} says s in decide: {d,e,c,i,d,e}.',
+  used: 'Used is the word use with a {d} on the end: {u,s,e,d}.',
+  special: 'Special has the letters {c} and {i} in the middle: {s,p,e,c,i,a,l}.'
 };
-const spokenTip = x => x.mnemSay || (!x.mnem && TIP_SAY[x.w]) || trickText(x);
+const spokenTip = x => speakLetters(x.mnemSay || (!x.mnem && TIP_SAY[x.w]) || trickText(x));
 function trickText(x) {
   return x.mnem || TIP_TABLE[x.w] || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
 }
@@ -2091,7 +2099,7 @@ async function aiTips(words) {
   aiNeedKey();
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
-  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Also give a "say" version for a text-to-speech voice: the same tip, but name any letter group as separate letters (for example o, u, g, h, never ough) and write any sound the way it is said (for example uff), because the voice cannot read letter groups or sounds properly. Reply with JSON only, like {"word": {"tip": "...", "say": "..."}}.' }] }) });
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Also give a "say" version for a text-to-speech voice: the same tip, but put every letter or letter group that should be said as letters inside curly braces with commas between them (for example {o,u,g,h}, never ough), and write any sound the way it is said (for example uff), because the voice cannot read letter groups or sounds properly. Reply with JSON only, like {"word": {"tip": "...", "say": "..."}}.' }] }) });
   if (!r.ok) throw aiFail(r.status);
   const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
   const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}'); if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a list of tips.');
@@ -2111,8 +2119,9 @@ function tipsOneByOne(all) {
       prog = `Word ${i + 1} of ${list.length}`;
       h(`<div class="screen onetip"><div class="wordtile">${esc(x.w)}</div>
         <p class="tipbig">${esc(tip)}</p>
-        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
+        <div class="row"><button id="tphear" class="iconbtn big" aria-label="Say it again">${ico('speaker')}</button><button id="tpmode" class="btn small">Letters: ${letterSayMode() === 'names' ? 'names' : 'sounds'}</button>${i > 0 ? '<button id="tpprev" class="btn">Previous</button>' : ''}<button id="tpnext" class="btn big">${last ? 'Done' : 'Next'} ${ico(last ? 'check' : 'next')}</button></div></div>`);
       on('#tphear', () => say(x.w + '. ' + spokenTip(x)));
+      on('#tpmode', () => { S.letterSay = letterSayMode() === 'names' ? 'phonics' : 'names'; save(); show(); });
       on('#tpprev', () => { hush(); i--; show(); });
       on('#tpnext', () => { hush(); if (last) finish(); else { i++; show(); } });
       backBtn(finish);
@@ -2469,6 +2478,7 @@ function adult() {
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
+    <label>In the spelling tips, say letters as</label><select id="lsay"><option value="phonics" ${letterSayMode() === 'phonics' ? 'selected' : ''}>Phonics sounds (mmm, ah, nnn)</option><option value="names" ${letterSayMode() === 'names' ? 'selected' : ''}>Letter names (em, ay, en)</option></select>
     <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${effVp() === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
