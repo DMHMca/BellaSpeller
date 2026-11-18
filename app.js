@@ -6,29 +6,39 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.64'; // bump with every release
+const APP_VER = '3.65'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
+// Her current set of ten words (from her own handwritten lists). A device that still has only the untouched first try-out week is moved to this set once.
+const NEW_WORDS = ['many', 'enough', 'friend', 'because', 'answer', 'colour', 'great', 'decide', 'used', 'special'];
+const OLD_TRYOUT = 'nice,nicer,shiny,shining,being,every,everyone,other';
+function migrateWords(s) {
+  if (s.wordsMigrated) return s;
+  s.wordsMigrated = 1;
+  const w = s.weeks[s.weeks.length - 1];
+  if (s.weeks.length === 1 && w.id === 'w1' && w.words.map(x => x.w).join() === OLD_TRYOUT) {
+    s.weeks.push({ id: 'w2', label: "Bella's words", rule: 'Tricky words that do not spell the way they sound', words: NEW_WORDS.map(x => ({ w: x })), score: null, ep: null });
+    s.cur = 'w2';
+  }
+  return s;
+}
 function fresh() {
   return {
     pin: null, name: '', girls: ['Imogen', 'Persephone', 'Florence', 'Tabitha'], meIn: false,
     weeks: [{
-      id: 'w1', label: 'Try-out week',
-      rule: 'Adding -ing or -er to words ending in e with a consonant before it',
-      words: [
-        { w: 'nice' }, { w: 'nicer' }, { w: 'shiny' }, { w: 'shining' }, { w: 'being' },
-        { w: 'every', red: true, say: 'ev-er-y' }, { w: 'everyone', red: true, say: 'ev-er-y-one' }, { w: 'other', red: true }
-      ],
+      id: 'w1', label: "Bella's words",
+      rule: 'Tricky words that do not spell the way they sound',
+      words: NEW_WORDS.map(w => ({ w })),
       score: null, ep: null
     }],
     cur: 'w1', log: [], stars: 0, story: {}
   };
 }
-function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return s; } } catch (e) { } loadedFresh = true; return fresh(); }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return migrateWords(s); } } catch (e) { } loadedFresh = true; return fresh(); }
 let loadedFresh = false;
 function save() {
   const j = JSON.stringify(S);
