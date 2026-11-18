@@ -417,3 +417,14 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .scrollbtns .scrollbtn:last-child .ico { transform: rotate(90deg); }
 .storyimg { max-height: clamp(90px, 16vh, 180px); }
 .storypic { min-height: clamp(90px, 16vh, 180px); }
+
+/* a bigger keyboard for the spelling screen: easier for fingers */
+.writescreen .kb { gap: 8px; }
+.writescreen .kb div { gap: 8px; }
+.writescreen .key { max-width: 120px; height: clamp(54px, 8.8vh, 88px); font-size: clamp(26px, 4.6vh, 40px); border-radius: 16px; }
+.writescreen .key.wide { max-width: 170px; }
+.writescreen .key.ok { flex: 2.2 1 0; max-width: 220px; }
+.writescreen .key.ok .ico { width: 40px; height: 40px; }
+.writescreen .cuepic { max-height: clamp(70px, 11vh, 120px); }
+/* the spelling screen may use the full width, so the keys can be big */
+#app:has(.writescreen) { max-width: 1100px; }

@@ -5,7 +5,7 @@ const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.24'; // bump with every release
+const APP_VER = '3.26'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1133,7 +1133,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     let sureShown = false, armed = false;
     setTimeout(() => { armed = true; }, 700); // taps from the screen before can land here; ignore input for the first moments
     // The word is finished as soon as it is spelled right; for anything else she taps the tick.
-    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && (help === 'sure' || autoSure) && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } if (typed === word) setTimeout(() => { if (typed === word) finish(); }, 350); } };
+    const add = c => { if (!armed) return; if (typed.length < Math.min(24, word.length + 3)) { typed += c; draw(); if (wobj && (help === 'sure' || autoSure) && !sureShown && !word.startsWith(typed)) { sureShown = true; used.add('sure'); $('#surebox').textContent = SURE_MSG; say(SURE_MSG); } } }; // nothing is decided until she presses the finished key (extra letters such as wente for went are common)
     const del = () => { typed = typed.slice(0, -1); draw(); };
     const finish = () => { if (typed && !done) { done = true; hush(); const tl = [...used]; res({ typed, hints, reminded, tools: tl, aided: !!help || tl.some(id => REVEALS.includes(id)) }); } };
     const hint = () => {
@@ -1662,7 +1662,7 @@ function traceFlow(word) {
       const draw = () => { $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>'; const okk = document.querySelector('.key[data-k="ok"]'); if (okk) okk.disabled = !typed; };
       let armed = false; setTimeout(() => { armed = true; }, 700);
       const submit = () => { if (!armed) return; if (typed === word) r('ok'); else if (typed) { typed = ''; $('#cmsg').textContent = 'Look closely and try again.'; draw(); } };
-      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { if (!armed) return; const k = b.dataset.k; if (k === 'ok') return submit(); if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); if (typed === word) setTimeout(() => { if (typed === word) submit(); }, 350); }; });
+      document.querySelectorAll('.key').forEach(b => { b.onclick = () => { if (!armed) return; const k = b.dataset.k; if (k === 'ok') return submit(); if (k === 'del') typed = typed.slice(0, -1); else if (typed.length < Math.min(24, word.length + 3)) typed += k; draw(); }; });
       backBtn(() => r(BACK)); draw();
     });
     if (s2 === BACK) return res(BACK);
