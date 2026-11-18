@@ -3,8 +3,9 @@
 
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
-function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.18'; // bump with every release
+function soundOn() { return S.sound === undefined ? true : S.sound === true; } // on by default
+let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
+const APP_VER = '3.19'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -778,7 +779,7 @@ function startWaitLines() {
 // Makes sure the clips exist. Shows a short "getting ready" screen, which Bella can skip.
 let prepShown = false, justWritten = false;
 async function prep(texts, msg, ready) {
-  if (!ttsOn() || !soundOn()) return null;
+  if (!ttsOn()) return null;
   const need = [];
   for (const t of new Set(texts)) { if (t && sendable(t) && !(await getClipUrl(t))) need.push(t); }
   if (!need.length) return null;
@@ -844,7 +845,7 @@ async function decodeClip(url) {
 function say(t) {
   const tok = ++sayTok;
   stopAll();
-  if (!soundOn()) { keepAwake(false); return; }
+  if (!soundOn() && !testMode) { keepAwake(false); return; }
   if (ttsOn()) keepAwake(true);
   const warm = Date.now() - lastAudioEnd < 2500; // already talking a moment ago: no need to wake the speaker again
   speechUntil = Date.now() + 120000;
@@ -956,7 +957,7 @@ function paintSound() {
 function toggleSound() { S.sound = !soundOn(); save(); if (!soundOn()) { hush(); keepAwake(false); } paintSound(); }
 function h(html, opts) {
   keyHandler = null;
-  const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div>${sndBtn}<span class="prog">${esc(prog)}</span></div>`;
+  const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div>${testMode ? '' : sndBtn}<span class="prog">${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
   const ts = $('#topSnd'); if (ts) { ts.onclick = toggleSound; paintSound(); }
@@ -1569,7 +1570,7 @@ function storyReadyScreen() {
 async function storyDay() {
   const wk = curWeek();
   if (!(await storyStart(wk))) return home();
-  const ep = epOf(wk), st = S.story[wk.id], sound = soundOn();
+  const ep = epOf(wk), st = S.story[wk.id], sound = true;
   const beats = [].concat(...ep.parts);
   const order = beats.filter(b => b.p && b.word).map(b => b.word);
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
@@ -1787,10 +1788,11 @@ function trickScreen(x) {
   });
 }
 async function remember() {
+  testMode = true;
   const wk = curWeek(), list = trickyWords(wk);
   if (!list.length) {
     await gentle('No tricky words yet.', 'Do the story or the practice first. Any word that hides will come here.', 'Back home', 'No tricky words yet. Do the story or the practice first. Any word that hides will come here.');
-    return home();
+    { testMode = false; return home(); }
   }
   await loadPics(wk);
   await prep(list.map(x => x.w).concat(list.filter(x => x.mnem).map(x => 'Let us remember this word. ' + x.w + '. ' + x.mnem), ['Let us remember this word.']), 'Getting your tricky words ready');
@@ -1801,7 +1803,7 @@ async function remember() {
     while (!ok && tries < 3) {
       tries++;
       await trickScreen(x);
-      const t = await traceFlow(x.w); if (t === BACK) { if (i === 0 && tries === 1) return home(); continue; }
+      const t = await traceFlow(x.w); if (t === BACK) { if (i === 0 && tries === 1) { testMode = false; return home(); } continue; }
       const a = await writeWord(x.w, false, null, x);
       if (a === BACK) continue;
       S.log.push({ t: Date.now(), d: today(), wk: wk.id, w: x.w, mode: 'remember', typed: a.typed, hints: 0, ok: a.typed === x.w, redo: true }); save();
@@ -1813,7 +1815,7 @@ async function remember() {
   }
   prog = '';
   await gentle('All done!', 'The more you do this, the easier those words get.', 'Home', 'All done! The more you do this, the easier those words get.');
-  home();
+  testMode = false; home();
 }
 const MNEM_AFTER = 3;
 async function memoryTrickStep(week, x) {
@@ -1875,6 +1877,10 @@ function spellTexts(wk) {
 }
 // Runs the queue of words. A missed word comes back later in the same run. Returns the first-go results, or null if she went back to the start.
 async function runWords(wk, queue, starred) {
+  testMode = true;
+  try { return await runWordsInner(wk, queue, starred); } finally { testMode = false; }
+}
+async function runWordsInner(wk, queue, starred) {
   const N = wk.words.length, firsts = {};
   let i = 0;
   while (i < queue.length) {
@@ -1898,7 +1904,7 @@ async function finishSitting(wk, firsts, sound, kind) {
   home();
 }
 async function revise() {
-  const wk = curWeek(), sound = soundOn();
+  const wk = curWeek(), sound = true;
   const met = w => S.log.some(l => l.wk === wk.id && l.w === w);
   const due = (S.due && S.due[wk.id]) || [];
   const queue = shuffle(wk.words.slice()).sort((p, q) => (due.includes(q.w) ? 1 : 0) - (due.includes(p.w) ? 1 : 0)).map(x => ({ x, look: !sound || !met(x.w), counts: true, mode: 'revise' }));
@@ -1926,6 +1932,7 @@ function ceiling() {
 
 // ---------- home ----------
 function home() {
+  testMode = false; // leaving a test by any route
   if (pendingReload) { pendingReload = false; location.reload(); return; }
   prog = '';
   const wk = curWeek(), ep = epOf(wk);
