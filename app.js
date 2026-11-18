@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.02'; // bump with every release
+const APP_VER = '3.03'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1219,7 +1219,7 @@ function shelf(ep, st) {
       on('#chtoggle', () => { S.choices = (nChoices() + 1) % 4; save(); $('#chstate').textContent = nChoices() || 'off'; });
       all.forEach((t, i) => on('#i' + i, () => { hush(); res({ kind: 'type', type: t }); }));
       on('#again', () => { hush(); res({ kind: 'again' }); });
-      on('#resetstory', () => { const wk0 = curWeek(); hush(); delete S.story[wk0.id]; wk0.ep = null; if (S.due) delete S.due[wk0.id]; save(); ep = null; st = undefined; render(); }); // this week's story is put away and she chooses again // back to the beginning of this story, with no missed words carried over
+      on('#resetstory', () => { const wk0 = curWeek(); hush(); if (S.due) delete S.due[wk0.id]; if (ep && ep.idea) { save(); return res({ kind: 'redo' }); } delete S.story[wk0.id]; wk0.ep = null; save(); ep = null; st = undefined; render(); }); // same storyline, a new story around the same words (an older story with no saved storyline is just put away) // back to the beginning of this story, with no missed words carried over
       backBtn(res);
     };
     render();
@@ -1435,7 +1435,8 @@ async function storyStart(wk) {
       if (pick === BACK) return false;
       if (pick.kind === 'cast') { await castScreen(); continue; }
       if (pick.kind === 'again') { const e0 = epOf(wk), s0 = S.story[wk.id]; if (e0 && s0 && s0.part >= e0.parts.length) { S.story[wk.id] = { part: 0 }; save(); } return true; }
-      if (pick.kind === 'type') { final = pick.type.idea; step = 'ready'; } else step = 'outline';
+      if (pick.kind === 'redo') { final = epOf(wk).idea; step = 'write'; }
+      else if (pick.kind === 'type') { final = pick.type.idea; step = 'ready'; } else step = 'outline';
     } else if (step === 'outline') {
       idea = await outlineScreen();
       if (idea === BACK) { step = 'shelf'; continue; }
@@ -1483,7 +1484,7 @@ function clubSetup() {
     say(msg);
   });
 }
-function readyScreen() {
+function storyReadyScreen() {
   return new Promise(res => {
     h(`<div class="screen cheer">${confettiHtml()}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>Your story is ready!</h1><button id="next" class="btn big">Start the story ${ico('next')}</button></div>`);
     on('#next', () => { hush(); res(); }); keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
@@ -1500,7 +1501,7 @@ async function storyDay() {
   const steps = storySegments(beats);
   prepShown = false;
   await prep([].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk), spellTexts(wk), [STORY_INTRO]), 'Your story is ready!', true);
-  if (justWritten) { justWritten = false; if (!prepShown) await readyScreen(); }
+  if (justWritten) { justWritten = false; if (!prepShown) await storyReadyScreen(); }
   prog = ep.title;
   if ((await gentle('Some words in this story are highlighted in yellow.', 'They are this week\'s words. We will have a little go at them afterwards.', 'Start the story', STORY_INTRO)) === BACK) return home();
   let i = 0;
