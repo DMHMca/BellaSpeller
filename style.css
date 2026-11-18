@@ -427,7 +427,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .writescreen .key.ok .ico { width: 40px; height: 40px; }
 .writescreen .cuepic { max-height: clamp(70px, 11vh, 120px); }
 /* the spelling screen may use the full width, so the keys can be big */
-#app:has(.writescreen) { max-width: 1100px; }
+body.onwrite #app { max-width: 1100px; }
 
 /* the Update button: big, square, top right, only when a newer version is waiting */
 #updbtn { position: fixed; top: 8px; right: 8px; z-index: 96; width: 96px; height: 96px; border: 0; border-radius: 20px; background: #d4276a; color: #fff; font: inherit; font-weight: 800; font-size: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; box-shadow: 0 5px 0 #8e1648, 0 8px 18px rgba(0,0,0,.35); animation: updpulse 1.6s ease-in-out infinite; }
@@ -449,21 +449,21 @@ body.hasupdate #app { padding-right: 116px; }
 .choice.off { opacity: .35; filter: grayscale(1); cursor: default; box-shadow: none; }
 
 /* while she writes with the pen: no background animation, no clipped canvases, so the ink appears at once on a slow screen */
-body:has(#wpanel:not([style*="none"])) #scene, body:has(#wpanel:not([style*="none"])) #scene * { animation: none !important; }
-body:has(#wpanel:not([style*="none"])) .gapw, body:has(#wpanel:not([style*="none"])) .cheer * { animation: none !important; }
+body.inkmode #scene, body.inkmode #scene * { animation: none !important; }
+body.inkmode .gapw, body.inkmode .cheer * { animation: none !important; }
 .wwrap { box-shadow: none; border-radius: 4px; }
 .wwrap canvas { border-radius: 0; }
 
 #vlabel { position: fixed; left: 12px; bottom: 28px; z-index: 90; background: rgba(0,0,0,.35); border: 0; border-radius: 10px; color: #fff; opacity: .9; font: inherit; font-size: 20px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
 
 /* writing mode: everything higher up, so the buttons stay on the screen */
-body:has(#wpanel:not([style*="none"])) #app { padding-top: 40px; padding-bottom: 12px; }
-body:has(#wpanel:not([style*="none"])) .writescreen { gap: 6px; padding-top: 0; }
-body:has(#wpanel:not([style*="none"])) .top { min-height: 44px; margin-bottom: 0; }
+body.inkmode #app { padding-top: 40px; padding-bottom: 12px; }
+body.inkmode .writescreen { gap: 6px; padding-top: 0; }
+body.inkmode .top { min-height: 44px; margin-bottom: 0; }
 .wpanel { gap: 6px; }
 .wread { min-height: 0; }
 .readback { font-size: 22px; margin-bottom: 4px; }
-body:has(#wpanel:not([style*="none"])) .writescreen .slots { display: none; }
+body.inkmode .writescreen .slots { display: none; }
 
 /* story choice screen: compact; on a wide screen Home, Back and the options go down the left and the stories are narrower */
 .shelfscreen { gap: 10px; }
@@ -479,11 +479,11 @@ body:has(#wpanel:not([style*="none"])) .writescreen .slots { display: none; }
 .shelfscreen .shelf { gap: 10px; }
 .shelfscreen .shelfhead { margin: 10px 0 6px; font-size: 18px; }
 @media (min-width: 900px) {
-  #app:has(.shelfscreen) { max-width: 940px; display: grid; grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 18px; align-items: start; }
-  #app:has(.shelfscreen) .top { grid-column: 1; grid-row: 1; flex-direction: column; align-items: stretch; margin: 0; min-height: 0; gap: 8px; }
-  #app:has(.shelfscreen) .top .lhs { flex-direction: column; align-items: stretch; gap: 8px; }
-  #app:has(.shelfscreen) .top .iconbtn, #app:has(.shelfscreen) .top .sndtop { justify-content: flex-start; margin: 0; }
-  #app:has(.shelfscreen) .prog { display: none; }
+  body.onshelf #app { max-width: 940px; display: grid; grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 18px; align-items: start; }
+  body.onshelf #app .top { grid-column: 1; grid-row: 1; flex-direction: column; align-items: stretch; margin: 0; min-height: 0; gap: 8px; }
+  body.onshelf #app .top .lhs { flex-direction: column; align-items: stretch; gap: 8px; }
+  body.onshelf #app .top .iconbtn, body.onshelf #app .top .sndtop { justify-content: flex-start; margin: 0; }
+  body.onshelf #app .prog { display: none; }
   .shelfscreen { display: contents; }
   .shelfmain { display: flex; flex-direction: column; align-items: center; gap: 10px; grid-column: 2; grid-row: 1 / span 2; min-width: 0; }
   .shelfmain > * { width: 100%; }

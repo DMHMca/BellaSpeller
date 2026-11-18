@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.47'; // bump with every release
+const APP_VER = '3.48'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -966,6 +966,7 @@ function h(html, opts) {
   keyHandler = null;
   const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div>${testMode ? '' : sndBtn}<span class="prog">${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
+  { const cl = document.body.classList; cl.toggle('onshelf', html.includes('shelfscreen')); cl.toggle('onwrite', html.includes('writescreen')); cl.remove('inkmode'); }
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
   const ts = $('#topSnd'); if (ts) { ts.onclick = toggleSound; paintSound(); }
   window.scrollTo(0, 0);
@@ -1234,10 +1235,18 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       ink.onpointermove = e => {
         if (!cur || e.pointerId !== cur.id) return;
         const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-        (evs.length ? evs : [e]).forEach(ev => { const [x, y] = pos(ev), p = cur.pts[cur.pts.length - 1], pr = ev.pressure || 0.5; ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineWidth = 3 + pr * 4; ix.beginPath(); ix.moveTo(p.x, p.y); ix.lineTo(x, y); ix.stroke(); cur.pts.push({ x, y, t: Date.now() }); });
+        ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineJoin = 'round'; ix.lineWidth = 4;
+        (evs.length ? evs : [e]).forEach(ev => {
+          const [x, y] = pos(ev), p = cur.pts[cur.pts.length - 1];
+          if (Math.hypot(x - p.x, y - p.y) < 1.5) return; // ignore tiny jitter, which is what makes the line look shaky
+          const m0 = cur.mid || { x: p.x, y: p.y }, m1 = { x: (p.x + x) / 2, y: (p.y + y) / 2 };
+          ix.beginPath(); ix.moveTo(m0.x, m0.y); ix.quadraticCurveTo(p.x, p.y, m1.x, m1.y); ix.stroke();
+          cur.mid = m1; cur.pts.push({ x, y, t: Date.now() });
+        });
       };
       // start reading as soon as the pen pauses, so the answer is usually ready by the time she presses Done
       ink.onpointerup = ink.onpointercancel = () => {
+        if (cur && cur.mid) { const l = cur.pts[cur.pts.length - 1]; ix.beginPath(); ix.moveTo(cur.mid.x, cur.mid.y); ix.lineTo(l.x, l.y); ix.stroke(); }
         cur = null; clearTimeout(pre.t);
         pre.t = setTimeout(() => { if (!strokes.length || done) return; const n = strokes.length; pre.n = n; pre.p = readHandwriting(strokes, ink, W, H); pre.p.catch(() => { }); }, 1500);
       };
@@ -1246,7 +1255,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const wrow = () => document.querySelector('#wpanel > .row');
     const clearInk = () => { clearTimeout(pre.t); pre.n = 0; pre.p = null; if (ix) ix.clearRect(0, 0, W, H); strokes = []; cur = null; $('#wread').innerHTML = ''; const r = wrow(); if (r) r.style.display = ''; };
     const setMode = m => {
-      mode = m; S.input = m; save();
+      mode = m; S.input = m; save(); document.body.classList.toggle('inkmode', m === 'write');
       const kb = document.querySelector('.kb'), wp = $('#wpanel'), sw = $('#modesw');
       if (kb) kb.style.display = m === 'write' ? 'none' : '';
       if (wp) wp.style.display = m === 'write' ? '' : 'none';
