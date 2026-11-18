@@ -1,5 +1,6 @@
 /* BellaSpeller: night-sky sleepover. Story text lives on cream "pages"; instructions and controls live on the sky. */
 @font-face { font-family:'Atkinson'; src:url(fonts/atkinson-400.woff2) format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:'Pacifico'; src:url(fonts/pacifico.woff2) format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
 @font-face { font-family:'Atkinson'; src:url(fonts/atkinson-700.woff2) format('woff2'); font-weight:700; font-style:normal; font-display:swap; }
 
 :root {
@@ -505,3 +506,13 @@ body.inkmode .wwrap { margin: 0 auto; }
 
 /* multiple choice: every option looks the same, so the colour never gives the answer away */
 .mcbox .choice, .mcbox .choice:nth-child(n) { border-left-color: var(--mint); }
+
+/* the logo on the home screen */
+.logowrap { width: 100%; display: flex; justify-content: center; margin: -6px 0 -4px; }
+.logo { width: min(100%, 420px); height: auto; max-height: 24vh; overflow: visible; }
+.lgspark { transform-box: fill-box; transform-origin: center; animation: lgtw 2.6s ease-in-out infinite; }
+@keyframes lgtw { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .lgspark { animation: none; } }
+
+.herorow { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
+@media (min-width: 700px) { .herorow { flex-direction: row; justify-content: center; gap: 30px; } .herorow .logowrap { width: auto; margin: 0; } .herorow .logo { width: min(46vw, 330px); max-height: 20vh; } .herorow .hello { text-align: left; } }

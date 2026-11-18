@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.54'; // bump with every release
+const APP_VER = '3.55'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2074,6 +2074,22 @@ function ceiling() {
 }
 
 // ---------- home ----------
+// The BellaSpeller logo: a pink script wordmark with a white outline, a swoosh, and sparkling stars around it.
+const SPARK = 'M0 -1 C0 -.25 .25 0 1 0 C.25 0 0 .25 0 1 C0 .25 -.25 0 -1 0 C-.25 0 0 -.25 0 -1Z';
+function logoSvg(cls) {
+  const sp = [[40, 52, 17, '#ffe27a', 0], [488, 40, 21, '#fff', 1], [470, 178, 13, '#ffe27a', 2], [26, 168, 11, '#fff', 3], [255, 12, 12, '#ffd1ea', 1.5], [340, 205, 10, '#fff', 2.5], [118, 12, 9, '#fff', .5]];
+  return `<svg class="logo ${cls || ''}" viewBox="0 0 520 230" role="img" aria-label="BellaSpeller">
+    <defs><linearGradient id="lgPink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb6df"/><stop offset=".55" stop-color="#ff5fb0"/><stop offset="1" stop-color="#e0197f"/></linearGradient>
+    <linearGradient id="lgSwoosh" x1="0" x2="1"><stop offset="0" stop-color="#ffe27a" stop-opacity="0"/><stop offset=".5" stop-color="#ffe27a"/><stop offset="1" stop-color="#ffe27a" stop-opacity="0"/></linearGradient>
+    <filter id="lgGlow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="5" stdDeviation="3" flood-color="#8e1648" flood-opacity=".6"/></filter></defs>
+    <g filter="url(#lgGlow)" font-family="Pacifico, 'Segoe Script', 'Brush Script MT', cursive" text-anchor="middle" paint-order="stroke" stroke-linejoin="round">
+      <text x="236" y="108" font-size="112" fill="url(#lgPink)" stroke="#fff" stroke-width="9" transform="rotate(-4 236 108)">Bella</text>
+      <text x="282" y="190" font-size="88" fill="url(#lgPink)" stroke="#fff" stroke-width="8" transform="rotate(-4 282 190)">Speller</text>
+    </g>
+    <path d="M70 206 C170 224 330 224 450 200" fill="none" stroke="url(#lgSwoosh)" stroke-width="5" stroke-linecap="round"/>
+    ${sp.map(([x, y, r, c, d]) => `<path class="lgspark" style="animation-delay:${d}s" d="${SPARK}" transform="translate(${x} ${y}) scale(${r})" fill="${c}"/>`).join('')}
+  </svg>`;
+}
 function home() {
   testMode = false; // leaving a test by any route
   if (pendingReload) { pendingReload = false; location.reload(); return; }
@@ -2082,8 +2098,8 @@ function home() {
   const stNow = S.story[wk.id];
   const sub = !ep || !stNow ? 'Choose a story' : stNow.part >= ep.parts.length ? 'Choose or play again' : 'Carry on';
   const storyBtn = `<button id="story" class="tile t-story"><span class="ticon">${ico('book')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s story" : "My story"}</b><small>${esc(sub)}</small></div></button>`;
-  h(`<div class="top"><span class="wordmark">${ico('star')}<span>BellaSpeller</span></span>${sndBtn}</div>
-    <div class="screen"><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div>
+  h(`<div class="top"><span></span>${sndBtn}</div>
+    <div class="screen"><div class="herorow"><div class="logowrap">${logoSvg()}</div><div class="hello"><h1>Hello${S.name ? ' ' + esc(S.name) : ''}!</h1><p>What shall we do today?</p></div></div>
     <div class="tiles">${storyBtn}
     <button id="quick" class="tile t-quick"><span class="ticon">${ico('bolt')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s practice" : "My practice"}</b><small>Just the ${wk.words.length} words</small></div></button>
     <button id="remember" class="tile t-rem"><span class="ticon">${ico('bulb')}</span><div class="tt"><b>${S.name ? esc(S.name) + "'s revision" : "My revision"}</b><small>Remember the tricky words</small></div></button>
