@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '2.99'; // bump with every release
+const APP_VER = '3.00'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -370,10 +370,14 @@ function phonicsRule(w) {
     const place = where === 'start' ? 'It starts with ' + pat : where === 'end' ? 'It ends with ' + pat : 'It has ' + pat + ' in it';
     const letters = pat.split('').join(' ');
     const snd = PSOUND[pat];
-    const spoken = (where === 'start' ? 'It starts with ' : where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. ' + 'Listen: ' + listOf(family) + '. ' : 'the letters ' + letters + ', like ' + listOf(family) + '. ') + (PNOTE[pat] || '');
+    const spoken = (where === 'start' ? 'It starts with ' : where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. ' + 'Listen: ' + listOf(family) + '. ' : 'the letters ' + letters + ', like ' + listOf(family) + '. ') + (PNOTE[pat] || '') + (pat.length === 2 && !['ly', 'ed', 'le'].includes(pat) ? ' That is called a digraph: two letters, one sound.' : '');
     return { rule: place + ', like ' + listOf(family) + '.', spoken, family };
   }
-  if (/[aeiou][^aeiouwy]e$/.test(w)) { const family = ['make', 'time', 'hope', 'cube'].filter(e => e !== w).slice(0, 3); return { rule: 'It has a magic e on the end, like ' + listOf(family) + '.', spoken: 'It has a magic e on the end, like ' + listOf(family) + '. The e is silent, but it makes the vowel say its own name.', family }; }
+  const sp = w.match(/([aeiou])[^aeiouwy]e$/);
+  if (sp) {
+    const v = sp[1], ex = { a: ['make', 'game', 'late'], e: ['these', 'theme', 'complete'], i: ['time', 'bike', 'like'], o: ['hope', 'home', 'nose'], u: ['cube', 'tune', 'huge'] }[v].filter(e => e !== w);
+    return { rule: 'It has a split digraph, ' + v + '_e, like ' + listOf(ex) + '.', spoken: 'It has a split digraph, ' + v + ' and e, like ' + listOf(ex) + '. The ' + v + ' and the e on the end work together to make one sound, with a letter in between.', family: ex };
+  }
   return null;
 }
 // The rule and words like it for a word: from the built-in spelling patterns first, then from the AI's suggestion.
