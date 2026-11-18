@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.05'; // bump with every release
+const APP_VER = '3.06'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -309,7 +309,7 @@ function toolContent(x, stage) {
   return { html, shown };
 }
 // ---- help she asks for after a word did not go right: one at a time ----
-const cueSpoken = (sentence, word) => sentence + ' ... So the word I would like you to try to spell is ' + word + '.';
+const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + '.';
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) {
@@ -806,19 +806,24 @@ function say(t) {
   if (ttsOn() && !warm) wakeAudio();
   speechUntil = Date.now() + 120000;
   if (!ttsOn()) return builtinSay(t);
-  getClipUrl(t).then(url => {
+  const play = url => {
+    audioEl = new Audio(url);
+    audioEl.onended = () => { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); };
+    audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
+    const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
+    el.preload = 'auto';
+    setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, warm ? 60 : 550);
+  };
+  getClipUrl(t).then(async url => {
     if (tok !== sayTok) return;
-    if (url) {
-      audioEl = new Audio(url);
-      audioEl.onended = () => { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); };
-      audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
-      const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
-      el.preload = 'auto';
-      setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, warm ? 60 : 550);
-    } else {
-      builtinSay(t);
-      if (ttsFails < 3 && sendable(t)) fetchClip(t).then(() => { ttsFails = 0; }, e => { ttsFails++; lastTtsErr = e.message; });
+    if (url) return play(url);
+    // Not recorded yet: wait a moment for the proper voice rather than dropping straight to the device's own voice.
+    if (ttsFails < 3 && sendable(t)) {
+      const got = await Promise.race([fetchClip(t).then(u => { ttsFails = 0; return u; }, e => { ttsFails++; lastTtsErr = e.message; return null; }), new Promise(r => setTimeout(() => r(null), 4000))]);
+      if (tok !== sayTok) return;
+      if (got) return play(got);
     }
+    builtinSay(t);
   });
 }
 function builtinSay(t) {
