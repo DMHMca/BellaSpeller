@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.08'; // bump with every release
+const APP_VER = '3.11'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -787,31 +787,53 @@ function stopAll() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (audioEl) { audioEl.onended = audioEl.onerror = null; audioEl.pause(); audioEl = null; }
 }
-let wakeCtx = null, lastAudioEnd = 0;
-// Speakers and Bluetooth often switch off in silence and swallow the first second of the next sound. A very quiet hiss just before each clip keeps them awake.
-function wakeAudio() {
+let wakeCtx = null, lastAudioEnd = 0, keepSrc = null;
+// Speakers and Bluetooth often switch off in silence and swallow the start of the next sound. A constant signal far too quiet to hear (about one step above silence) keeps the output awake while the app is open with sound on.
+function keepAwake(on) {
   try {
+    if (!on) { if (keepSrc) { keepSrc.stop(); keepSrc = null; } return; }
+    if (keepSrc) { if (wakeCtx && wakeCtx.state === 'suspended') wakeCtx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     wakeCtx = wakeCtx || new AC(); const c = wakeCtx; if (c.state === 'suspended') c.resume();
-    const len = Math.floor(c.sampleRate * 0.6), buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.0007;
-    const src = c.createBufferSource(); src.buffer = buf; src.connect(c.destination); src.start();
+    const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.00004;
+    keepSrc = c.createBufferSource(); keepSrc.buffer = buf; keepSrc.loop = true; keepSrc.connect(c.destination); keepSrc.start();
   } catch (e) { }
+}
+const clipBufs = new Map();
+async function decodeClip(url) {
+  if (clipBufs.has(url)) return clipBufs.get(url);
+  const ab = await (await fetch(url)).arrayBuffer();
+  const buf = await wakeCtx.decodeAudioData(ab);
+  clipBufs.set(url, buf); return buf;
 }
 function say(t) {
   const tok = ++sayTok;
   stopAll();
-  if (!soundOn()) return;
+  if (!soundOn()) { keepAwake(false); return; }
+  if (ttsOn()) keepAwake(true);
   const warm = Date.now() - lastAudioEnd < 2500; // already talking a moment ago: no need to wake the speaker again
   speechUntil = Date.now() + 120000;
   if (!ttsOn()) return builtinSay(t);
-  const play = url => {
+  const playTag = url => { // plain audio element (used if the audio channel is not running)
     audioEl = new Audio(url);
     audioEl.onended = () => { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); };
     audioEl.onerror = () => { if (tok === sayTok) builtinSay(t); };
-    const el = audioEl; // a short lead-in: the sound device needs a moment to wake, or the first word is clipped
+    const el = audioEl;
     el.preload = 'auto';
     setTimeout(() => { if (tok === sayTok && audioEl === el) el.play().catch(() => { if (tok === sayTok) builtinSay(t); }); }, warm ? 60 : 350);
+  };
+  // The recording is decoded and started on the audio channel that is already running, a fraction of a second ahead, so the first word is not lost.
+  const play = url => {
+    if (!wakeCtx || wakeCtx.state !== 'running') return playTag(url);
+    const w = { ended: false, paused: false, onended: null, onerror: null, src: null, pause() { this.paused = true; try { this.src && this.src.stop(); } catch (e) { } } };
+    audioEl = w;
+    decodeClip(url).then(buf => {
+      if (tok !== sayTok || w.paused) return;
+      const src = wakeCtx.createBufferSource(); src.buffer = buf; src.connect(wakeCtx.destination); w.src = src;
+      src.onended = () => { w.ended = true; if (!w.paused) { speechUntil = Date.now() + 2500; lastAudioEnd = Date.now(); } };
+      src.start(wakeCtx.currentTime + (warm ? 0.1 : 0.3));
+    }).catch(() => { if (tok === sayTok) playTag(url); });
   };
   getClipUrl(t).then(async url => {
     if (tok !== sayTok) return;
@@ -1048,7 +1070,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const sayIt = () => say(help === 'family' && wobj && familyText(wobj) ? familyText(wobj) : sp ? cueSpoken(cue, word) : word);
     if (help) used.add(help);
     h(`<div class="screen writescreen">
-      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"><i>&#9660;</i></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
+      ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word you just looked at'}</span></div>`}
       ${wobj ? picHtml(word) : ''}${note ? `<p class="msg smallmsg">${esc(note)}</p>` : ''}<div id="helpbox" class="helpbox"></div>
       <div id="surebox" class="surebox"></div>
       <div id="remindbox" style="width:100%"></div>
