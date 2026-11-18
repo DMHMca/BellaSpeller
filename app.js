@@ -5,7 +5,7 @@ const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.23'; // bump with every release
+const APP_VER = '3.24'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1608,8 +1608,12 @@ async function storyDay() {
 // The story sentence for a word (the last sentence of its paragraph), or null if the week has no story.
 function storySentence(wk, w) {
   const ep = epOf(wk); if (!ep) return null;
-  if (ep.sentences && ep.sentences[w]) return fill(ep.sentences[w]);
-  for (const part of ep.parts || []) for (const b of part) if (b.p && b.word === w) return fill(lastSentence(b.p));
+  // The sentence used for a word must really contain that exact word (not a longer or shorter form such as shining for shiny).
+  // If the saved one does not, look through the whole story for a sentence that does, and use nothing rather than a wrong one.
+  const ok = t => t && wholeWord(w, t) === 1;
+  if (ep.sentences && ok(fill(ep.sentences[w] || ''))) return fill(ep.sentences[w]);
+  for (const part of ep.parts || []) for (const b of part) if (b.p && b.word === w && ok(fill(lastSentence(b.p)))) return fill(lastSentence(b.p));
+  for (const part of ep.parts || []) for (const b of part) if (b.p) for (const t of splitSentences(fill(b.p))) if (ok(t)) return t;
   return null;
 }
 function picFor(word) {
