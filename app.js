@@ -4,7 +4,7 @@
 const KEY = 'star-speller-1';
 const DEBUG = true; // true: settings button on every screen and no PIN. Set false for release.
 function soundOn() { return S.sound === undefined ? !DEBUG : S.sound === true; } // off by default while debugging
-const APP_VER = '3.14'; // bump with every release
+const APP_VER = '3.16'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -339,6 +339,7 @@ const PHONICS = [
   ['tion', 'end', ['nation', 'action', 'station', 'motion']], ['ture', 'end', ['picture', 'nature', 'future', 'creature']], ['tch', 'end', ['catch', 'match', 'watch', 'witch']], ['dge', 'end', ['bridge', 'edge', 'badge', 'judge']],
   ['ck', 'end', ['back', 'pack', 'duck', 'kick']], ['ful', 'end', ['careful', 'helpful', 'playful', 'cheerful']], ['ous', 'end', ['famous', 'nervous', 'serious', 'curious']], ['ly', 'end', ['slowly', 'quickly', 'gladly', 'kindly']],
   ['ing', 'end', ['going', 'playing', 'jumping', 'singing']], ['ed', 'end', ['jumped', 'played', 'wanted', 'helped']], ['le', 'end', ['little', 'table', 'bubble', 'puzzle']],
+  ['ere', 'end', ['where', 'there', 'here', 'were']], ['ear', 'any', ['hear', 'near', 'year', 'dear']], ['are', 'end', ['care', 'share', 'dare', 'spare']], ['air', 'any', ['hair', 'pair', 'chair', 'fair']],
   ['ph', 'any', ['phone', 'photo', 'graph', 'elephant']], ['ea', 'any', ['read', 'beat', 'team', 'speak', 'seat']], ['ee', 'any', ['tree', 'green', 'sleep', 'need']], ['oa', 'any', ['boat', 'road', 'coat', 'soap']],
   ['ai', 'any', ['rain', 'train', 'wait', 'paint']], ['ay', 'any', ['day', 'play', 'stay', 'way']], ['oo', 'any', ['moon', 'room', 'school', 'cool']], ['ie', 'any', ['field', 'piece', 'chief', 'brief']], ['ei', 'any', ['ceiling', 'receive', 'neighbour', 'eight']],
   ['ou', 'any', ['house', 'cloud', 'mouth', 'round']], ['ow', 'any', ['down', 'town', 'flower', 'brown']], ['oy', 'any', ['boy', 'toy', 'enjoy', 'royal']], ['oi', 'any', ['coin', 'noise', 'point', 'voice']],
@@ -356,32 +357,52 @@ const PNOTE = {
   oo: 'The letters o o say oo, as in moon.', ou: 'The letters o u say ow, as in house.', ow: 'The letters o w say ow, as in down.', oi: 'The letters o i say oi. O i goes in the middle. O y goes at the end.', oy: 'The letters o y say oi. O y goes at the end. O i goes in the middle.',
   au: 'The letters a u say or.', aw: 'The letters a w say or.', ar: 'The letters a r say ar, as in car.', or: 'The letters o r say or.', er: 'E r, i r and u r all say er.', ir: 'I r, e r and u r all say er.', ur: 'U r, e r and i r all say er.',
   ss: 'At the end of a short word, we often double the s, the l and the f.', ll: 'At the end of a short word, we often double the l, the s and the f.', ff: 'At the end of a short word, we often double the f, the l and the s.',
+  ere: 'The letters e r e at the end can say air, as in where, or eer, as in here.', ear: 'The letters e a r usually say eer, as in hear.', are: 'The letters a r e at the end say air, as in care.', air: 'The letters a i r say air, as in hair.',
   ould: 'The letters o u l d say ood.', le: 'The letters l e at the end of a word say ul.', ie: 'The letters i e can say ee, as in field, or eye, as in pie.'
 };
 // The sound each pattern makes, written the way a speech voice will say it as a sound, not as letter names. Not checked by ear yet.
 const PSOUND = { th: 'thhh', sh: 'shhh', ch: 'chhh', wh: 'wuh', kn: 'nnn', wr: 'rrr', qu: 'kwuh', ph: 'fff', ck: 'kuh', tion: 'shun', tch: 'chhh', dge: 'juh', ight: 'ite', ea: 'ee', ee: 'ee', oa: 'oh', ai: 'ay', ay: 'ay', oo: 'oo', ie: 'ee', ei: 'ay', ou: 'ow', ow: 'ow', oy: 'oy', oi: 'oy', au: 'or', aw: 'or', ar: 'ar', or: 'or', er: 'er', ir: 'er', ur: 'er', ss: 'sss', ll: 'lll', ff: 'fff', ould: 'ood', le: 'ul' };
 const listOf = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
-function phonicsRule(w) {
+// Which letters of the word did she get wrong? Uses the best match between what she typed and the word.
+const lastTyped = new Map();
+const noteTyped = (w, typed) => { if (typed && typed !== w) lastTyped.set(w, typed); else lastTyped.delete(w); };
+function errorSpan(w, typed) {
+  if (!typed || typed === w) return null;
+  const mk = matchMask(w, typed), idx = mk.map((m, i) => m ? -1 : i).filter(i => i >= 0);
+  return idx.length ? idx : null;
+}
+const whereInWord = (w, idx) => { const m = idx.reduce((a, b) => a + b, 0) / idx.length / w.length; return m < 0.34 ? 'at the start' : m > 0.66 ? 'near the end' : 'in the middle'; };
+function phonicsRule(w, typed) {
+  const err = errorSpan(w, typed), cands = [];
   for (const [pat, where, ex] of PHONICS) {
-    const hit = where === 'start' ? w.startsWith(pat) : where === 'end' ? w.endsWith(pat) && w.length > pat.length : w.includes(pat);
-    if (!hit) continue;
+    let at = [];
+    if (where === 'start') { if (w.startsWith(pat)) at = [0]; }
+    else if (where === 'end') { if (w.endsWith(pat) && w.length > pat.length) at = [w.length - pat.length]; }
+    else { let i = w.indexOf(pat); while (i >= 0) { at.push(i); i = w.indexOf(pat, i + 1); } }
+    if (!at.length) continue;
     const family = ex.filter(e => e !== w).slice(0, 3);
     if (family.length < 2) continue;
-    const place = where === 'start' ? 'It starts with ' + pat : where === 'end' ? 'It ends with ' + pat : 'It has ' + pat + ' in it';
-    const letters = pat.split('').join(' ');
-    const snd = PSOUND[pat];
-    const spoken = (where === 'start' ? 'It starts with ' : where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. ' + 'Listen: ' + listOf(family) + '. ' : 'the letters ' + letters + ', like ' + listOf(family) + '. ') + (PNOTE[pat] || (pat.length === 2 && !['ly', 'ed', 'le'].includes(pat) ? 'That is called a digraph: two letters, one sound.' : ''));
-    return { rule: place + ', like ' + listOf(family) + '.', spoken, family };
+    const hit = err ? at.find(p => err.some(i => i >= p && i < p + pat.length)) : undefined;
+    cands.push({ pat, where, family, hits: hit !== undefined, p0: hit !== undefined ? hit : at[0] });
+  }
+  // the rule for the part she got wrong comes first; with no attempt to go on, the first pattern that fits
+  const c = (err && cands.find(x => x.hits)) || cands[0];
+  if (c) {
+    const place = c.where === 'start' ? 'It starts with ' + c.pat : c.where === 'end' ? 'It ends with ' + c.pat : 'It has ' + c.pat + ' in it';
+    const letters = c.pat.split('').join(' '), snd = PSOUND[c.pat];
+    const loc = c.where === 'start' ? 'at the start' : c.where === 'end' ? 'near the end' : whereInWord(w, Array.from({ length: c.pat.length }, (_, k) => c.p0 + k));
+    const spoken = (err ? 'The tricky part is ' + loc + '. ' : '') + (c.where === 'start' ? 'It starts with ' : c.where === 'end' ? 'It ends with ' : 'It has ') + (snd ? 'the sound ' + snd + '. Listen: ' + listOf(c.family) + '. ' : 'the letters ' + letters + ', like ' + listOf(c.family) + '. ') + (PNOTE[c.pat] || (c.pat.length === 2 && !['ly', 'ed', 'le'].includes(c.pat) ? 'That is called a digraph: two letters, one sound.' : ''));
+    return { rule: place + ', like ' + listOf(c.family) + '.', spoken, family: c.family };
   }
   const sp = w.match(/([aeiou])[^aeiouwy]e$/);
   if (sp) {
     const v = sp[1], ex = { a: ['make', 'game', 'late'], e: ['these', 'theme', 'complete'], i: ['time', 'bike', 'like'], o: ['hope', 'home', 'nose'], u: ['cube', 'tune', 'huge'] }[v].filter(e => e !== w);
-    return { rule: 'It has a split digraph, ' + v + '_e, like ' + listOf(ex) + '.', spoken: 'It has a split digraph, ' + v + ' and e, like ' + listOf(ex) + '. The ' + v + ' and the e on the end work together to make one sound, with a letter in between.', family: ex };
+    return { rule: 'It has a split digraph, ' + v + '_e, like ' + listOf(ex) + '.', spoken: (err ? 'The tricky part is ' + whereInWord(w, err) + '. ' : '') + 'It has a split digraph, ' + v + ' and e, like ' + listOf(ex) + '. The ' + v + ' and the e on the end work together to make one sound, with a letter in between.', family: ex };
   }
   return null;
 }
 // The rule and words like it for a word: from the built-in spelling patterns first, then from the AI's suggestion.
-const famOf = x => { const ph = phonicsRule(x.w); return ph || { rule: x.rule || '', family: x.family || [] }; };
+const famOf = x => { const ph = phonicsRule(x.w, lastTyped.get(x.w)); return ph || { rule: x.rule || '', family: x.family || [] }; };
 // What is said aloud for Words like it: the rule and the similar words, never the word itself.
 const wordAgain = x => ' Now spell the word: ' + x.w + '.'; // every spoken help ends by saying the word again
 const familyText = x => { const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return body ? body + wordAgain(x) : ''; };
@@ -465,7 +486,7 @@ function misspellings(x, weekWords) {
   const add = t => { t = String(t || '').toLowerCase().trim(); if (!t || seen.has(t) || !/^[a-z'-]+$/.test(t) || Math.abs(t.length - w.length) > 3 || t.length < Math.min(4, w.length) || (weekWords || []).includes(t)) return false; seen.add(t); out.push(t); return true; };
   S.log.slice().reverse().filter(l => l.w === w && !l.ok && l.typed).forEach(l => { if (out.length < 3) add(l.typed); });
   shuffle((x.wrong || []).slice()).forEach(t => { if (out.length < 3) add(t); });
-  const SW = [['ere', 'ear'], ['ere', 'eir'], ['ear', 'ere'], ['eir', 'ere'], ['e', 'ea'], ['ea', 'e'], ['ea', 'ee'], ['ee', 'ea'], ['ai', 'ay'], ['ay', 'ai'], ['oa', 'ow'], ['ow', 'oa'], ['ou', 'ow'], ['ow', 'ou'], ['oo', 'u'], ['ie', 'ei'], ['ei', 'ie'], ['au', 'aw'], ['aw', 'au'], ['er', 'ur'], ['ur', 'er'], ['ir', 'er'], ['or', 'ar'], ['igh', 'ie'], ['ough', 'uff'], ['ough', 'ow'], ['ph', 'f'], ['ck', 'k'], ['tion', 'shun'], ['cial', 'shul'], ['ge', 'dge'], ['dge', 'ge'], ['c', 's'], ['s', 'c'], ['i', 'y'], ['y', 'i'], ['e', 'a'], ['a', 'e'], ['o', 'u'], ['u', 'o'], ['kn', 'n'], ['wr', 'r'], ['wh', 'w'], ['gh', ''], ['ss', 's'], ['s', 'ss'], ['ll', 'l'], ['l', 'll'], ['tt', 't'], ['t', 'tt'], ['nn', 'n'], ['n', 'nn'], ['rr', 'r'], ['r', 'rr']];
+  const SW = [['e', 'ea'], ['ea', 'e'], ['ea', 'ee'], ['ee', 'ea'], ['ai', 'ay'], ['ay', 'ai'], ['oa', 'ow'], ['ow', 'oa'], ['ou', 'ow'], ['ow', 'ou'], ['oo', 'u'], ['ie', 'ei'], ['ei', 'ie'], ['au', 'aw'], ['aw', 'au'], ['er', 'ur'], ['ur', 'er'], ['ir', 'er'], ['or', 'ar'], ['igh', 'ie'], ['ough', 'uff'], ['ough', 'ow'], ['ph', 'f'], ['ck', 'k'], ['tion', 'shun'], ['cial', 'shul'], ['ge', 'dge'], ['dge', 'ge'], ['c', 's'], ['s', 'c'], ['i', 'y'], ['y', 'i'], ['e', 'a'], ['a', 'e'], ['o', 'u'], ['u', 'o'], ['kn', 'n'], ['wr', 'r'], ['wh', 'w'], ['gh', ''], ['ss', 's'], ['s', 'ss'], ['ll', 'l'], ['l', 'll'], ['tt', 't'], ['t', 'tt'], ['nn', 'n'], ['n', 'nn'], ['rr', 'r'], ['r', 'rr']];
   const cands = [];
   SW.forEach(([a, b]) => { let i = w.indexOf(a); while (i >= 0) { cands.push(w.slice(0, i) + b + w.slice(i + a.length)); i = w.indexOf(a, i + 1); } });
   cands.push(w.endsWith('e') ? w.slice(0, -1) : w + 'e');
@@ -1648,6 +1669,7 @@ async function reviseWord(week, it, sentence, starred) {
       const id = helpsFor(it.x).includes('family') ? 'family' : await helpMenu(it.x); if (id === BACK) continue;
       a = await writeWord(word, false, null, it.x, false, cue, id); if (a === BACK) continue;
     }
+    noteTyped(word, a.typed);
     const tl = a.tools.concat(traced ? ['trace'] : []), aided = a.aided || traced;
     const ok = a.typed === word;
     S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: it.mode || 'revise', typed: a.typed, hints: a.hints, remind: a.reminded || undefined, tools: tl.length ? tl : undefined, aided: aided || undefined, look: it.look || undefined, ok, redo: !it.counts || attempts++ > 0 || undefined });
@@ -1798,7 +1820,7 @@ async function memoryTrickStep(week, x) {
 }
 async function hintLadder(week, x, mode, sentence, usedFamily) {
   const word = x.w;
-  const tryLog = (a, help, n) => { S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
+  const tryLog = (a, help, n) => { noteTyped(word, a.typed); S.log.push({ t: Date.now(), d: today(), wk: week.id, w: word, mode: mode || 'revise', typed: a.typed, hints: a.hints || 0, ok: a.typed === word, rung: n, tools: help ? [help].concat(a.tools.filter(t => t !== help)) : undefined, aided: !!help || undefined, redo: true }); save(); };
   let n = 0;
   for (;;) {
     // After the first miss she is not asked anything: the spoken rule comes straight away, and Are you sure? is on for every go from here.
