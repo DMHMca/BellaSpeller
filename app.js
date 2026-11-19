@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.110'; // bump with every release
+const APP_VER = '3.111'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2409,7 +2409,7 @@ function recordPane() {
     <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added. Type or change a school score in its box at any time: it is saved as soon as you leave the box.</p>`;
 }
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['tools', 'Tools'], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['tools', 'Tools'], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -2452,27 +2452,7 @@ function adult() {
     <p class="note">Enter this at the end of the week, when the marked test is back.</p>
     <label>Score for ${esc(wk.label)}, out of ${wk.words.length}</label><input id="score" type="number" min="0" max="${wk.words.length}" value="${wk.score == null ? '' : wk.score}" style="max-width:120px">
     <div><button id="saveScore" class="btn">Save score</button></div>
-    </div><div class="tabpane" data-tab="story"><h2>Story for this week</h2>
-    <p>${epOf(wk) ? 'A story is ready: "' + esc(epOf(wk).title) + '" (' + storyWordCount(epOf(wk)) + ' words).' + (storyWordCount(epOf(wk)) > curLen().max ? ' <b>This is over the ' + curLen().max + '-word limit. Press Write a different story.</b>' : '') : 'No story yet. Revision works without one.'}</p>
-    ${aiKey() ? `${epOf(wk) ? '<button id="readStory" class="btn">Read this story</button> ' : ''}<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
-    <div id="draftOut"></div>
-
-    <details class="adv"><summary>Advanced and testing (not needed day to day)</summary>
-    ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
-    <input id="cm1" type="text" value="anthropic/claude-sonnet-5.5"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="google/gemini-4-hydrogen" style="margin-top:8px">
-    <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
-
-    <h2>Handwriting test</h2><p class="note">A test of reading handwriting from a pen. Type the word you are going to write, write it below with the pen, and press Read it. To see whether the AI "corrects" mistakes, write a word with a deliberate misspelling and type it exactly as you wrote it. Nothing here is saved except the results list below.</p>
-    <label>When she writes with the pen on the spelling screen, read it with</label><select id="hwEngine"><option value="auto">Automatic (the AI if there is a key, otherwise the device)</option><option value="vision">The AI vision model</option><option value="builtin">The device's own recognizer</option></select>
-    <label>The word you will write, exactly as you write it</label><input id="hwWord" type="text" autocomplete="off" spellcheck="false" placeholder="for example because">
-    <label>How to read it</label><select id="hwMode"><option value="word">The whole word at once (AI vision)</option><option value="boxes">One letter per box (AI vision)</option><option value="builtin">The device's own recognizer, if it has one</option></select>
-    <label>AI vision model</label><select id="hwModel">${HW_MODELS.map(m => `<option value="${m}">${esc(m)}</option>`).join('')}</select>
-    <p id="hwDetect" class="note"></p>
-    <label>Or try the device's own handwriting keyboard: tap in this box, switch the on-screen keyboard to handwriting, and write the word</label><input id="hwNative" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <div id="hwWrap" class="hwwrap"><canvas id="hwGuide"></canvas><canvas id="hwInk"></canvas></div>
-    <div><button id="hwClear" class="btn small">Clear</button> <button id="hwRead" class="btn small">Read it</button> <button id="hwCopy" class="btn small">Copy the results</button></div>
-    <p id="hwOut" class="note"></p><div id="hwLog"></div>
-    </details></div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
+    </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>Revision sittings</h2>
@@ -2500,6 +2480,22 @@ function adult() {
     <label>Story AI key (leave blank to use the OpenRouter key)</label><input id="aiKey" type="password" autocomplete="off" value="${esc(S.aiKey || '')}">
     <div><button id="saveName" class="btn">Save settings</button> <button id="backup" class="btn small">Save a backup file</button> <button id="restore" class="btn small">Load a backup file</button><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
     <p class="note">To move everything to another device (told stories, words, settings, her answers): save a backup file here, send it to the other device (email or Google Drive), then press Load a backup file there. This device keeps its own OpenRouter key.</p>
+    <details class="adv"><summary>Testing (not needed day to day)</summary>
+    ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
+    <input id="cm1" type="text" value="anthropic/claude-sonnet-5.5"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="google/gemini-4-hydrogen" style="margin-top:8px">
+    <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
+
+    <h2>Handwriting test</h2><p class="note">A test of reading handwriting from a pen. Type the word you are going to write, write it below with the pen, and press Read it. To see whether the AI "corrects" mistakes, write a word with a deliberate misspelling and type it exactly as you wrote it. Nothing here is saved except the results list below.</p>
+    <label>When she writes with the pen on the spelling screen, read it with</label><select id="hwEngine"><option value="auto">Automatic (the AI if there is a key, otherwise the device)</option><option value="vision">The AI vision model</option><option value="builtin">The device's own recognizer</option></select>
+    <label>The word you will write, exactly as you write it</label><input id="hwWord" type="text" autocomplete="off" spellcheck="false" placeholder="for example because">
+    <label>How to read it</label><select id="hwMode"><option value="word">The whole word at once (AI vision)</option><option value="boxes">One letter per box (AI vision)</option><option value="builtin">The device's own recognizer, if it has one</option></select>
+    <label>AI vision model</label><select id="hwModel">${HW_MODELS.map(m => `<option value="${m}">${esc(m)}</option>`).join('')}</select>
+    <p id="hwDetect" class="note"></p>
+    <label>Or try the device's own handwriting keyboard: tap in this box, switch the on-screen keyboard to handwriting, and write the word</label><input id="hwNative" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div id="hwWrap" class="hwwrap"><canvas id="hwGuide"></canvas><canvas id="hwInk"></canvas></div>
+    <div><button id="hwClear" class="btn small">Clear</button> <button id="hwRead" class="btn small">Read it</button> <button id="hwCopy" class="btn small">Copy the results</button></div>
+    <p id="hwOut" class="note"></p><div id="hwLog"></div>
+    </details>
     <p class="note">BellaSpeller ${APP_VERSION}. Everything is stored on this device only.</p></div></div>`);
   adultFlash = '';
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
@@ -2513,20 +2509,6 @@ function adult() {
   if ($('#name')) $('#name').onchange = () => { S.name = $('#name').value.trim(); save(); };
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
-  on('#readStory', () => { $('#draftOut').innerHTML = storyPreview(epOf(wk)); });
-  on('#draft', async () => {
-    const out = $('#draftOut'), btn = $('#draft');
-    btn.disabled = true; out.innerHTML = '<p class="note">Writing the story. This can take up to a minute.</p>';
-    try {
-      const ep = await draftStory(wk);
-      out.innerHTML = `<p class="note">Please read it through before she sees it.</p>${storyPreview(ep)}<button id="useStory" class="btn">Use this story</button>`;
-      on('#useStory', () => {
-        const id = 'ai' + Date.now();
-        S.eps = S.eps || {}; S.eps[id] = ep; wk.ep = id; delete S.story[wk.id]; save(); adult();
-      });
-    } catch (e) { out.innerHTML = `<p class="note">${esc(e.message || 'Something went wrong.')}</p>`; }
-    btn.disabled = false; btn.textContent = 'Try another';
-  });
   on('#compare', async () => {
     const out = $('#cmpOut'), btn = $('#compare');
     const models = ['cm1', 'cm2', 'cm3'].map(i => $('#' + i).value.trim()).filter(Boolean);
@@ -2613,7 +2595,7 @@ function adult() {
     const changed = nw.map(x => x.w).join() !== wk.words.map(x => x.w).join();
     wk.words = nw;
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
-    save(); ensureTools(wk); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? ' Write a new story on the Story tab.' : ''); adult();
+    save(); ensureTools(wk); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? '' : ''); adult();
   });
   on('#read', () => {
     const ws = parseWords($('#nw').value);
@@ -2621,12 +2603,12 @@ function adult() {
     const redFrom = ws.length >= 6 ? ws.length - 3 : ws.length;
     $('#preview').innerHTML = `<p>Nearly done. Tick any red words from the school list, then save.</p>` +
       ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${i >= redFrom ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
-      `<p class="note">You can write a story for these words on the Story tab. Revision works without one.</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
+      `<p class="note">Bella can make a story with these words from her own home screen.</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
     on('#saveWeek', () => {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
       S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: null });
-      S.cur = id; save(); ensureTools(S.weeks[S.weeks.length - 1]); adultTab = 'story'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '. Next: press "Write with all three" below to have stories written for these words.'; adult();
+      S.cur = id; save(); ensureTools(S.weeks[S.weeks.length - 1]); adultTab = 'words'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '.'; adult();
     });
   });
 }
