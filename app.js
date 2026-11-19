@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.114'; // bump with every release
+const APP_VER = '3.115'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2400,58 +2400,96 @@ function recordPane() {
   return sw + `<table><tr><th>Week</th><th>Bella's test words</th><th>Right first time in the app</th><th>Times a spelling aid was used</th><th>Mnemonics made</th><th>School score</th></tr>${rows}</table>
     <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added. Type or change a school score in its box at any time: it is saved as soon as you leave the box.</p>`;
 }
-// The Help tab: how the app works, in plain words, for anyone helping Bella.
+// The Help tab: five headings, each closed until tapped.
 function helpPane() {
-  const sec = (t, body, open) => `<details class="hsec"${open ? ' open' : ''}><summary>${t}</summary>${body}</details>`;
+  const sec = (t, body, cls) => `<details class="hsec${cls ? ' ' + cls : ''}"><summary>${t}</summary>${body}</details>`;
+  const sub = (t, body) => sec(t, body, 'sub');
   return `<h2>Help</h2>
-  <p class="note">A short guide for anyone helping Bella with the app. Tap a heading to open it. This is version ${esc(APP_VERSION)}.</p>
-  ${sec('What the app is for', `<p>BellaSpeller helps Bella learn the spelling words from school each week. It never shows her a word she is being tested on before she tries it, and it keeps the helps gentle, so she does as much as she can by herself. Everything she does is saved on the device she uses, not on a server.</p>`, true)}
-  ${sec('The four boxes on her home screen', `
-    <p><b>Her story.</b> She chooses a story idea, or tells her own, and the app writes a short story for her to read (it can read it aloud). The week's words are highlighted in yellow inside it. Afterwards the app says each word in its sentence and she spells it. This needs the AI key and an internet connection.</p>
-    <p><b>Her practice.</b> The same spelling, without a story. The word is never shown: she hears it in its sentence and writes it.</p>
-    <p><b>Her revision.</b> Two choices. <i>Mnemonics</i>: she picks tricky words and builds a silly sentence from them, with an arrow from each letter. <i>Spelling tips</i>: a short tip for each word, which she can read or hear, all together or one at a time.</p>
-    <p><b>Grown-ups.</b> This area. Her name appears on the boxes once it is saved under Settings.</p>`)}
-  ${sec('Spelling a word: what happens', `
-    <p>She hears the word (and its sentence), then writes it, either on the keyboard or by hand with a finger or pen. The choice is remembered on that device. If it is right first time she gets a star and a bit of praise. If it is wrong, the app asks whether she would like some help or another go.</p>
-    <p>If she is still stuck after three wrong goes in practice or revision, the app says the word is still hiding and brings it back in a later sitting, rather than showing the answer. In her story, after three wrong goes it shows her the word once and she writes it from memory.</p>
-    <p>If she is not sure when the word is first said, <b>Hear it again</b> says it again.</p>`)}
-  ${sec('The spelling helps, and how each one works', `
-    <p>After a wrong go, or if she asks before trying, she can choose one of these. Each is recorded, and any word where she used a help does not count towards the "right first time" score.</p>
-    <p><b>The spelling rule.</b> Says a spelling pattern for the word, with similar words. It is greyed out for a word that has no rule in the app.</p>
-    <p><b>A hint.</b> Tells her how many letters the word has and where her go went wrong, for example that a letter is missing or which letter to look at again. It never gives the letter away.</p>
-    <p><b>I will tell you if a letter doesn't look right.</b> A gentle nudge once per word, when a letter does not look right. It never says which letter. It is not available when she writes by hand.</p>
-    <p><b>Multiple choice.</b> She picks the right spelling from several. After she picks the right one, the app asks her to go back and spell it again by herself.</p>`)}
-  ${sec('Writing by hand', `
-    <p>The button under the word switches between <b>Write it by hand</b> and <b>Use the keyboard</b>. Handwriting works with a finger or a pen on a touch screen. The app reads what she wrote and shows it above the box as "I read: ...", so she can see what it understood. If the reading is wrong, she can clear the box and write it again.</p>
-    <p>Reading handwriting uses the AI when the device has the key, and the device's own reader otherwise (which may not exist on every device). A hand resting on the screen is ignored while the pen is in use.</p>`)}
-  ${sec('Mnemonics and spelling tips', `
-    <p>A <b>mnemonic</b> is a silly sentence whose words start with the letters of the word in order, for example <i>Big Elephants Can Always Understand Small Elephants</i> for because. Bella builds them herself on the mnemonic screen, and they are saved.</p>
-    <p>A <b>spelling tip</b> is a short note about the tricky part of a word. The app has some built in, and the AI can look up missing ones. Spoken tips use letter names, not letter sounds. You can edit any tip under This Week's Spelling Tips.</p>`)}
-  ${sec('Scores and the Progress tab', `
-    <p><b>Right first time</b> means she wrote the word correctly on her first go, with no hint or other help. The app's score for a sitting is the number of words she got right first time.</p>
-    <p><b>A sitting</b> is one run through the week's words. Words she gets wrong come back in a later sitting.</p>
-    <p><b>Owning a word</b> (shown under Details) means right first time, without help, on two different days.</p>
-    <p>The <b>Progress</b> tab shows one row for each week: the words, her best sitting, how many times a spelling help was used, whether mnemonics were made, and the school score. You can type or change the school score there, switch to a graph, or save everything as a CSV or Excel file.</p>`)}
-  ${sec('A weekly routine for grown-ups', `
-    <ol><li>Under <b>This week</b>, add the new week of words (one per line, or separated by commas).</li>
-    <li>Optionally remove last week's words with <b>Remove this week</b>. Its record stays in Progress unless you remove it.</li>
-    <li>When the school test score comes in, type it into the Progress tab.</li>
-    <li>If another device needs the new words, use <b>Show this week's words as a QR code</b> under Settings, and scan it on the other device.</li></ol>`)}
-  ${sec('Setting up another device', `
-    <p>Under Settings: <b>Show the key as a QR code</b> on one device, and <b>Scan a QR code</b> on the other, holding the camera up to the screen. Do the same for <b>Show this week's words as a QR code</b>. The QR code for the key contains the AI key, so only show it to the device you are setting up.</p>
-    <p>To move everything (words, progress, tips), use <b>Save a backup file</b> on one device and <b>Load a backup file</b> on the other. The backup does not include the AI key, and loading one replaces what is on that device.</p>`)}
-  ${sec('Updating the app', `
-    <p>When a new version is ready, a pink <b>Update</b> button appears on the home screen. Tap it. On a larger screen the version number at the bottom left also works as an update button. If it does not seem to update, open the app's web address with <b>?u=</b> and the new version number on the end, for example the usual address followed by ?u=3.114.</p>`)}
-  ${sec('If something goes wrong', `
-    <p><b>It has frozen or a screen is blank.</b> Press <b>Home</b> or <b>Back</b> at the top if you can. If not, close the page or app and open it again. Her answers and settings are saved on the device, so nothing is lost.</p>
-    <p><b>The voice is silent.</b> Check the device volume and that the sound button at the top of the home screen says <b>Voice on</b>. On a spelling screen, press <b>Hear it again</b>. If the app's voice does not start within a few seconds, the device's own voice takes over.</p>
-    <p><b>Stories will not write, or the AI will not read her handwriting.</b> Those need the AI key and an internet connection. Check the connection, and that the key is saved under Settings (it can be moved from another device by QR code).</p>
-    <p><b>The new words or a wrong word.</b> Fix it under This week.</p>
-    <p><b>A word is read out wrongly.</b> The voice sometimes mispronounces unusual words, especially names. Choosing a different voice under Settings may help.</p>
-    <p><b>I cleared the record by mistake.</b> Use <b>Load a backup file</b> on the Progress tab, if you saved a backup first. The clearing box always offers to save one.</p>
-    <p><b>Something looks wrong on a small screen.</b> The app resizes itself to the screen, but a very small tablet is the least tested. Opening it as an installed app (Add to Home screen) gives more room, because the browser bars disappear.</p>`)}
-  ${sec('Words used in the app', `
-    <p><b>Mnemonic:</b> a silly sentence that helps remember a spelling. <b>Spelling tip:</b> a short note about a tricky word. <b>Sitting:</b> one run through the week's words. <b>Right first time:</b> correct on the first go with no help. <b>Spelling help:</b> the rule, hint, "tell me if a letter looks wrong" and multiple choice. <b>Week:</b> one list of words, matching a school spelling test.</p>`)}`;
+  <p class="note">Tap a heading to open it. This is version ${esc(APP_VERSION)}.</p>
+
+  ${sec('1. How the app works', `
+    ${sub('The four boxes on her home screen', `
+      <p><b>Her story.</b> She chooses a story idea, or tells her own, and the app writes a short story for her to read (it can read it aloud). The week's words are highlighted in yellow inside it. Afterwards the app says each word in its sentence and she spells it. This needs the AI key and an internet connection.</p>
+      <p><b>Her practice.</b> The same spelling without a story. The word is never shown: she hears it in its sentence and writes it.</p>
+      <p><b>Her revision.</b> Mnemonics (she builds a silly sentence, with an arrow from each letter) or Spelling tips (a short tip for each word, which she can read or hear).</p>
+      <p><b>Grown-ups.</b> This area. Her name appears on the boxes once it is saved under Settings.</p>`)}
+    ${sub('Spelling a word', `
+      <p>She hears the word in its sentence, then writes it on the keyboard or by hand with a finger or pen. The choice is remembered on that device. Right first time earns a star and praise. If it is wrong, she is asked whether she would like some help or another go.</p>
+      <p>After three wrong goes in practice or revision, the app says the word is still hiding and brings it back in a later sitting rather than showing it. In her story, after three wrong goes it shows her the word once and she writes it from memory. <b>Hear it again</b> repeats the word.</p>`)}
+    ${sub('The spelling helps', `
+      <p>Each use is recorded, and a word where she used a help does not count as right first time.</p>
+      <p><b>The spelling rule.</b> Says a spelling pattern for the word, with similar words. Greyed out for a word with no rule in the app.</p>
+      <p><b>A hint.</b> Says how many letters the word has and where her go went wrong. It never gives the letter away.</p>
+      <p><b>I will tell you if a letter doesn't look right.</b> A nudge once per word. It never says which letter. Not available when she writes by hand.</p>
+      <p><b>Multiple choice.</b> She picks the right spelling from several, then goes back and spells it herself.</p>`)}
+    ${sub('Writing by hand', `
+      <p>The button under the word switches between <b>Write it by hand</b> and <b>Use the keyboard</b>. The app reads what she wrote and shows it as "I read: ..." above the box, so she can see what it understood. Reading uses the AI when the device has the key, and the device's own reader otherwise (which not every device has).</p>`)}
+    ${sub('Mnemonics and spelling tips', `
+      <p>A <b>mnemonic</b> is a silly sentence whose words start with the letters of the word in order, such as <i>Big Elephants Can Always Understand Small Elephants</i> for because. Bella builds them herself and they are saved.</p>
+      <p>A <b>spelling tip</b> is a short note about the tricky part of a word. Some are built in and the AI can look up missing ones. Spoken tips use letter names. You can edit them under This Week's Spelling Tips.</p>`)}`)}
+
+  ${sec('2. What grown-ups do', `
+    <ol>
+      <li><b>Each week, add the new words.</b> Under <b>This week</b>, add the week's list (one per line, or separated by commas). Use <b>Remove this week</b> on an old week only if you no longer want it in the record.</li>
+      <li><b>Look over the spelling tips.</b> Under <b>This Week's Spelling Tips</b>, check the tip for each word and change any that are wrong. Empty boxes can be filled by the AI.</li>
+      <li><b>Put Bella's name in</b> under Settings, so the boxes say "Bella's story" and so on.</li>
+      <li><b>Encourage short, regular sittings</b> rather than one long one. The app records the day of every sitting.</li>
+      <li><b>When the school test result arrives, enter it</b> on the Progress tab. It can be entered late, even after you have moved on to the next week.</li>
+      <li><b>If another device needs the week's words</b>, show them as a QR code under Settings and scan it on the other device.</li>
+    </ol>`)}
+
+  ${sec('3. How to track Bella\'s progress', `
+    ${sub('The Progress tab', `
+      <p>One row for each week, with: the week number and date first used, the test words, her best sitting in the app (for example "Best 7 of 10"), how many sittings and days it took, how many times a spelling help was used, whether mnemonics were made, and the school score.</p>
+      <p>The school score is a box you can type in. It is saved when you leave the box. Press <b>Graph</b> for a week-by-week chart: purple is her best sitting in the app and orange is the school score, both as a percentage of that week's words, so weeks with different numbers of words can be compared.</p>
+      <p><b>Save as CSV</b> and <b>Save as Excel</b> save the same table as a file you can keep, sort or chart yourself.</p>`)}
+    ${sub('What the figures mean', `
+      <p><b>Right first time:</b> she wrote the word correctly on her first go, with no hint or other help. The app's score for a sitting is the number of words she got right first time.</p>
+      <p><b>A sitting:</b> one run through the week's words. Words she gets wrong come back in a later sitting.</p>
+      <p><b>Times a spelling help was used:</b> every time she used a hint, rule, nudge or multiple choice. One tricky word can count several times.</p>
+      <p><b>Mnemonics made:</b> whether she built mnemonics for that week, and for how many words. It does not record how often she looks at them afterwards.</p>`)}
+    ${sub('The Details tab', `
+      <p>For the current week: for each word, how many tries, how many right first time, how many hints, and what she typed when it was wrong. Below that, every sitting with its day and score. A word counts as <b>owned</b> once she has it right first time, without help, on two different days.</p>
+      <p>Looking at what she typed when wrong shows which words she confuses and how.</p>`)}
+    ${sub('Starting again, or undoing it', `
+      <p><b>Start again from scratch</b> (on the Progress and Details tabs) clears every answer, star, sitting and school score and removes all weeks except the one in use. It offers to save a backup first. <b>Load a backup file</b> next to it puts everything back from that backup.</p>`)}`)}
+
+  ${sec('4. Updating the app, and what to do if it stops working', `
+    ${sub('Updating', `
+      <p>When a new version is ready, a pink <b>Update</b> button appears on the home screen. Tap it. On a larger screen the version number at the bottom left also works as an update button. If it does not seem to update, open the app's web address with <b>?u=</b> and the new version number on the end, for example the usual address followed by ?u=3.114.</p>
+      <p>The address is case-sensitive: the part after the slash starts with a capital B and a capital S.</p>`)}
+    ${sub('If it freezes or a screen is blank', `
+      <p>Press <b>Home</b> or <b>Back</b> at the top if you can. If not, close the page or app and open it again. Her answers and settings are saved on the device as she goes, so nothing is lost.</p>`)}
+    ${sub('If the voice is silent or says a word wrongly', `
+      <p>Check the device volume and that the sound button on the home screen says <b>Voice on</b>. On a spelling screen, press <b>Hear it again</b>. If the app's voice does not start within a few seconds, the device's own voice takes over. The voice can mispronounce unusual words, especially names. A different voice can be chosen under Settings.</p>`)}
+    ${sub('If stories will not write, or her handwriting is not read', `
+      <p>Both need the AI key on that device and an internet connection. Check the connection, and that the key is saved under Settings. A key can be moved to another device by QR code. If the AI reading is wrong, she can clear the box and write the word again.</p>`)}
+    ${sub('If a screen looks wrong on a small tablet', `
+      <p>The app resizes itself to the screen, but a very small tablet is the least tested. Installing it as an app (browser menu, then Add to Home screen) gives more room, because the browser bars disappear.</p>`)}
+    ${sub('If the record was cleared by mistake', `
+      <p>Use <b>Load a backup file</b> on the Progress tab, if a backup was saved first.</p>`)}`)}
+
+  ${sec('5. How the app is built, and how to keep it going', `
+    ${sub('The structure in plain words', `
+      <p>BellaSpeller is a <b>web app</b>: a set of ordinary files (a page, a program called app.js, a style sheet, a few libraries and fonts) that run entirely in the browser on Bella's device. There is no database or server of its own. It is published on <b>GitHub Pages</b>, which simply hands the files to any device that asks, at the address you use to open it. It can be installed on a tablet's home screen like an app, and once loaded it keeps a copy of itself on the device so it starts quickly.</p>
+      <p>Everything Bella does, her words, answers, stars, mnemonics, tips and your school scores, is saved <b>on that device only</b>. There is no sync between devices. Moving data between devices is done with the backup file or the QR codes under Settings.</p>
+      <p>Because data belongs to the address the app is opened from, a copy of the app at a different web address starts empty.</p>`)}
+    ${sub('The AI back end: OpenRouter', `
+      <p>The parts that need artificial intelligence do not run on the device. The app sends a request over the internet to a service called <b>OpenRouter</b>, which passes it to an AI model and returns the answer. It is used to write stories, to build and look up spelling tips and mnemonics, to read handwriting (a picture of what she wrote is sent for reading), and, if a recorded voice is chosen, to produce spoken audio. The spelling practice itself, the scoring and the progress record do not need it, and the device's own voice is used when no recorded voice is set.</p>
+      <p>OpenRouter needs an <b>API key</b>, a long private code tied to an OpenRouter account. The key is typed or scanned into Settings on each device and stays on that device. It is left out of backup files, so it never travels with them. Keep it private: anyone who has it can spend the account's credit. Each device that uses the AI needs its own copy of the key, so after changing to a new tablet or computer the key must be moved across (scan the key QR code from a device that already has it, or paste it in under Settings).</p>`)}
+    ${sub('What it costs', `
+      <p>Using OpenRouter costs money as it is used, but at the level of one child's weekly practice the cost is low. When it was checked in November 2026, the whole account's spend for the month was a few dollars, including all the building and testing of the app. Stories and handwriting reading are the main uses, each costing a small fraction of a penny. Credit is bought in advance on the OpenRouter website. It is sensible to set a spending limit on the key there, so a lost or misused key cannot cost much.</p>
+      <p>Hosting on GitHub Pages is free.</p>`)}
+    ${sub('Releasing a change', `
+      <p>The files live in a code repository on GitHub. Pushing a change to its main branch publishes it within about a minute. Every release must change two things so devices notice it: the version number <b>APP_VER</b> near the top of app.js, and the cache name near the top of sw.js (the file that keeps the device's offline copy). If either is left alone, some devices will keep showing the old version.</p>`)}
+    ${sub('Moving the app to a new owner, or making your own copy', `
+      <ol>
+        <li><b>Get the files.</b> Take the whole app folder (index.html, app.js, style.css, episodes.js, sw.js, manifest.json, the icons, the fonts folder, qrgen.js, jsqr.js). The easiest way is the code repository itself, which can have its ownership transferred on GitHub (Settings, then Transfer) or be copied to a new repository. The project folder with the handover and design notes should be kept with it.</li>
+        <li><b>Publish it.</b> Make a new repository, put the files in it, and turn on GitHub Pages (Settings, Pages, deploy from the main branch). Any other host that serves plain files over a secure (https) address works too, for example Netlify or Cloudflare Pages. A secure address is needed for the camera, installing and the offline copy.</li>
+        <li><b>Make a new OpenRouter account</b> (or use the existing one), add credit, create a key, and put it in Settings on each device. Set a spending limit on the key.</li>
+        <li><b>Move each device.</b> The new web address starts empty. Before leaving the old address, on each device use <b>Save a backup file</b> (Settings). Then open the new address and use <b>Load a backup file</b>. Then add the key.</li>
+        <li><b>Make changes with care.</b> The app is written to be edited by an AI coding assistant such as Claude Code working in the folder. Keep the handover notes up to date, test on the real tablet, and follow the release rule above.</li>
+      </ol>`)}`)}`;
 }
 let adultTab = 'words', adultFlash = '';
 const ADULT_TABS = [['words', 'This week'], ['tools', "This Week's Spelling Tips"], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings'], ['help', 'Help']];
