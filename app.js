@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.101'; // bump with every release
+const APP_VER = '3.102'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2459,12 +2459,12 @@ function recordPane() {
     <td>${esc(r.w.words.map(x => x.w).join(', '))}</td>
     <td>${r.sits.length ? 'Best ' + r.best.score + ' of ' + r.best.of + '<br><span class="note">' + r.sits.length + (r.sits.length === 1 ? ' sitting' : ' sittings') + ', ' + r.days + (r.days === 1 ? ' day' : ' days') + '</span>' : (r.days ? 'no full sitting' : '')}</td>
     <td>${r.aids}</td><td>${r.mn ? 'Yes, ' + r.mn + ' of ' + r.w.words.length : 'No'}</td>
-    <td>${r.w.score == null ? 'not entered' : r.w.score + ' of ' + r.w.words.length}</td></tr>`).join('');
+    <td style="white-space:nowrap"><input class="rsc" data-w="${esc(r.w.id)}" type="number" inputmode="numeric" min="0" max="${r.w.words.length}" value="${r.w.score == null ? '' : r.w.score}" placeholder="score" aria-label="School score for week ${r.n}" style="width:76px;padding:6px 8px;font-size:16px"> of ${r.w.words.length}</td></tr>`).join('');
   return sw + `<table><tr><th>Week</th><th>Bella's test words</th><th>Right first time in the app</th><th>Times a spelling aid was used</th><th>Mnemonics made</th><th>School score</th></tr>${rows}</table>
-    <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added.</p>`;
+    <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added. Type or change a school score in its box at any time: it is saved as soon as you leave the box.</p>`;
 }
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['tools', 'Tools'], ['progress', 'Progress'], ['record', 'Record'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['tools', 'Tools'], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -2541,7 +2541,7 @@ function adult() {
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
 
-    </div><div class="tabpane" data-tab="record"><h2>Record of every week</h2>${recordPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
+    </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
@@ -2563,6 +2563,7 @@ function adult() {
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
+  document.querySelectorAll('.rsc').forEach(i => { i.onchange = () => { const w = S.weeks.find(x => x.id === i.dataset.w); if (!w) return; const v = i.value.trim(); w.score = v === '' ? null : Math.max(0, Math.min(w.words.length, parseInt(v, 10) || 0)); save(); adultTab = 'record'; adult(); }; });
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
