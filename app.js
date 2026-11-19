@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.116'; // bump with every release
+const APP_VER = '3.117'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -970,7 +970,7 @@ function splitSentences(t) {
 // The whole story in one scrolling window: all she has to do is read. With sound on it is read aloud and the window follows the voice.
 function chunkItems(items) { // groups of sentences of about 40 words, for the voice
   const out = []; let cur = [], n = 0;
-  items.forEach(q => { const w = q.t.split(/\s+/).length; if (cur.length && n + w > 26) { out.push(cur); cur = []; n = 0; } cur.push(q); n += w; });
+  items.forEach(q => { const w = q.t.split(/\s+/).length; if (cur.length && n + w > 18) { out.push(cur); cur = []; n = 0; } cur.push(q); n += w; });
   if (cur.length) out.push(cur);
   return out;
 }
@@ -983,34 +983,52 @@ function storyScroll(items) {
       <div class="row"><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
     // The window is always a whole number of lines tall, and it only ever rests on a whole line, so a word is never cut in half.
     const lineH = () => { const sp = $('#sp'); return sp ? (parseFloat(getComputedStyle(sp).lineHeight) || 40) : 40; };
+    let winH = 0;
+    const maxScroll = () => { const sp = $('#sp'); return sp ? Math.max(0, sp.scrollHeight - winH) : 0; };
+    const snap = t => { const lh = lineH(); return Math.min(maxScroll(), Math.max(0, Math.round(t / lh) * lh)); };
+    // The window takes all the height there is on this screen, as a whole number of lines. The text is padded to a whole number of lines too,
+    // so the last line can always be scrolled fully into view.
     const fitLines = () => {
       const sp = $('#sp'); if (!sp) return;
-      sp.style.height = ''; const cs = getComputedStyle(sp), b = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth), lh = lineH();
-      const n = Math.max(2, Math.floor((sp.offsetHeight - b) / lh)); sp.style.height = (n * lh + b) + 'px';
-      sp.scrollTop = Math.round(sp.scrollTop / lh) * lh;
+      const cs = getComputedStyle(sp), b = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth), lh = lineH();
+      const row = $('#next') && $('#next').parentElement, app = $('#app');
+      const reserve = (row ? row.offsetHeight : 70) + 16 + (app ? parseFloat(getComputedStyle(app).paddingBottom) || 0 : 0) + 10;
+      const n = Math.max(3, Math.floor((innerHeight - sp.getBoundingClientRect().top - reserve - b) / lh));
+      winH = n * lh; sp.style.height = (winH + b) + 'px';
+      sp.style.paddingBottom = '0px'; const ch = sp.scrollHeight; sp.style.paddingBottom = (Math.ceil(ch / lh - 0.001) * lh - ch) + 'px';
+      sp.scrollTop = snap(sp.scrollTop);
     };
     const onResize = () => { if (!$('#sp')) return removeEventListener('resize', onResize); fitLines(); };
     addEventListener('resize', onResize); fitLines(); setTimeout(fitLines, 300); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLines);
     let snapT = 0;
-    $('#sp').addEventListener('scroll', () => { clearTimeout(snapT); snapT = setTimeout(() => { const sp = $('#sp'); if (!sp) return; const lh = lineH(), t = Math.round(sp.scrollTop / lh) * lh; if (Math.abs(sp.scrollTop - t) > 1) sp.scrollTo({ top: t, behavior: 'smooth' }); }, 160); });
-    const lines = sp => Math.max(1, Math.round(sp.clientHeight / lineH()));
+    $('#sp').addEventListener('scroll', () => { clearTimeout(snapT); snapT = setTimeout(() => { const sp = $('#sp'); if (!sp) return; const t = snap(sp.scrollTop); if (Math.abs(sp.scrollTop - t) > 1) sp.scrollTo({ top: t, behavior: 'smooth' }); }, 160); });
+    const lines = () => Math.max(1, Math.round(winH / lineH()));
     let run = 0;
+    // The voice reads a short piece at a time. The window only moves when the piece being read is not fully in view,
+    // and then it moves so that piece is at the top, so what is being said is always on screen.
+    const follow = el => {
+      const sp = $('#sp'); if (!sp || !el) return;
+      const r = el.getClientRects(), sr = sp.getBoundingClientRect(), bt = parseFloat(getComputedStyle(sp).borderTopWidth);
+      if (!r.length) return;
+      const rt = r[0].top - sr.top - bt + sp.scrollTop, rb = r[r.length - 1].bottom - sr.top - bt + sp.scrollTop;
+      if (rt < sp.scrollTop - 1 || rb > sp.scrollTop + winH + 1) sp.scrollTo({ top: snap(Math.floor((rt + 2) / lineH()) * lineH()), behavior: 'smooth' });
+    };
     const play = async () => {
       const my = ++run; hush();
       if (!soundOn() || !S.readAloud) return;
       for (let i = 0; i < chunks.length; i++) {
         if (my !== run) return;
-        const el = document.querySelector(`.chunk[data-i="${i}"]`), sp = $('#sp');
+        const el = document.querySelector(`.chunk[data-i="${i}"]`);
         document.querySelectorAll('.chunk.now').forEach(x => x.classList.remove('now'));
-        if (el && sp) { el.classList.add('now'); sp.scrollTo({ top: Math.max(0, Math.floor((el.getBoundingClientRect().top - sp.getBoundingClientRect().top - parseFloat(getComputedStyle(sp).borderTopWidth) + sp.scrollTop + 2) / lineH()) * lineH()), behavior: 'smooth' }); }
+        if (el) { el.classList.add('now'); follow(el); }
         const ok = await sayDone(chunkText(chunks[i]));
         if (!ok || my !== run) return;
-        await new Promise(r => setTimeout(r, 900)); // a breath between pieces
+        await new Promise(r => setTimeout(r, 350)); // a breath between pieces
         if (my !== run) return;
       }
     };
-    on('#sup', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: -Math.max(1, lines(sp) - 1) * lineH(), behavior: 'smooth' }); });
-    on('#sdown', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: Math.max(1, lines(sp) - 1) * lineH(), behavior: 'smooth' }); });
+    on('#sup', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: snap(sp.scrollTop - Math.max(1, lines() - 1) * lineH()), behavior: 'smooth' }); });
+    on('#sdown', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: snap(sp.scrollTop + Math.max(1, lines() - 1) * lineH()), behavior: 'smooth' }); });
     on('#readtoggle', () => {
       S.readAloud = !S.readAloud; if (S.readAloud && !soundOn()) S.sound = true; save(); paintSound();
       $('#readtoggle').classList.toggle('on', !!S.readAloud);
