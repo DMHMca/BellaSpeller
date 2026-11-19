@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.90'; // bump with every release
+const APP_VER = '3.91'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2481,6 +2481,8 @@ function adult() {
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
+    <div class="row"><button id="qrShow" class="btn small">Show a QR code for another device</button><button id="qrScan" class="btn small">Scan a QR code</button></div>
+    <p class="note">To set up Bella's tablet: show the QR code here, then on the tablet press Scan a QR code and point it at this screen.</p>
     <label>Family rules for the stories (added to every story request)</label><textarea id="famRules" style="min-height:110px">${esc(S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules)}</textarea>
     <label>AI model for writing stories</label>${modelSelect('orModel')}
     <label>Or type another model name (optional)</label><input id="orModelOther" type="text" autocomplete="off" placeholder="for example openai/gpt-6.1-sol">
@@ -2493,6 +2495,7 @@ function adult() {
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
+  on('#qrShow', () => showKeyQr()); on('#qrScan', () => scanKeyQr());
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
   if ($('#picsOn')) $('#picsOn').onchange = e => { S.pics = e.target.checked; save(); };
@@ -2630,6 +2633,75 @@ function adult() {
   });
 }
 
+// ---------- Setting up another device by QR code ----------
+// The device that has the OpenRouter key shows it as a QR code; the other device scans it with its camera. The key never goes through a server.
+// Nothing here writes the key to the screen as text or to any log: it is only drawn inside the QR picture, and only while a grown-up has the window open.
+const QR_PREFIX = 'BELLASPELLER-KEY-1:';
+const loadScriptOnce = (src) => new Promise((res, rej) => {
+  if (document.querySelector('script[data-lib="' + src + '"]')) return res();
+  const e = document.createElement('script'); e.src = src + (typeof __s === 'string' ? __s : ''); e.dataset.lib = src; e.onload = () => res(); e.onerror = () => rej(new Error('Could not load ' + src));
+  document.body.appendChild(e);
+});
+function qrOverlay(title, bodyHtml, onClose) {
+  const ov = document.createElement('div'); ov.className = 'overlay'; ov.id = 'qrOverlay';
+  ov.innerHTML = `<div class="pickcard"><div class="dbghead"><b>${esc(title)}</b><button class="btn small" id="qr-x">Close</button></div>${bodyHtml}</div>`;
+  document.body.appendChild(ov);
+  const close = () => { try { onClose && onClose(); } catch (e) { } ov.remove(); };
+  ov.querySelector('#qr-x').onclick = close;
+  return { ov, close };
+}
+// Shows the key as a QR code, for another device to scan. Closes itself after two minutes.
+async function showKeyQr() {
+  const key = S.orKey || S.aiKey;
+  if (!key) { alert('This device has no AI key to share yet.'); return; }
+  try { await loadScriptOnce('qrgen.js'); } catch (e) { alert('Could not load the QR code maker. Check the internet connection and try again.'); return; }
+  const payload = QR_PREFIX + JSON.stringify({ k: S.orKey || undefined, a: S.aiKey || undefined, b: S.aiBase || undefined });
+  const qr = qrcode(0, 'M'); qr.addData(payload); qr.make();
+  const n = qr.getModuleCount(), cell = Math.max(4, Math.floor(Math.min(innerWidth - 80, innerHeight - 260, 440) / (n + 8))), size = (n + 8) * cell;
+  const { ov, close } = qrOverlay('Set up another device', `<p class="note">On the other device, open Grown-ups, Settings, and press <b>Scan a QR code</b>. Hold it up to this screen. This picture contains the AI key, so only show it to the device you are setting up. It closes by itself in two minutes.</p><div style="display:flex;justify-content:center"><canvas id="qrCanvas" width="${size}" height="${size}" style="max-width:100%;height:auto;background:#fff;border-radius:12px"></canvas></div>`);
+  const c = ov.querySelector('#qrCanvas'), x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); x.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (qr.isDark(r, q)) x.fillRect((q + 4) * cell, (r + 4) * cell, cell, cell);
+  setTimeout(close, 120000);
+}
+// Scans a QR code from another device with the camera, and saves the key on this device.
+async function scanKeyQr() {
+  let stream = null, stop = false, raf = 0;
+  const done = () => { stop = true; cancelAnimationFrame(raf); try { stream && stream.getTracks().forEach(t => t.stop()); } catch (e) { } };
+  const { ov, close } = qrOverlay('Scan the QR code', `<p class="note" id="qrMsg">Hold this camera up to the QR code on the other device.</p><video id="qrVideo" playsinline muted style="width:100%;border-radius:12px;background:#000;max-height:60vh"></video><canvas id="qrWork" hidden></canvas>`, done);
+  const msg = t => { const m = ov.querySelector('#qrMsg'); if (m) m.textContent = t; };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg('This device cannot use its camera here.'); return; }
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); }
+  catch (e) { msg('The camera could not be opened. Allow the camera for this page and try again.'); return; }
+  const v = ov.querySelector('#qrVideo'); v.srcObject = stream; try { await v.play(); } catch (e) { }
+  const det = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+  if (!det) { try { await loadScriptOnce('jsqr.js'); } catch (e) { msg('Could not load the QR reader.'); done(); return; } }
+  const wk = ov.querySelector('#qrWork'), wx = wk.getContext('2d', { willReadFrequently: true });
+  const accept = text => {
+    if (typeof text !== 'string' || !text.startsWith(QR_PREFIX)) return false;
+    let o; try { o = JSON.parse(text.slice(QR_PREFIX.length)); } catch (e) { return false; }
+    const ok = t => typeof t === 'string' && /^[A-Za-z0-9_.:\/-]{8,300}$/.test(t);
+    if (!o || !(ok(o.k) || ok(o.a))) return false;
+    if (ok(o.k)) S.orKey = o.k; if (ok(o.a)) S.aiKey = o.a; if (typeof o.b === 'string' && /^https:\/\/[A-Za-z0-9.\/_-]{4,200}$/.test(o.b)) S.aiBase = o.b;
+    save(); return true;
+  };
+  const tick = async () => {
+    if (stop) return;
+    try {
+      if (v.readyState >= 2 && v.videoWidth) {
+        let text = null;
+        if (det) { const r = await det.detect(v); if (r && r[0]) text = r[0].rawValue; }
+        else { wk.width = v.videoWidth; wk.height = v.videoHeight; wx.drawImage(v, 0, 0); const im = wx.getImageData(0, 0, wk.width, wk.height), r = jsQR(im.data, im.width, im.height); if (r) text = r.data; }
+        if (text) {
+          if (accept(text)) { done(); msg('Done. The AI key is now saved on this device.'); setTimeout(() => { close(); adult(); }, 1500); return; }
+          msg('That QR code is not from BellaSpeller. Try again.');
+        }
+      }
+    } catch (e) { }
+    raf = requestAnimationFrame(() => setTimeout(tick, 120));
+  };
+  tick();
+}
 // ---------- debug settings: a button on every screen, no PIN. Set DEBUG to false for release. ----------
 // Goes to the page under a new address that carries the version (?u=3.80). The server and the browser have never seen that address, so every file
 // (the page, the script, the styles) is fetched fresh and cannot come back from a saved copy of the old version.
