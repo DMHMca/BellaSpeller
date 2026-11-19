@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.102'; // bump with every release
+const APP_VER = '3.103'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2437,9 +2437,30 @@ function downloadRecord(kind) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+// Wipes the history so the real weeks can start clean. The words of the week in use are kept so the app always has a week; the grown-up replaces them next.
+function backupNow() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.assign({}, S, { orKey: undefined, aiKey: undefined }), null, 1)], { type: 'application/json' }));
+  a.download = 'bellaspeller-backup-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove();
+}
+function startAgainDialog() {
+  const { ov, close } = qrOverlay('Start the record again', `<p><b>Are you sure?</b> This clears every sitting, every answer, all the stars and every school score, and removes all weeks except the one now in use. It cannot be undone.</p>
+    <p class="note">It is a good idea to save a backup file first. If you change your mind, the backup can be loaded again from Settings.</p>
+    <div class="row" style="justify-content:flex-start"><button class="btn small" id="sa-bk">Save a backup file first</button></div>
+    <p class="note" id="sa-msg"></p>
+    <div class="row" style="justify-content:flex-start"><button class="btn small" id="sa-no">No, keep everything</button><button class="btn small" id="sa-yes" style="border-color:#b3261e;color:#b3261e">Yes, clear it all</button></div>`);
+  ov.querySelector('#sa-bk').onclick = () => { backupNow(); ov.querySelector('#sa-msg').textContent = 'Backup saved to this device\'s Downloads folder.'; };
+  ov.querySelector('#sa-no').onclick = close;
+  ov.querySelector('#sa-yes').onclick = () => {
+    const wk = curWeek();
+    S.weeks = [wk]; S.cur = wk.id; wk.score = null; wk.ep = null;
+    S.log = []; S.sittings = []; S.due = {}; S.story = {}; S.stars = 0; save(); close();
+    adultTab = 'words'; adultFlash = 'The record is cleared. Next: put in the real words for this week below, add them as a new week, then use "Remove this week" on the old one.'; adult();
+  };
+}
 function recordPane() {
   const recs = S.weeks.map(weekRecord);
-  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button><button class="btn small" id="recCsv">Save as CSV</button><button class="btn small" id="recXls">Save as Excel</button></div><p class="note">The saved file has one row per week with every figure, ready to open in Excel or Google Sheets.</p>`;
+  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button><button class="btn small" id="recCsv">Save as CSV</button><button class="btn small" id="recXls">Save as Excel</button></div><div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="recReset">Start again from scratch…</button></div><p class="note">The saved file has one row per week with every figure, ready to open in Excel or Google Sheets.</p>`;
   if (recView === 'graph') {
     const pts = recs.filter(r => r.app != null || r.sch != null);
     if (!pts.length) return sw + '<p class="note">Nothing to draw yet. The graph fills in as Bella finishes sittings and you enter the school scores.</p>';
@@ -2564,6 +2585,7 @@ function adult() {
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
   document.querySelectorAll('.rsc').forEach(i => { i.onchange = () => { const w = S.weeks.find(x => x.id === i.dataset.w); if (!w) return; const v = i.value.trim(); w.score = v === '' ? null : Math.max(0, Math.min(w.words.length, parseInt(v, 10) || 0)); save(); adultTab = 'record'; adult(); }; });
+  on('#recReset', () => startAgainDialog());
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
