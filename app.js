@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.113'; // bump with every release
+const APP_VER = '3.114'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -541,16 +541,11 @@ function misspellings(x, weekWords) {
   return out.slice(0, 3);
 }
 function toolsPane(wk) {
-  const cards = wk.words.map((x, i) => `<div class="wcard"><h3>${esc(x.w)}</h3>
-    <label>Spelling tip${x.mnemBy === 'ai' ? ' <span class="note">(suggested by the AI)</span>' : ''}</label>
-    <input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" autocomplete="off">
-    <label>Words with the same pattern (untick to remove)</label>
-    <div>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</div>
-    <label>Common wrong spellings, separated by commas</label>
-    <input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></div>`).join('');
-  return `<h2>Details for this week's words</h2>
-    <p class="note">What the app uses for each word. The spelling tip is what Bella hears and sees under Spelling tips. The same-pattern words come into the spelling rule help. The common wrong spellings are used as the wrong choices in multiple choice. Leave a box empty to show nothing.</p>
-    ${cards}
+  const rows = wk.words.map((x, i) => `<div class="wcard"><h3>${esc(x.w)}</h3>
+    <input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" aria-label="Spelling tip for ${esc(x.w)}" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</div>`).join('');
+  return `<h2>This Week's Spelling Tips</h2>
+    <p class="note">The tip Bella sees and hears for each word under Spelling tips. Change any of them, or leave a box empty to show nothing for that word.</p>
+    ${rows}
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }
@@ -2405,8 +2400,61 @@ function recordPane() {
   return sw + `<table><tr><th>Week</th><th>Bella's test words</th><th>Right first time in the app</th><th>Times a spelling aid was used</th><th>Mnemonics made</th><th>School score</th></tr>${rows}</table>
     <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added. Type or change a school score in its box at any time: it is saved as soon as you leave the box.</p>`;
 }
+// The Help tab: how the app works, in plain words, for anyone helping Bella.
+function helpPane() {
+  const sec = (t, body, open) => `<details class="hsec"${open ? ' open' : ''}><summary>${t}</summary>${body}</details>`;
+  return `<h2>Help</h2>
+  <p class="note">A short guide for anyone helping Bella with the app. Tap a heading to open it. This is version ${esc(APP_VERSION)}.</p>
+  ${sec('What the app is for', `<p>BellaSpeller helps Bella learn the spelling words from school each week. It never shows her a word she is being tested on before she tries it, and it keeps the helps gentle, so she does as much as she can by herself. Everything she does is saved on the device she uses, not on a server.</p>`, true)}
+  ${sec('The four boxes on her home screen', `
+    <p><b>Her story.</b> She chooses a story idea, or tells her own, and the app writes a short story for her to read (it can read it aloud). The week's words are highlighted in yellow inside it. Afterwards the app says each word in its sentence and she spells it. This needs the AI key and an internet connection.</p>
+    <p><b>Her practice.</b> The same spelling, without a story. The word is never shown: she hears it in its sentence and writes it.</p>
+    <p><b>Her revision.</b> Two choices. <i>Mnemonics</i>: she picks tricky words and builds a silly sentence from them, with an arrow from each letter. <i>Spelling tips</i>: a short tip for each word, which she can read or hear, all together or one at a time.</p>
+    <p><b>Grown-ups.</b> This area. Her name appears on the boxes once it is saved under Settings.</p>`)}
+  ${sec('Spelling a word: what happens', `
+    <p>She hears the word (and its sentence), then writes it, either on the keyboard or by hand with a finger or pen. The choice is remembered on that device. If it is right first time she gets a star and a bit of praise. If it is wrong, the app asks whether she would like some help or another go.</p>
+    <p>If she is still stuck after three wrong goes in practice or revision, the app says the word is still hiding and brings it back in a later sitting, rather than showing the answer. In her story, after three wrong goes it shows her the word once and she writes it from memory.</p>
+    <p>If she is not sure when the word is first said, <b>Hear it again</b> says it again.</p>`)}
+  ${sec('The spelling helps, and how each one works', `
+    <p>After a wrong go, or if she asks before trying, she can choose one of these. Each is recorded, and any word where she used a help does not count towards the "right first time" score.</p>
+    <p><b>The spelling rule.</b> Says a spelling pattern for the word, with similar words. It is greyed out for a word that has no rule in the app.</p>
+    <p><b>A hint.</b> Tells her how many letters the word has and where her go went wrong, for example that a letter is missing or which letter to look at again. It never gives the letter away.</p>
+    <p><b>I will tell you if a letter doesn't look right.</b> A gentle nudge once per word, when a letter does not look right. It never says which letter. It is not available when she writes by hand.</p>
+    <p><b>Multiple choice.</b> She picks the right spelling from several. After she picks the right one, the app asks her to go back and spell it again by herself.</p>`)}
+  ${sec('Writing by hand', `
+    <p>The button under the word switches between <b>Write it by hand</b> and <b>Use the keyboard</b>. Handwriting works with a finger or a pen on a touch screen. The app reads what she wrote and shows it above the box as "I read: ...", so she can see what it understood. If the reading is wrong, she can clear the box and write it again.</p>
+    <p>Reading handwriting uses the AI when the device has the key, and the device's own reader otherwise (which may not exist on every device). A hand resting on the screen is ignored while the pen is in use.</p>`)}
+  ${sec('Mnemonics and spelling tips', `
+    <p>A <b>mnemonic</b> is a silly sentence whose words start with the letters of the word in order, for example <i>Big Elephants Can Always Understand Small Elephants</i> for because. Bella builds them herself on the mnemonic screen, and they are saved.</p>
+    <p>A <b>spelling tip</b> is a short note about the tricky part of a word. The app has some built in, and the AI can look up missing ones. Spoken tips use letter names, not letter sounds. You can edit any tip under This Week's Spelling Tips.</p>`)}
+  ${sec('Scores and the Progress tab', `
+    <p><b>Right first time</b> means she wrote the word correctly on her first go, with no hint or other help. The app's score for a sitting is the number of words she got right first time.</p>
+    <p><b>A sitting</b> is one run through the week's words. Words she gets wrong come back in a later sitting.</p>
+    <p><b>Owning a word</b> (shown under Details) means right first time, without help, on two different days.</p>
+    <p>The <b>Progress</b> tab shows one row for each week: the words, her best sitting, how many times a spelling help was used, whether mnemonics were made, and the school score. You can type or change the school score there, switch to a graph, or save everything as a CSV or Excel file.</p>`)}
+  ${sec('A weekly routine for grown-ups', `
+    <ol><li>Under <b>This week</b>, add the new week of words (one per line, or separated by commas).</li>
+    <li>Optionally remove last week's words with <b>Remove this week</b>. Its record stays in Progress unless you remove it.</li>
+    <li>When the school test score comes in, type it into the Progress tab.</li>
+    <li>If another device needs the new words, use <b>Show this week's words as a QR code</b> under Settings, and scan it on the other device.</li></ol>`)}
+  ${sec('Setting up another device', `
+    <p>Under Settings: <b>Show the key as a QR code</b> on one device, and <b>Scan a QR code</b> on the other, holding the camera up to the screen. Do the same for <b>Show this week's words as a QR code</b>. The QR code for the key contains the AI key, so only show it to the device you are setting up.</p>
+    <p>To move everything (words, progress, tips), use <b>Save a backup file</b> on one device and <b>Load a backup file</b> on the other. The backup does not include the AI key, and loading one replaces what is on that device.</p>`)}
+  ${sec('Updating the app', `
+    <p>When a new version is ready, a pink <b>Update</b> button appears on the home screen. Tap it. On a larger screen the version number at the bottom left also works as an update button. If it does not seem to update, open the app's web address with <b>?u=</b> and the new version number on the end, for example the usual address followed by ?u=3.114.</p>`)}
+  ${sec('If something goes wrong', `
+    <p><b>It has frozen or a screen is blank.</b> Press <b>Home</b> or <b>Back</b> at the top if you can. If not, close the page or app and open it again. Her answers and settings are saved on the device, so nothing is lost.</p>
+    <p><b>The voice is silent.</b> Check the device volume and that the sound button at the top of the home screen says <b>Voice on</b>. On a spelling screen, press <b>Hear it again</b>. If the app's voice does not start within a few seconds, the device's own voice takes over.</p>
+    <p><b>Stories will not write, or the AI will not read her handwriting.</b> Those need the AI key and an internet connection. Check the connection, and that the key is saved under Settings (it can be moved from another device by QR code).</p>
+    <p><b>The new words or a wrong word.</b> Fix it under This week.</p>
+    <p><b>A word is read out wrongly.</b> The voice sometimes mispronounces unusual words, especially names. Choosing a different voice under Settings may help.</p>
+    <p><b>I cleared the record by mistake.</b> Use <b>Load a backup file</b> on the Progress tab, if you saved a backup first. The clearing box always offers to save one.</p>
+    <p><b>Something looks wrong on a small screen.</b> The app resizes itself to the screen, but a very small tablet is the least tested. Opening it as an installed app (Add to Home screen) gives more room, because the browser bars disappear.</p>`)}
+  ${sec('Words used in the app', `
+    <p><b>Mnemonic:</b> a silly sentence that helps remember a spelling. <b>Spelling tip:</b> a short note about a tricky word. <b>Sitting:</b> one run through the week's words. <b>Right first time:</b> correct on the first go with no help. <b>Spelling help:</b> the rule, hint, "tell me if a letter looks wrong" and multiple choice. <b>Week:</b> one list of words, matching a school spelling test.</p>`)}`;
+}
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['tools', 'Word details'], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['tools', "This Week's Spelling Tips"], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings'], ['help', 'Help']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -2458,7 +2506,7 @@ function adult() {
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
     <div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="detCsv">Save as CSV</button><button class="btn small" id="recReset2">Start again from scratch…</button><button class="btn small" id="restore3">Load a backup file</button></div>
 
-    </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
+    </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="help">${helpPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (saved as soon as you leave the box; it appears on the home screen)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>

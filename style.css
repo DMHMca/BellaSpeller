@@ -628,3 +628,8 @@ body.onmn #app { max-width: 1100px; }
 .adult .wcard { border: 1px solid var(--paper-edge); border-radius: 14px; padding: 6px 16px 14px; margin: 12px 0; }
 .adult .wcard h3 { margin: 8px 0 0; font-size: 22px; }
 .adult .wcard input.tf { width: 100%; }
+
+.adult details.hsec { border: 1px solid var(--paper-edge); border-radius: 14px; margin: 10px 0; padding: 0 16px; background: #fff; }
+.adult details.hsec summary { cursor: pointer; font-weight: 700; font-size: 20px; padding: 14px 0; }
+.adult details.hsec[open] summary { border-bottom: 1px solid var(--paper-edge); margin-bottom: 10px; }
+.adult details.hsec p, .adult details.hsec li { margin: 0 0 12px; line-height: 1.5; }
