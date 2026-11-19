@@ -614,7 +614,7 @@ body.onmn #app { max-width: 1100px; }
   .writescreen .cuepic, .writescreen .cue { display: none; }
   .homebar { gap: 10px; }
   .homelogo { max-width: 110px; }
-  #vlabel { display: none; }
+  body.onwrite #vlabel, body.inkmode #vlabel { display: none; }
 }
 
 /* The story window shows only whole lines: no top or bottom padding inside the scrolling part (the border takes its place), and the height is set to a whole number of lines by the app. */
