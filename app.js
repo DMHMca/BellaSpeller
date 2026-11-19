@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.95'; // bump with every release
+const APP_VER = '3.96'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -37,7 +37,7 @@ function migrateMnem(s) {
 }
 function fresh() {
   return {
-    pin: null, name: '', girls: ['Imogen', 'Persephone', 'Florence', 'Tabitha'], meIn: false,
+    pin: null, name: '', girls: ['Imogen', 'Matilda', 'Florence', 'Tabitha'], meIn: false,
     weeks: [{
       id: 'w1', label: "Bella's words",
       rule: 'Tricky words that do not spell the way they sound',
@@ -47,7 +47,7 @@ function fresh() {
     cur: 'w1', log: [], stars: 0, story: {}
   };
 }
-function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Persephone', 'Florence', 'Tabitha']; return migrateMnem(migrateWords(s)); } } catch (e) { } loadedFresh = true; return fresh(); }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Matilda', 'Florence', 'Tabitha']; if (s.girls) s.girls = s.girls.map(g => g === 'Persephone' ? 'Matilda' : g); return migrateMnem(migrateWords(s)); } } catch (e) { } loadedFresh = true; return fresh(); }
 let loadedFresh = false;
 function save() {
   const j = JSON.stringify(S);
@@ -285,7 +285,7 @@ const PRESETS = [
   { id: 'el-lily', label: 'Lily (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'lily' },
   { id: 'el-matilda', label: 'Matilda (ElevenLabs)', model: 'elevenlabs/eleven-flash-v2.5', voice: 'matilda' }
 ];
-const POOL = ['Persephone', 'Imogen', 'Octavia', 'Clementine', 'Florence', 'Matilda', 'Beatrice', 'Arabella', 'Henrietta', 'Evie', 'Tabitha', 'Seraphina', 'Philippa', 'Cecily', 'Ottilie', 'Rosalind', 'Amelia', 'Poppy', 'Isla', 'Ivy', 'Willow', 'Edith', 'Harriet', 'Lottie', 'Elsie', 'Maisie', 'Winnie', 'Georgia', 'Felicity', 'Verity'];
+const POOL = ['Imogen', 'Florence', 'Matilda', 'Beatrice', 'Evie', 'Tabitha', 'Amelia', 'Poppy', 'Isla', 'Ivy', 'Willow', 'Edith', 'Harriet', 'Lottie', 'Elsie', 'Maisie', 'Georgia', 'Grace', 'Ruby', 'Daisy', 'Alice', 'Hannah', 'Molly', 'Rose'];
 const BOYS = ['Percy', 'Barnaby', 'Hugo', 'Rupert', 'Monty', 'Alfie', 'Archie', 'Wilfred', 'Ludo', 'Fergus', 'Oscar', 'Freddie', 'Arthur', 'Theo', 'Rufus', 'Jasper', 'Hector', 'Barney', 'Kit', 'Rory', 'Toby', 'Max', 'Ned', 'Felix', 'Louis', 'Jack', 'Edmund', 'Ralph', 'Humphrey', 'Orlando'];
 const TRAITS = ['', 'funny', 'shy', 'bossy', 'kind', 'sensible', 'cheeky', 'curious', 'creative', 'brave', 'clumsy', 'forgetful', 'always late', 'worries a lot', 'notices everything', 'loves gadgets', 'asks lots of questions', 'loves experiments', 'loves animals', 'loves football', 'good at maths', 'good at drawing'];
 const STORY_TYPES = [
@@ -334,7 +334,7 @@ function toolContent(x, stage) {
   return { html, shown };
 }
 // ---- help she asks for after a word did not go right: one at a time ----
-const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + ', ' + word + '.';
+const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.') + ' The word I would like you to try to spell is ' + word + '. Again, the word is ' + word + '.';
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) { return ['family', 'hint', 'sure', 'choice']; } // the main helps, in this order; none shows the word
