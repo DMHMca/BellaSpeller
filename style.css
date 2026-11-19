@@ -596,22 +596,23 @@ body.onmn #app { max-width: 1100px; }
 .tipbig { max-width: 900px; font-size: clamp(28px, 5vh, 44px); line-height: 1.3; color: #ffd1ea; font-weight: 700; text-align: center; margin: 0; }
 .tipbig.none { opacity: .5; }
 
-/* Very short screens (a small tablet on its side, with the browser bars showing): everything is tightened so the keyboard fits without scrolling. */
-@media (max-height: 520px) {
-  #app { padding: 6px 14px 10px; min-height: 0; }
-  .screen { gap: 6px; padding-top: 0; }
-  .writescreen { gap: 5px; }
-  .writescreen .page.small, .writescreen .gapcard { padding: 8px 14px; }
-  .gapcard .story { font-size: 20px; line-height: 1.35; }
-  .writescreen .btn.small, .writescreen .iconbtn { min-height: 38px; padding: 4px 14px; font-size: 16px; }
+/* Short screens (a small tablet on its side, with the browser bars showing): sizes follow the screen height so the keyboard always fits. */
+@media (max-height: 700px) {
+  #app { padding: 6px 14px 8px; min-height: 0; }
+  .screen { gap: 1.2vh; padding-top: 0; }
+  .writescreen { gap: 1.2vh; }
+  .writescreen .page.small, .writescreen .gapcard { padding: 1vh 14px; }
+  .gapcard .story, .writescreen .story { font-size: clamp(16px, 3.4vh, 22px); line-height: 1.3; }
+  .writescreen .btn.small, .writescreen .iconbtn { min-height: 0; height: 6.5vh; padding: 0 14px; font-size: clamp(13px, 2.8vh, 17px); }
+  .writescreen .btn.small .ico, .writescreen .iconbtn .ico { width: 3.4vh; height: 3.4vh; }
   .writescreen .row { gap: 8px; }
-  .writescreen .slots { min-height: 38px; }
-  .writescreen .slot { height: 36px; font-size: 28px; min-width: 24px; }
-  .writescreen .kb, .writescreen .kb div { gap: 4px; }
-  .writescreen .key { height: 36px; font-size: 20px; border-radius: 10px; box-shadow: 0 3px 0 rgba(0,0,0,.3); }
+  .writescreen .slots { min-height: 6vh; }
+  .writescreen .slot { height: 5.6vh; font-size: clamp(18px, 4vh, 30px); min-width: 3.4vh; }
+  .writescreen .kb, .writescreen .kb div { gap: 0.8vh; }
+  .writescreen .key, body .writescreen .key { height: 7vh; font-size: clamp(16px, 3.4vh, 24px); border-radius: 9px; box-shadow: 0 2px 0 rgba(0,0,0,.3); }
+  .writescreen .key.ok .ico { width: 3.6vh; height: 3.6vh; }
   .writescreen .cuepic, .writescreen .cue { display: none; }
   .homebar { gap: 10px; }
   .homelogo { max-width: 110px; }
-  .btn.big { padding-top: 10px; padding-bottom: 10px; }
   #vlabel { display: none; }
 }
