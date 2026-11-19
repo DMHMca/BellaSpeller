@@ -351,7 +351,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .smallmsg { font-size:clamp(18px,2.8vh,24px); margin:0; }
 
 /* busier, bigger waiting screens */
-.waitline { font-size: clamp(26px, 5vh, 42px); font-weight: 800; color: #fff; line-height: 1.25; max-width: 760px; min-height: 3em; text-align: center; }
+.waitline { font-size: clamp(30px, 6vh, 48px); font-weight: 800; color: #fff; line-height: 1.25; max-width: 760px; min-height: 3em; text-align: center; }
 .dance { font-size: 48px; }
 .parade { position: relative; width: 100%; height: 76px; overflow: hidden; }
 .parade span { position: absolute; left: -60px; font-size: 44px; animation: marchby linear infinite; }
@@ -372,7 +372,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .scenebar { text-align: center; font-size: clamp(30px, 5.2vh, 46px); letter-spacing: 8px; line-height: 1.1; }
 
 /* the silly lines: a different hand and colour from the heading */
-.waitline { font-family: "Segoe Print", "Chalkboard SE", "Comic Sans MS", "Marker Felt", "Bradley Hand", cursive; font-weight: 700; color: #ffb3d9; }
+.waitline { font-weight: 700; color: #fff; }
 
 /* pictures */
 .storypic { width: 100%; display: flex; justify-content: center; min-height: clamp(120px, 24vh, 240px); }
