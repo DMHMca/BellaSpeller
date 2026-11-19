@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.92'; // bump with every release
+const APP_VER = '3.93'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2662,16 +2662,16 @@ async function unpackText(p) {
   if (p[0] === 'Z') { const ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter(); w.write(b64dec(p.slice(1))); w.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer()); }
   return decodeURIComponent(escape(atob(p.slice(1))));
 }
-// This week's words, with their tips and mnemonics, as one small QR code. The key is not in it.
+// This week's words and their spelling tips, as one small QR code. The key is not in it.
 async function showWeekQr() {
   const wk = curWeek();
   try { await loadScriptOnce('qrgen.js'); } catch (e) { alert('Could not load the QR code maker. Check the internet connection and try again.'); return; }
-  const slim = lvl => ({ v: 1, n: S.name || undefined, g: S.girls, l: wk.label, r: wk.rule, w: wk.words.map(x => { const o = { w: x.w }; if (x.red) o.d = 1; if (x.say) o.s = x.say; if (lvl < 2 && x.mnem) o.m = x.mnem; if (lvl < 1 && x.mnemSay) o.y = x.mnemSay; if (lvl < 2 && x.mnemonic) o.z = x.mnemonic; if (lvl < 1 && x.mnemWords) o.q = x.mnemWords; return o; }) });
+  const slim = lvl => ({ v: 1, n: S.name || undefined, l: wk.label, r: wk.rule, w: wk.words.map(x => { const o = { w: x.w }; if (x.red) o.d = 1; if (x.say) o.s = x.say; if (lvl < 2 && x.mnem) o.m = x.mnem; if (lvl < 1 && x.mnemSay) o.y = x.mnemSay; return o; }) }); // words and spelling tips only: she makes the mnemonics herself on the other device
   let text = '', lvl = 0;
   for (; lvl <= 2; lvl++) { text = WEEK_PREFIX + await packText(JSON.stringify(slim(lvl))); if (text.length <= 2400) break; }
   const qr = qrcode(0, 'L'); qr.addData(text); qr.make();
   const n = qr.getModuleCount(), cell = Math.max(3, Math.floor(Math.min(innerWidth - 60, innerHeight - 240, 560) / (n + 8))), size = (n + 8) * cell;
-  const { ov, close } = qrOverlay('This week\'s words', `<p class="note">On the other device, open Grown-ups, Settings, and press <b>Scan a QR code</b>, then hold it up to this screen. It adds this week's words${lvl > 0 ? ' (some tips were left out to fit)' : ''}. Turn the screen brightness up and keep the tablet steady.</p><div style="display:flex;justify-content:center"><canvas id="qrCanvas" width="${size}" height="${size}" style="max-width:100%;height:auto;background:#fff;border-radius:12px"></canvas></div>`);
+  const { ov, close } = qrOverlay('This week\'s words', `<p class="note">On the other device, open Grown-ups, Settings, and press <b>Scan a QR code</b>, then hold it up to this screen. It adds this week's words and their spelling tips${lvl > 0 ? ' (some tips were left out to fit)' : ''}. Turn the screen brightness up and keep the tablet steady.</p><div style="display:flex;justify-content:center"><canvas id="qrCanvas" width="${size}" height="${size}" style="max-width:100%;height:auto;background:#fff;border-radius:12px"></canvas></div>`);
   const c = ov.querySelector('#qrCanvas'), x = c.getContext('2d');
   x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); x.fillStyle = '#000';
   for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (qr.isDark(r, q)) x.fillRect((q + 4) * cell, (r + 4) * cell, cell, cell);
@@ -2686,7 +2686,6 @@ async function addWeekFromQr(packed) {
     if (!x || typeof x.w !== 'string' || !/^[a-z' -]{1,30}$/.test(x.w)) return false;
     const w = { w: x.w };
     if (x.d) w.red = true; if (x.s) w.say = txt(x.s, 60); if (x.m) { w.mnem = txt(x.m, 200); w.mnemBy = 'ai'; } if (x.y) w.mnemSay = txt(x.y, 300);
-    if (x.z) w.mnemonic = txt(x.z, 200); if (Array.isArray(x.q) && x.q.length === x.w.length && x.q.every((t, i) => typeof t === 'string' && t[0] === x.w[i])) w.mnemWords = x.q.map(t => t.slice(0, 24));
     words.push(w);
   }
   const id = 'w' + Date.now();
