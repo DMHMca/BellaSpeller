@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.98'; // bump with every release
+const APP_VER = '3.99'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1063,6 +1063,19 @@ function storyScroll(items) {
     h(`<div class="screen storyscreen"><div class="readrow"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="scrollbtns"><button id="sup" class="scrollbtn" aria-label="Scroll up">${ico('next')}</button><button id="sdown" class="scrollbtn" aria-label="Scroll down">${ico('next')}</button></div></div>
       <div class="storypic" id="spic"></div>
       <div class="row"><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
+    // The window is always a whole number of lines tall, and it only ever rests on a whole line, so a word is never cut in half.
+    const lineH = () => { const sp = $('#sp'); return sp ? (parseFloat(getComputedStyle(sp).lineHeight) || 40) : 40; };
+    const fitLines = () => {
+      const sp = $('#sp'); if (!sp) return;
+      sp.style.height = ''; const cs = getComputedStyle(sp), b = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth), lh = lineH();
+      const n = Math.max(2, Math.floor((sp.offsetHeight - b) / lh)); sp.style.height = (n * lh + b) + 'px';
+      sp.scrollTop = Math.round(sp.scrollTop / lh) * lh;
+    };
+    const onResize = () => { if (!$('#sp')) return removeEventListener('resize', onResize); fitLines(); };
+    addEventListener('resize', onResize); fitLines(); setTimeout(fitLines, 300); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitLines);
+    let snapT = 0;
+    $('#sp').addEventListener('scroll', () => { clearTimeout(snapT); snapT = setTimeout(() => { const sp = $('#sp'); if (!sp) return; const lh = lineH(), t = Math.round(sp.scrollTop / lh) * lh; if (Math.abs(sp.scrollTop - t) > 1) sp.scrollTo({ top: t, behavior: 'smooth' }); }, 160); });
+    const lines = sp => Math.max(1, Math.round(sp.clientHeight / lineH()));
     // The picture under the box follows the story: the latest word paragraph the voice (or her scrolling) has reached.
     let shownPic = '';
     const showPic = () => {
@@ -1084,15 +1097,15 @@ function storyScroll(items) {
         if (my !== run) return;
         const el = document.querySelector(`.chunk[data-i="${i}"]`), sp = $('#sp');
         document.querySelectorAll('.chunk.now').forEach(x => x.classList.remove('now'));
-        if (el && sp) { el.classList.add('now'); sp.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top - sp.getBoundingClientRect().top + sp.scrollTop - 16), behavior: 'smooth' }); }
+        if (el && sp) { el.classList.add('now'); sp.scrollTo({ top: Math.max(0, Math.floor((el.getBoundingClientRect().top - sp.getBoundingClientRect().top - parseFloat(getComputedStyle(sp).borderTopWidth) + sp.scrollTop + 2) / lineH()) * lineH()), behavior: 'smooth' }); }
         const ok = await sayDone(chunkText(chunks[i]));
         if (!ok || my !== run) return;
         await new Promise(r => setTimeout(r, 900)); // a breath between pieces
         if (my !== run) return;
       }
     };
-    on('#sup', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: -sp.clientHeight * 0.8, behavior: 'smooth' }); });
-    on('#sdown', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: sp.clientHeight * 0.8, behavior: 'smooth' }); });
+    on('#sup', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: -Math.max(1, lines(sp) - 1) * lineH(), behavior: 'smooth' }); });
+    on('#sdown', () => { const sp = $('#sp'); if (sp) sp.scrollBy({ top: Math.max(1, lines(sp) - 1) * lineH(), behavior: 'smooth' }); });
     on('#readtoggle', () => {
       S.readAloud = !S.readAloud; if (S.readAloud && !soundOn()) S.sound = true; save(); paintSound();
       $('#readtoggle').classList.toggle('on', !!S.readAloud);
