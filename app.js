@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.117'; // bump with every release
+const APP_VER = '3.118'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2833,8 +2833,10 @@ async function scanKeyQr() {
 // Goes to the page under a new address that carries the version (?u=3.80). The server and the browser have never seen that address, so every file
 // (the page, the script, the styles) is fetched fresh and cannot come back from a saved copy of the old version.
 async function freshReload(ver) {
-  try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch (e) { }
-  const q = new URLSearchParams(location.search); q.set('u', ver || Date.now());
+  // Clear the saved copies, but never wait more than a couple of seconds for it: some installed windows stall on this.
+  const clear = (async () => { try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for (const k of await caches.keys()) await caches.delete(k); } catch (e) { } })();
+  await Promise.race([clear, new Promise(r => setTimeout(r, 2500))]);
+  const q = new URLSearchParams(location.search); q.set('u', (ver || 'x') + '-' + Date.now().toString(36)); // a new address every time, so no stale copy can be reused
   location.replace(location.pathname + '?' + q.toString());
 }
 // A big square Update button in the top right corner. It is only there when a newer version is waiting.
