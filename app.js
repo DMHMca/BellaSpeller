@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.112'; // bump with every release
+const APP_VER = '3.113'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -541,13 +541,16 @@ function misspellings(x, weekWords) {
   return out.slice(0, 3);
 }
 function toolsPane(wk) {
-  const rows = wk.words.map((x, i) => `<tr><td><b>${esc(x.w)}</b></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td>
-    <td>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td></tr>`).join('');
+  const cards = wk.words.map((x, i) => `<div class="wcard"><h3>${esc(x.w)}</h3>
+    <label>Spelling tip${x.mnemBy === 'ai' ? ' <span class="note">(suggested by the AI)</span>' : ''}</label>
+    <input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" autocomplete="off">
+    <label>Words with the same pattern (untick to remove)</label>
+    <div>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</div>
+    <label>Common wrong spellings, separated by commas</label>
+    <input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></div>`).join('');
   return `<h2>Details for this week's words</h2>
-    <p class="note">What the app uses for each word. The spelling tip is what Bella hears and sees under Spelling tips. The same-pattern words come into the spelling rule help (untick one to remove it). The common wrong spellings are used as the wrong choices in multiple choice. Leave a box empty to show nothing.</p>
-    <table><tr><th>Word</th><th>Spelling tip</th><th>Same-pattern words</th><th>Common wrong spellings</th></tr>${rows}</table>
+    <p class="note">What the app uses for each word. The spelling tip is what Bella hears and sees under Spelling tips. The same-pattern words come into the spelling rule help. The common wrong spellings are used as the wrong choices in multiple choice. Leave a box empty to show nothing.</p>
+    ${cards}
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }

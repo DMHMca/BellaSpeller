@@ -624,3 +624,7 @@ body.onmn #app { max-width: 1100px; }
 
 .adult details.adv { margin-top: 26px; border-top: 2px solid var(--paper-edge); padding-top: 10px; }
 .adult details.adv summary { cursor: pointer; font-weight: 700; padding: 10px 0; color: var(--ink-soft); }
+
+.adult .wcard { border: 1px solid var(--paper-edge); border-radius: 14px; padding: 6px 16px 14px; margin: 12px 0; }
+.adult .wcard h3 { margin: 8px 0 0; font-size: 22px; }
+.adult .wcard input.tf { width: 100%; }
