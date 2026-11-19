@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.93'; // bump with every release
+const APP_VER = '3.94'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1296,7 +1296,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       const kb = document.querySelector('.kb'), wp = $('#wpanel'), sw = $('#modesw');
       if (kb) kb.style.display = m === 'write' ? 'none' : '';
       if (wp) wp.style.display = m === 'write' ? '' : 'none';
-      if (sw) sw.innerHTML = m === 'write' ? 'Use the keyboard' : 'Write it with the pen';
+      if (sw) sw.innerHTML = m === 'write' ? 'Use the keyboard' : 'Write it by hand';
       if (m === 'write') initInk();
       typed = ''; draw(); clearInkIfReady();
     };
@@ -1319,7 +1319,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     });
     if (!noBack) backBtn(res);
     draw(); sayIt();
-    if (!(wobj && (force || help === 'choice')) && mode === 'write') setMode('write'); else { const sw = $('#modesw'); if (sw) sw.innerHTML = 'Write it with the pen'; }
+    if (!(wobj && (force || help === 'choice')) && mode === 'write') setMode('write'); else { const sw = $('#modesw'); if (sw) sw.innerHTML = 'Write it by hand'; }
     if (wobj && (force || help === 'choice')) { const sw = $('#modesw'); if (sw) sw.style.display = 'none'; }
   });
 }
