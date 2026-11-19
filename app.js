@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.108'; // bump with every release
+const APP_VER = '3.109'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -37,7 +37,7 @@ function migrateMnem(s) {
 }
 function fresh() {
   return {
-    pin: null, name: 'Bella', girls: ['Imogen', 'Matilda', 'Florence', 'Tabitha'], meIn: false,
+    pin: null, name: '', girls: ['Imogen', 'Matilda', 'Florence', 'Tabitha'], meIn: false,
     weeks: [{
       id: 'w1', label: "Bella's words",
       rule: 'Tricky words that do not spell the way they sound',
@@ -47,7 +47,7 @@ function fresh() {
     cur: 'w1', log: [], stars: 0, story: {}
   };
 }
-function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Matilda', 'Florence', 'Tabitha']; if (s.girls) s.girls = s.girls.map(g => g === 'Persephone' ? 'Matilda' : g); if (!s.name) s.name = 'Bella'; return migrateMnem(migrateWords(s)); } } catch (e) { } loadedFresh = true; return fresh(); }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.weeks && s.weeks.length) { if (s.girls && s.girls.join() === 'Priya,Maya,Jess,Tilly') s.girls = ['Imogen', 'Matilda', 'Florence', 'Tabitha']; if (s.girls) s.girls = s.girls.map(g => g === 'Persephone' ? 'Matilda' : g); return migrateMnem(migrateWords(s)); } } catch (e) { } loadedFresh = true; return fresh(); }
 let loadedFresh = false;
 function save() {
   const j = JSON.stringify(S);
@@ -2604,8 +2604,8 @@ function adult() {
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
-  if ($('#name')) $('#name').onchange = () => { S.name = $('#name').value.trim() || 'Bella'; save(); };
-  on('#saveName', () => { S.name = $('#name').value.trim() || 'Bella'; S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
+  if ($('#name')) $('#name').onchange = () => { S.name = $('#name').value.trim(); save(); };
+  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
   if ($('#picsOn')) $('#picsOn').onchange = e => { S.pics = e.target.checked; save(); };
   if ($('#imgSel')) $('#imgSel').onchange = e => { S.imgModel = e.target.value; save(); };
