@@ -619,3 +619,5 @@ body.onmn #app { max-width: 1100px; }
 
 /* The story window shows only whole lines: no top or bottom padding inside the scrolling part (the border takes its place), and the height is set to a whole number of lines by the app. */
 .scrollwrap .scrollpage { padding-top: 0; padding-bottom: 0; border-top: 14px solid var(--paper); border-bottom: 14px solid var(--paper); }
+
+.adult .btn.small.recv.on { background: #2a1f4d; color: #fff; border-color: #2a1f4d; }

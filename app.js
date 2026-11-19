@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.99'; // bump with every release
+const APP_VER = '3.100'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2408,8 +2408,45 @@ function owned() {
   S.log.forEach(l => { if (l.ok && !l.hints && !l.redo) (days[l.w] = days[l.w] || new Set()).add(l.d); });
   return Object.keys(days).filter(w => days[w].size >= 2);
 }
+// ---------- The record: one row per week, and a week-by-week graph ----------
+let recView = 'table';
+function weekRecord(w, i) {
+  const logs = S.log.filter(l => l.wk === w.id), sits = (S.sittings || []).filter(x => x.wk === w.id);
+  const best = sits.length ? sits.reduce((a, x) => (x.score / (x.of || 1) > a.score / (a.of || 1) ? x : a), sits[0]) : null;
+  const aids = logs.filter(l => l.aided || l.hints > 0 || (l.tools && l.tools.length)).length;
+  const days = new Set(logs.map(l => l.d).concat(sits.map(x => x.d))), first = [...days].sort()[0] || '';
+  const mn = w.words.filter(x => x.mnemonic).length;
+  const pct = (a, b) => (b ? Math.round(100 * a / b) : null);
+  return { n: i + 1, w, sits, best, aids, days: days.size, first, mn, app: best ? pct(best.score, best.of) : null, sch: w.score == null ? null : pct(w.score, w.words.length) };
+}
+function recordPane() {
+  const recs = S.weeks.map(weekRecord);
+  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button></div>`;
+  if (recView === 'graph') {
+    const pts = recs.filter(r => r.app != null || r.sch != null);
+    if (!pts.length) return sw + '<p class="note">Nothing to draw yet. The graph fills in as Bella finishes sittings and you enter the school scores.</p>';
+    const W = 640, H = 300, L = 46, R = 16, T = 18, B = 40, pw = W - L - R, ph = H - T - B;
+    const x = k => L + (pts.length === 1 ? pw / 2 : pw * k / (pts.length - 1)), y = v => T + ph * (1 - v / 100);
+    const line = (key, col) => {
+      let d = '', pen = false, dots = '';
+      pts.forEach((r, k) => { const v = r[key]; if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(k).toFixed(1) + ' ' + y(v).toFixed(1) + ' '; pen = true; dots += `<circle cx="${x(k).toFixed(1)}" cy="${y(v).toFixed(1)}" r="5" fill="${col}"/><text x="${x(k).toFixed(1)}" y="${(y(v) - 10).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="700" fill="${col}">${v}</text>`; });
+      return `<path d="${d}" fill="none" stroke="${col}" stroke-width="3"/>${dots}`;
+    };
+    const grid = [0, 25, 50, 75, 100].map(v => `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#d8d2ee"/><text x="${L - 8}" y="${y(v) + 5}" text-anchor="end" font-size="13" fill="#4a4270">${v}%</text>`).join('');
+    const xl = pts.map((r, k) => `<text x="${x(k).toFixed(1)}" y="${H - 14}" text-anchor="middle" font-size="14" font-weight="700" fill="#2a1f4d">Wk ${r.n}</text>`).join('');
+    return sw + `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;height:auto;background:#fff;border-radius:14px;margin-top:10px" role="img" aria-label="Scores week by week">${grid}${xl}${line('sch', '#d98200')}${line('app', '#5b3fc4')}</svg>
+      <p class="note"><b style="color:#5b3fc4">Purple</b>: Bella's best sitting in the app (right first time, no help). <b style="color:#d98200">Orange</b>: the school score. Both are shown as a percentage of that week's words.</p>`;
+  }
+  const rows = recs.map(r => `<tr><td><b>Week ${r.n}</b><br><span class="note">${esc(r.w.label)}${r.w.id === S.cur ? ' (current)' : ''}${r.first ? '<br>from ' + esc(r.first) : ''}</span></td>
+    <td>${esc(r.w.words.map(x => x.w).join(', '))}</td>
+    <td>${r.sits.length ? 'Best ' + r.best.score + ' of ' + r.best.of + '<br><span class="note">' + r.sits.length + (r.sits.length === 1 ? ' sitting' : ' sittings') + ', ' + r.days + (r.days === 1 ? ' day' : ' days') + '</span>' : (r.days ? 'no full sitting' : '')}</td>
+    <td>${r.aids}</td><td>${r.mn ? 'Yes, ' + r.mn + ' of ' + r.w.words.length : 'No'}</td>
+    <td>${r.w.score == null ? 'not entered' : r.w.score + ' of ' + r.w.words.length}</td></tr>`).join('');
+  return sw + `<table><tr><th>Week</th><th>Bella's test words</th><th>Right first time in the app</th><th>Times a spelling aid was used</th><th>Mnemonics made</th><th>School score</th></tr>${rows}</table>
+    <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added.</p>`;
+}
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['tools', 'Tools'], ['progress', 'Progress'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['story', 'Story'], ['tools', 'Tools'], ['progress', 'Progress'], ['record', 'Record'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -2486,7 +2523,7 @@ function adult() {
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
 
-    </div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
+    </div><div class="tabpane" data-tab="record"><h2>Record of every week</h2>${recordPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
@@ -2508,6 +2545,7 @@ function adult() {
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
+  document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
