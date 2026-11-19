@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.104'; // bump with every release
+const APP_VER = '3.105'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2425,6 +2425,19 @@ function recordRows() {
   const rows = S.weeks.map(weekRecord).map(r => [r.n, r.w.label, r.first, r.w.words.map(x => x.w).join(' '), r.best ? r.best.score : '', r.best ? r.best.of : '', r.sits.length, r.days, r.aids, r.mn, r.w.score == null ? '' : r.w.score, r.w.words.length]);
   return [head].concat(rows);
 }
+function saveCsv(rows, base) {
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = base + '-' + today() + '.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+// The Details page as rows: this week word by word, then every sitting.
+function detailRows() {
+  const wk = curWeek(), own = owned(), rows = [['Word by word: ' + wk.label], ['Word', 'Tries', 'Right first time', 'Hints', 'What she typed when wrong', 'Owned']];
+  wk.words.forEach(x => { const logs = S.log.filter(l => l.wk === wk.id && l.w === x.w && !l.redo); rows.push([x.w, logs.length, logs.filter(l => l.ok && !l.hints).length, logs.reduce((a, l) => a + (l.hints || 0), 0), logs.filter(l => !l.ok).map(l => l.typed).join(' / '), own.includes(x.w) ? 'yes' : '']); });
+  rows.push([], ['Sittings'], ['Week', 'Day', 'Right first time', 'Out of', 'After']);
+  (S.sittings || []).forEach(x => { const i = S.weeks.findIndex(w => w.id === x.wk); rows.push([i < 0 ? '' : i + 1, x.d, x.score, x.of, x.kind === 'story' ? 'the story' : 'revision']); });
+  return rows;
+}
 function downloadRecord(kind) {
   const rows = recordRows(); let blob, name = 'bellaspeller-record-' + today();
   if (kind === 'csv') {
@@ -2460,7 +2473,7 @@ function startAgainDialog() {
 }
 function recordPane() {
   const recs = S.weeks.map(weekRecord);
-  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button><button class="btn small" id="recCsv">Save as CSV</button><button class="btn small" id="recXls">Save as Excel</button></div><div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="recReset">Start again from scratch…</button></div><p class="note">The saved file has one row per week with every figure, ready to open in Excel or Google Sheets.</p>`;
+  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button><button class="btn small" id="recCsv">Save as CSV</button><button class="btn small" id="recXls">Save as Excel</button></div><div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="recReset">Start again from scratch…</button><button class="btn small" id="restore2">Load a backup file</button></div><p class="note">If you clear by mistake, "Load a backup file" puts back everything from a backup you saved earlier.</p><p class="note">The saved file has one row per week with every figure, ready to open in Excel or Google Sheets.</p>`;
   if (recView === 'graph') {
     const pts = recs.filter(r => r.app != null || r.sch != null);
     if (!pts.length) return sw + '<p class="note">Nothing to draw yet. The graph fills in as Bella finishes sittings and you enter the school scores.</p>';
@@ -2561,7 +2574,7 @@ function adult() {
     ${toolsProgress()}
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
-    <div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="recReset2">Start again from scratch…</button></div>
+    <div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="detCsv">Save as CSV</button><button class="btn small" id="recReset2">Start again from scratch…</button><button class="btn small" id="restore3">Load a backup file</button></div>
 
     </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
@@ -2586,7 +2599,7 @@ function adult() {
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
   document.querySelectorAll('.rsc').forEach(i => { i.onchange = () => { const w = S.weeks.find(x => x.id === i.dataset.w); if (!w) return; const v = i.value.trim(); w.score = v === '' ? null : Math.max(0, Math.min(w.words.length, parseInt(v, 10) || 0)); save(); adultTab = 'record'; adult(); }; });
-  on('#recReset', () => startAgainDialog()); on('#recReset2', () => startAgainDialog());
+  on('#recReset', () => startAgainDialog()); on('#recReset2', () => startAgainDialog()); on('#detCsv', () => saveCsv(detailRows(), 'bellaspeller-details')); on('#restore2', () => $('#restoreFile').click()); on('#restore3', () => $('#restoreFile').click());
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
