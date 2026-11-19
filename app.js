@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.118'; // bump with every release
+const APP_VER = '3.119'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2509,8 +2509,34 @@ function helpPane() {
         <li><b>Make changes with care.</b> The app is written to be edited by an AI coding assistant such as Claude Code working in the folder. Keep the handover notes up to date, test on the real tablet, and follow the release rule above.</li>
       </ol>`)}`)}`;
 }
+// ---------- Bug reports and change requests, kept on the device for whoever maintains the app ----------
+function requestsText(openOnly) {
+  const list = (S.reqs || []).filter(q => !openOnly || !q.done);
+  const block = (kind, head) => {
+    const rows = list.filter(q => q.kind === kind);
+    return head + '\n' + (rows.length ? rows.map((q, i) => (i + 1) + '. [' + (q.done ? 'done' : 'open') + '] ' + q.d + ', v' + q.ver + ', screen ' + q.scr + (q.wk ? ', ' + q.wk : '') + '\n   ' + q.text.replace(/\n/g, '\n   ')).join('\n') : '   none') + '\n';
+  };
+  return 'BellaSpeller v' + APP_VER + ', ' + today() + '\n\n' + block('bug', 'BUG REPORTS') + '\n' + block('change', 'CHANGE REQUESTS');
+}
+function requestsPane() {
+  const all = S.reqs || [];
+  const panel = (kind, title, hint, ph) => {
+    const rows = all.filter(q => q.kind === kind);
+    return `<div class="reqpanel"><h3>${title}</h3><p class="note">${hint}</p>
+      <textarea class="reqbox" id="rq-${kind}" rows="4" placeholder="${ph}"></textarea>
+      <div><button class="btn small reqadd" data-k="${kind}">Add</button></div>
+      ${rows.length ? rows.slice().reverse().map(q => `<div class="reqitem${q.done ? ' done' : ''}"><div class="reqmeta">${esc(q.d)} · v${esc(q.ver)} · screen ${esc(q.scr)}${q.wk ? ' · ' + esc(q.wk) : ''}</div><div class="reqtext">${esc(q.text)}</div>
+        <div><button class="btn small reqdone" data-id="${q.id}">${q.done ? 'Mark as open' : 'Mark as done'}</button><button class="btn small reqdel" data-id="${q.id}">Delete</button></div></div>`).join('') : '<p class="note">Nothing here yet.</p>'}
+    </div>`;
+  };
+  return `<h2>Bug reports and change requests</h2>
+    <p class="note">Anyone can note a problem or an idea here. Each note is saved on this device with the date, the app version and the screen size, which helps with finding the cause. To pass them on, use <b>Copy the open ones</b> or <b>Save as a text file</b> below and send the text to whoever looks after the app.</p>
+    <div class="reqgrid">${panel('bug', 'Bug reports', 'Something that went wrong or did not work as expected. Say which screen it was on and what happened.', 'What went wrong?')}${panel('change', 'Change requests', 'Something you would like the app to do differently or something new.', 'What would you like changed or added?')}</div>
+    <div class="row" style="justify-content:flex-start"><button class="btn small" id="reqCopy">Copy the open ones</button><button class="btn small" id="reqSave">Save as a text file</button></div>
+    <p class="note" id="reqMsg"></p>`;
+}
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['tools', "This Week's Spelling Tips"], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings'], ['help', 'Help']];
+const ADULT_TABS = [['words', 'This week'], ['tools', "This Week's Spelling Tips"], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings'], ['requests', 'Bugs and changes'], ['help', 'Help']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -2562,7 +2588,7 @@ function adult() {
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
     <div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="detCsv">Save as CSV</button><button class="btn small" id="recReset2">Start again from scratch…</button><button class="btn small" id="restore3">Load a backup file</button></div>
 
-    </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="help">${helpPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
+    </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="requests">${requestsPane()}</div><div class="tabpane" data-tab="help">${helpPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (saved as soon as you leave the box; it appears on the home screen)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
@@ -2602,6 +2628,15 @@ function adult() {
   showTab(adultTab);
   document.querySelectorAll('.rsc').forEach(i => { i.onchange = () => { const w = S.weeks.find(x => x.id === i.dataset.w); if (!w) return; const v = i.value.trim(); w.score = v === '' ? null : Math.max(0, Math.min(w.words.length, parseInt(v, 10) || 0)); save(); adultTab = 'record'; adult(); }; });
   on('#recReset', () => startAgainDialog()); on('#recReset2', () => startAgainDialog()); on('#detCsv', () => saveCsv(detailRows(), 'bellaspeller-details')); on('#restore2', () => $('#restoreFile').click()); on('#restore3', () => $('#restoreFile').click());
+  document.querySelectorAll('.reqadd').forEach(b => { b.onclick = () => {
+    const k = b.dataset.k, box = $('#rq-' + k), t = box ? box.value.trim() : ''; if (!t) { box && box.focus(); return; }
+    S.reqs = S.reqs || []; S.reqs.push({ id: 'q' + Date.now(), kind: k, text: t.slice(0, 2000), d: today(), ver: APP_VER, scr: innerWidth + 'x' + innerHeight, wk: curWeek().label || '', done: false });
+    save(); adultTab = 'requests'; adult();
+  }; });
+  document.querySelectorAll('.reqdone').forEach(b => { b.onclick = () => { const q = (S.reqs || []).find(x => x.id === b.dataset.id); if (q) { q.done = !q.done; save(); adultTab = 'requests'; adult(); } }; });
+  document.querySelectorAll('.reqdel').forEach(b => { b.onclick = () => { if (!confirm('Delete this note?')) return; S.reqs = (S.reqs || []).filter(x => x.id !== b.dataset.id); save(); adultTab = 'requests'; adult(); }; });
+  on('#reqCopy', async () => { const t = requestsText(true), m = $('#reqMsg'); try { await navigator.clipboard.writeText(t); m.textContent = 'Copied. Paste it into a message.'; } catch (e) { m.textContent = 'Could not copy on this device. Use Save as a text file instead.'; } });
+  on('#reqSave', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([requestsText(false)], { type: 'text/plain;charset=utf-8' })); a.download = 'bellaspeller-requests-' + today() + '.txt'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
