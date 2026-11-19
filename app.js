@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.91'; // bump with every release
+const APP_VER = '3.92'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2481,8 +2481,8 @@ function adult() {
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
-    <div class="row"><button id="qrShow" class="btn small">Show a QR code for another device</button><button id="qrScan" class="btn small">Scan a QR code</button></div>
-    <p class="note">To set up Bella's tablet: show the QR code here, then on the tablet press Scan a QR code and point it at this screen.</p>
+    <div class="row"><button id="qrShow" class="btn small">Show the key as a QR code</button><button id="qrWeek" class="btn small">Show this week's words as a QR code</button><button id="qrScan" class="btn small">Scan a QR code</button></div>
+    <p class="note">To set up Bella's tablet: show a QR code here (the key, then this week's words), and on the tablet press Scan a QR code and point it at this screen each time.</p>
     <label>Family rules for the stories (added to every story request)</label><textarea id="famRules" style="min-height:110px">${esc(S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules)}</textarea>
     <label>AI model for writing stories</label>${modelSelect('orModel')}
     <label>Or type another model name (optional)</label><input id="orModelOther" type="text" autocomplete="off" placeholder="for example openai/gpt-6.1-sol">
@@ -2495,7 +2495,7 @@ function adult() {
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
-  on('#qrShow', () => showKeyQr()); on('#qrScan', () => scanKeyQr());
+  on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
   if ($('#picsOn')) $('#picsOn').onchange = e => { S.pics = e.target.checked; save(); };
@@ -2650,6 +2650,51 @@ function qrOverlay(title, bodyHtml, onClose) {
   ov.querySelector('#qr-x').onclick = close;
   return { ov, close };
 }
+const WEEK_PREFIX = 'BELLASPELLER-WEEK-1:';
+const b64enc = buf => { let s0 = ''; new Uint8Array(buf).forEach(c => { s0 += String.fromCharCode(c); }); return btoa(s0); };
+const b64dec = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+// Squeezes text smaller, where the browser can, so more fits in one QR code. 'Z' marks squeezed text, 'R' plain text.
+async function packText(txt) {
+  if ('CompressionStream' in window) { const cs = new CompressionStream('deflate-raw'), w = cs.writable.getWriter(); w.write(new TextEncoder().encode(txt)); w.close(); return 'Z' + b64enc(await new Response(cs.readable).arrayBuffer()); }
+  return 'R' + btoa(unescape(encodeURIComponent(txt)));
+}
+async function unpackText(p) {
+  if (p[0] === 'Z') { const ds = new DecompressionStream('deflate-raw'), w = ds.writable.getWriter(); w.write(b64dec(p.slice(1))); w.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer()); }
+  return decodeURIComponent(escape(atob(p.slice(1))));
+}
+// This week's words, with their tips and mnemonics, as one small QR code. The key is not in it.
+async function showWeekQr() {
+  const wk = curWeek();
+  try { await loadScriptOnce('qrgen.js'); } catch (e) { alert('Could not load the QR code maker. Check the internet connection and try again.'); return; }
+  const slim = lvl => ({ v: 1, n: S.name || undefined, g: S.girls, l: wk.label, r: wk.rule, w: wk.words.map(x => { const o = { w: x.w }; if (x.red) o.d = 1; if (x.say) o.s = x.say; if (lvl < 2 && x.mnem) o.m = x.mnem; if (lvl < 1 && x.mnemSay) o.y = x.mnemSay; if (lvl < 2 && x.mnemonic) o.z = x.mnemonic; if (lvl < 1 && x.mnemWords) o.q = x.mnemWords; return o; }) });
+  let text = '', lvl = 0;
+  for (; lvl <= 2; lvl++) { text = WEEK_PREFIX + await packText(JSON.stringify(slim(lvl))); if (text.length <= 2400) break; }
+  const qr = qrcode(0, 'L'); qr.addData(text); qr.make();
+  const n = qr.getModuleCount(), cell = Math.max(3, Math.floor(Math.min(innerWidth - 60, innerHeight - 240, 560) / (n + 8))), size = (n + 8) * cell;
+  const { ov, close } = qrOverlay('This week\'s words', `<p class="note">On the other device, open Grown-ups, Settings, and press <b>Scan a QR code</b>, then hold it up to this screen. It adds this week's words${lvl > 0 ? ' (some tips were left out to fit)' : ''}. Turn the screen brightness up and keep the tablet steady.</p><div style="display:flex;justify-content:center"><canvas id="qrCanvas" width="${size}" height="${size}" style="max-width:100%;height:auto;background:#fff;border-radius:12px"></canvas></div>`);
+  const c = ov.querySelector('#qrCanvas'), x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); x.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (qr.isDark(r, q)) x.fillRect((q + 4) * cell, (r + 4) * cell, cell, cell);
+}
+// Adds a week from a scanned code. The words are checked before anything is saved.
+async function addWeekFromQr(packed) {
+  let o; try { o = JSON.parse(await unpackText(packed)); } catch (e) { return false; }
+  if (!o || o.v !== 1 || !Array.isArray(o.w) || !o.w.length || o.w.length > 60) return false;
+  const txt = (t, n) => typeof t === 'string' ? t.slice(0, n) : undefined;
+  const words = [];
+  for (const x of o.w) {
+    if (!x || typeof x.w !== 'string' || !/^[a-z' -]{1,30}$/.test(x.w)) return false;
+    const w = { w: x.w };
+    if (x.d) w.red = true; if (x.s) w.say = txt(x.s, 60); if (x.m) { w.mnem = txt(x.m, 200); w.mnemBy = 'ai'; } if (x.y) w.mnemSay = txt(x.y, 300);
+    if (x.z) w.mnemonic = txt(x.z, 200); if (Array.isArray(x.q) && x.q.length === x.w.length && x.q.every((t, i) => typeof t === 'string' && t[0] === x.w[i])) w.mnemWords = x.q.map(t => t.slice(0, 24));
+    words.push(w);
+  }
+  const id = 'w' + Date.now();
+  S.weeks.push({ id, label: txt(o.l, 80) || 'Words from another device', rule: txt(o.r, 200) || '', words, score: null, ep: null });
+  S.cur = id;
+  if (typeof o.n === 'string' && o.n && !S.name) S.name = o.n.slice(0, 20);
+  save(); return true;
+}
 // Shows the key as a QR code, for another device to scan. Closes itself after two minutes.
 async function showKeyQr() {
   const key = S.orKey || S.aiKey;
@@ -2677,13 +2722,16 @@ async function scanKeyQr() {
   const det = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
   if (!det) { try { await loadScriptOnce('jsqr.js'); } catch (e) { msg('Could not load the QR reader.'); done(); return; } }
   const wk = ov.querySelector('#qrWork'), wx = wk.getContext('2d', { willReadFrequently: true });
-  const accept = text => {
-    if (typeof text !== 'string' || !text.startsWith(QR_PREFIX)) return false;
+  // Returns what the code was ('key' or 'week'), or false. Nothing is saved unless the contents check out.
+  const accept = async text => {
+    if (typeof text !== 'string') return false;
+    if (text.startsWith(WEEK_PREFIX)) return (await addWeekFromQr(text.slice(WEEK_PREFIX.length))) ? 'week' : false;
+    if (!text.startsWith(QR_PREFIX)) return false;
     let o; try { o = JSON.parse(text.slice(QR_PREFIX.length)); } catch (e) { return false; }
     const ok = t => typeof t === 'string' && /^[A-Za-z0-9_.:\/-]{8,300}$/.test(t);
     if (!o || !(ok(o.k) || ok(o.a))) return false;
     if (ok(o.k)) S.orKey = o.k; if (ok(o.a)) S.aiKey = o.a; if (typeof o.b === 'string' && /^https:\/\/[A-Za-z0-9.\/_-]{4,200}$/.test(o.b)) S.aiBase = o.b;
-    save(); return true;
+    save(); return 'key';
   };
   const tick = async () => {
     if (stop) return;
@@ -2693,7 +2741,8 @@ async function scanKeyQr() {
         if (det) { const r = await det.detect(v); if (r && r[0]) text = r[0].rawValue; }
         else { wk.width = v.videoWidth; wk.height = v.videoHeight; wx.drawImage(v, 0, 0); const im = wx.getImageData(0, 0, wk.width, wk.height), r = jsQR(im.data, im.width, im.height); if (r) text = r.data; }
         if (text) {
-          if (accept(text)) { done(); msg('Done. The AI key is now saved on this device.'); setTimeout(() => { close(); adult(); }, 1500); return; }
+          const got = await accept(text);
+          if (got) { done(); msg(got === 'week' ? 'Done. The words have been added and are this week\'s words.' : 'Done. The AI key is now saved on this device.'); setTimeout(() => { close(); adult(); }, 1800); return; }
           msg('That QR code is not from BellaSpeller. Try again.');
         }
       }
