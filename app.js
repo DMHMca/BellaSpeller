@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.107'; // bump with every release
+const APP_VER = '3.108'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2546,6 +2546,7 @@ function adult() {
     ${aiKey() ? `${epOf(wk) ? '<button id="readStory" class="btn">Read this story</button> ' : ''}<button id="draft" class="btn">${epOf(wk) ? 'Write a different story' : 'Write the story'}</button>` : '<p class="note">To have stories written by AI, add an OpenRouter key under Settings, at the bottom of this page.</p>'}
     <div id="draftOut"></div>
 
+    <details class="adv"><summary>Advanced and testing (not needed day to day)</summary>
     ${aiKey() ? `<h2>Compare models</h2><p class="note">Writes this week's story with each model so you can choose on evidence. One attempt each, so the results show how often each gets it right first time.</p>
     <input id="cm1" type="text" value="anthropic/claude-sonnet-5.5"><input id="cm2" type="text" value="openai/gpt-6.1-sol" style="margin-top:8px"><input id="cm3" type="text" value="google/gemini-4-hydrogen" style="margin-top:8px">
     <button id="compare" class="btn">Write with all three</button><div id="cmpOut"></div>` : ''}
@@ -2565,7 +2566,7 @@ function adult() {
     <div id="hwWrap" class="hwwrap"><canvas id="hwGuide"></canvas><canvas id="hwInk"></canvas></div>
     <div><button id="hwClear" class="btn small">Clear</button> <button id="hwRead" class="btn small">Read it</button> <button id="hwCopy" class="btn small">Copy the results</button></div>
     <p id="hwOut" class="note"></p><div id="hwLog"></div>
-    </div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
+    </details></div><div class="tabpane" data-tab="progress"><h2>Progress</h2>
     <p>Words she owns (right first time, without a hint, on two different days): <b>${own.length}</b>.</p>
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>Revision sittings</h2>
@@ -2577,7 +2578,7 @@ function adult() {
     <div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="detCsv">Save as CSV</button><button class="btn small" id="recReset2">Start again from scratch…</button><button class="btn small" id="restore3">Load a backup file</button></div>
 
     </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
-    <label>Her first name (stays on this device)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
+    <label>Her first name (saved as soon as you leave the box; it appears on the home screen)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
     <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${effVp() === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
@@ -2603,7 +2604,8 @@ function adult() {
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
-  on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
+  if ($('#name')) $('#name').onchange = () => { S.name = $('#name').value.trim() || 'Bella'; save(); };
+  on('#saveName', () => { S.name = $('#name').value.trim() || 'Bella'; S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
   if ($('#picsOn')) $('#picsOn').onchange = e => { S.pics = e.target.checked; save(); };
   if ($('#imgSel')) $('#imgSel').onchange = e => { S.imgModel = e.target.value; save(); };

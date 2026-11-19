@@ -621,3 +621,6 @@ body.onmn #app { max-width: 1100px; }
 .scrollwrap .scrollpage { padding-top: 0; padding-bottom: 0; border-top: 14px solid var(--paper); border-bottom: 14px solid var(--paper); }
 
 .adult .btn.small.recv.on { background: #2a1f4d; color: #fff; border-color: #2a1f4d; }
+
+.adult details.adv { margin-top: 26px; border-top: 2px solid var(--paper-edge); padding-top: 10px; }
+.adult details.adv summary { cursor: pointer; font-weight: 700; padding: 10px 0; color: var(--ink-soft); }
