@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.100'; // bump with every release
+const APP_VER = '3.101'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2419,9 +2419,27 @@ function weekRecord(w, i) {
   const pct = (a, b) => (b ? Math.round(100 * a / b) : null);
   return { n: i + 1, w, sits, best, aids, days: days.size, first, mn, app: best ? pct(best.score, best.of) : null, sch: w.score == null ? null : pct(w.score, w.words.length) };
 }
+// The record as plain rows, for a spreadsheet. Same figures as the table on screen.
+function recordRows() {
+  const head = ['Week', 'Label', 'First used', 'Test words', 'Best right first time', 'Out of', 'Sittings', 'Days used', 'Times a spelling aid was used', 'Words with mnemonics', 'School score', 'Out of'];
+  const rows = S.weeks.map(weekRecord).map(r => [r.n, r.w.label, r.first, r.w.words.map(x => x.w).join(' '), r.best ? r.best.score : '', r.best ? r.best.of : '', r.sits.length, r.days, r.aids, r.mn, r.w.score == null ? '' : r.w.score, r.w.words.length]);
+  return [head].concat(rows);
+}
+function downloadRecord(kind) {
+  const rows = recordRows(); let blob, name = 'bellaspeller-record-' + today();
+  if (kind === 'csv') {
+    const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+    blob = new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }); name += '.csv';
+  } else {
+    const t = '<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1">' + rows.map((r, i) => '<tr>' + r.map(v => (i ? '<td>' : '<th>') + esc(String(v)) + (i ? '</td>' : '</th>')).join('') + '</tr>').join('') + '</table></body></html>';
+    blob = new Blob([t], { type: 'application/vnd.ms-excel' }); name += '.xls';
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
 function recordPane() {
   const recs = S.weeks.map(weekRecord);
-  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button></div>`;
+  const sw = `<div class="row" style="justify-content:flex-start"><button class="btn small recv${recView === 'table' ? ' on' : ''}" data-v="table">Week by week</button><button class="btn small recv${recView === 'graph' ? ' on' : ''}" data-v="graph">Graph</button><button class="btn small" id="recCsv">Save as CSV</button><button class="btn small" id="recXls">Save as Excel</button></div><p class="note">The saved file has one row per week with every figure, ready to open in Excel or Google Sheets.</p>`;
   if (recView === 'graph') {
     const pts = recs.filter(r => r.app != null || r.sch != null);
     if (!pts.length) return sw + '<p class="note">Nothing to draw yet. The graph fills in as Bella finishes sittings and you enter the school scores.</p>';
@@ -2545,6 +2563,7 @@ function adult() {
   const showTab = t => { adultTab = t; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('.tabpane').forEach(d => { d.hidden = d.dataset.tab !== t; }); };
   document.querySelectorAll('.tab').forEach(b => { b.onclick = () => showTab(b.dataset.t); });
   showTab(adultTab);
+  on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
