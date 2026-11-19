@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.111'; // bump with every release
+const APP_VER = '3.112'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -542,18 +542,12 @@ function misspellings(x, weekWords) {
 }
 function toolsPane(wk) {
   const rows = wk.words.map((x, i) => `<tr><td><b>${esc(x.w)}</b></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="hard" value="${esc(x.hard || '')}" placeholder="hard letters" autocomplete="off"></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="parts" value="${esc(x.parts || '')}" placeholder="side|ways" autocomplete="off"></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="say" value="${esc(x.say || '')}" placeholder="w-hen" autocomplete="off"></td>
+    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td>
     <td>${(x.family || []).map(f => `<label class="famchk"><input type="checkbox" class="fam" data-i="${i}" data-f="${esc(f)}" checked> ${esc(f)}</label>`).join(' ') || '<span class="note">none</span>'}</td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td>
-    <td><input type="text" class="tf" data-i="${i}" data-f="mnem" value="${esc(x.mnem || '')}" placeholder="a spelling tip" autocomplete="off">${x.mnemBy === 'ai' ? '<span class="note">suggested by the AI</span>' : ''}</td></tr>`).join('');
-  return `<h2>Support tools</h2>
-    <p class="note">Bella chooses which tools to use, with the Tools button on the revision pages. Each use is recorded, so the Progress tab can show what she tries. This page sets what each tool shows for each word. The evidence for every tool is a bet, not a finding.</p>
-    ${TOOLS.map(t => `<div class="wl"><div><b>${esc(t.label)}.</b> <span class="note">${esc(t.note)}</span></div></div>`).join('')}
-    <h2>Tool details for this week's words</h2>
-    <p class="note">What the tools show for each word. Leave a box empty to show nothing for that word. Common wrong spellings are used by Pick the right spelling, after her own past mistakes.</p>
-    <table><tr><th>Word</th><th>Hard part</th><th>Word parts</th><th>Spelling voice</th><th>Same-pattern words (untick to remove)</th><th>Common wrong spellings</th><th>Spelling tip</th></tr>${rows}</table>
+    <td><input type="text" class="tf" data-i="${i}" data-f="wrong" value="${esc((x.wrong || []).join(', '))}" placeholder="freind, frend" autocomplete="off"></td></tr>`).join('');
+  return `<h2>Details for this week's words</h2>
+    <p class="note">What the app uses for each word. The spelling tip is what Bella hears and sees under Spelling tips. The same-pattern words come into the spelling rule help (untick one to remove it). The common wrong spellings are used as the wrong choices in multiple choice. Leave a box empty to show nothing.</p>
+    <table><tr><th>Word</th><th>Spelling tip</th><th>Same-pattern words</th><th>Common wrong spellings</th></tr>${rows}</table>
     <div><button id="tsave" class="btn">Save these</button> ${aiKey() ? '<button id="tsuggest" class="btn small">Fill empty boxes with AI suggestions</button>' : ''}</div>
     <p class="note">AI suggestions are only added to empty boxes, and they are worth a glance before Bella sees them.</p>`;
 }
@@ -2409,7 +2403,7 @@ function recordPane() {
     <p class="note">"Right first time" counts a word only when she wrote it right first go, without a hint or other help. Weeks are numbered in the order they were added. Type or change a school score in its box at any time: it is saved as soon as you leave the box.</p>`;
 }
 let adultTab = 'words', adultFlash = '';
-const ADULT_TABS = [['words', 'This week'], ['tools', 'Tools'], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings']];
+const ADULT_TABS = [['words', 'This week'], ['tools', 'Word details'], ['record', 'Progress'], ['progress', 'Details'], ['settings', 'Settings']];
 function adult() {
   const wk = curWeek(), own = owned();
   const rows = S.weeks.map(w => {
@@ -2457,8 +2451,6 @@ function adult() {
     <table><tr><th>Week</th><th>School score</th><th>Days used</th><th>Right first time, no hint</th><th>Story</th></tr>${rows}</table>
     <h2>Revision sittings</h2>
     ${(S.sittings || []).filter(x => x.wk === wk.id).length ? `<table><tr><th>Day</th><th>Right first time</th><th>After</th></tr>${(S.sittings || []).filter(x => x.wk === wk.id).map(x => `<tr><td>${esc(x.d)}</td><td>${x.score} out of ${x.of}</td><td>${x.kind === 'story' ? 'the story' : 'revision'}</td></tr>`).join('')}</table>` : '<p class="note">None yet. The score counts a word only when she writes it right first time, without Remind me or Next letter.</p>'}
-    <h2>Tools Bella has tried</h2>
-    ${toolsProgress()}
     <h2>This week, word by word</h2>
     <table><tr><th>Word</th><th>Tries</th><th>Right first time</th><th>Hints</th><th>What she typed when wrong</th><th>Owned</th></tr>${wordRows}</table>
     <div class="row" style="justify-content:flex-start;margin-top:18px"><button class="btn small" id="detCsv">Save as CSV</button><button class="btn small" id="recReset2">Start again from scratch…</button><button class="btn small" id="restore3">Load a backup file</button></div>
