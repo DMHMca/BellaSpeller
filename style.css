@@ -670,3 +670,11 @@ body.onstory #vlabel { display: none; }
 /* A narrower reading box, centred, with its scroll bar and the buttons beside it. */
 body.onstory .scrollwrap { max-width: 1080px; margin: 0 auto; }
 body.onstory .sidecol { justify-content: space-between; }
+
+/* Story page: yellow caption across the top, a narrower and deeper box, the two buttons underneath. */
+body.onstory .storyscreen { align-items: center; gap: 10px; }
+body.onstory .scrollwrap { max-width: 740px; width: 100%; margin: 0 auto; }
+body.onstory .storycap2 { margin: 0; color: #ffd54a; font-weight: 800; font-size: clamp(18px, 1.7vw, 24px); text-align: center; text-shadow: 0 0 8px rgba(24, 20, 80, .95); }
+body.onstory .storybtns { display: flex; justify-content: space-between; align-items: center; gap: 14px; width: min(740px, 100%); }
+body.onstory .storybtns .chip { font-size: 20px; padding: 12px 22px; }
+body.onstory .storybtns #next { padding: 12px 28px; font-size: 22px; }
