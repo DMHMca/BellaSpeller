@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.120'; // bump with every release
+const APP_VER = '3.123'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -922,7 +922,7 @@ function h(html, opts) {
   keyHandler = null;
   const top = opts && opts.noTop ? '' : `<div class="top"><div class="lhs"><button id="goHome" class="iconbtn" aria-label="Home">${ico('home')}<span>Home</span></button></div>${testMode ? '' : sndBtn}<span class="prog">${esc(prog)}</span></div>`;
   $('#app').innerHTML = top + html;
-  { const cl = document.body.classList; cl.toggle('onshelf', html.includes('shelfscreen')); cl.toggle('onwrite', html.includes('writescreen')); cl.toggle('onmn', html.includes('mnscreen')); cl.remove('inkmode'); }
+  { const cl = document.body.classList; cl.toggle('onshelf', html.includes('shelfscreen')); cl.toggle('onwrite', html.includes('writescreen')); cl.toggle('onmn', html.includes('mnscreen')); cl.toggle('onstory', html.includes('storyscreen')); cl.remove('inkmode'); }
   const g = $('#goHome'); if (g) g.onclick = () => { hush(); home(); };
   const ts = $('#topSnd'); if (ts) { ts.onclick = toggleSound; paintSound(); }
   window.scrollTo(0, 0);
@@ -979,8 +979,7 @@ const chunkText = c => c.map(q => q.t).join(' ');
 function storyScroll(items) {
   const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen storyscreen"><div class="readrow"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="scrollbtns"><button id="sup" class="scrollbtn" aria-label="Scroll up">${ico('next')}</button><button id="sdown" class="scrollbtn" aria-label="Scroll down">${ico('next')}</button></div></div>
-      <div class="row"><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div>`);
+    h(`<div class="screen storyscreen"><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="sidecol"><button id="sup" class="scrollbtn" aria-label="Scroll up">${ico('next')}</button><div class="sidemid"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><button id="sdown" class="scrollbtn" aria-label="Scroll down">${ico('next')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div></div>`);
     // The window is always a whole number of lines tall, and it only ever rests on a whole line, so a word is never cut in half.
     const lineH = () => { const sp = $('#sp'); return sp ? (parseFloat(getComputedStyle(sp).lineHeight) || 40) : 40; };
     let winH = 0;
@@ -992,7 +991,7 @@ function storyScroll(items) {
       const sp = $('#sp'); if (!sp) return;
       const cs = getComputedStyle(sp), b = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth), lh = lineH();
       const row = $('#next') && $('#next').parentElement, app = $('#app');
-      const reserve = (row ? row.offsetHeight : 70) + 16 + (app ? parseFloat(getComputedStyle(app).paddingBottom) || 0 : 0) + 10;
+      const reserve = (app ? parseFloat(getComputedStyle(app).paddingBottom) || 0 : 0) + 10;
       const n = Math.max(3, Math.floor((innerHeight - sp.getBoundingClientRect().top - reserve - b) / lh));
       winH = n * lh; sp.style.height = (winH + b) + 'px';
       sp.style.paddingBottom = '0px'; const ch = sp.scrollHeight; sp.style.paddingBottom = (Math.ceil(ch / lh - 0.001) * lh - ch) + 'px';

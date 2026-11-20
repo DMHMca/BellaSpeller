@@ -614,7 +614,7 @@ body.onmn #app { max-width: 1100px; }
   .writescreen .cuepic, .writescreen .cue { display: none; }
   .homebar { gap: 10px; }
   .homelogo { max-width: 110px; }
-  body.onwrite #vlabel, body.inkmode #vlabel { display: none; }
+  body.onwrite #vlabel, body.inkmode #vlabel, body.onstory #vlabel { display: none; }
 }
 
 /* The story window shows only whole lines: no top or bottom padding inside the scrolling part (the border takes its place), and the height is set to a whole number of lines by the app. */
@@ -646,3 +646,20 @@ body.onmn #app { max-width: 1100px; }
 .adult .reqitem.done .reqtext { text-decoration: line-through; opacity: .6; }
 .adult .reqmeta { font-size: 14px; color: var(--ink-soft); }
 .adult .reqtext { white-space: pre-wrap; margin: 4px 0 8px; }
+
+/* The story screen: the reading box takes the whole screen, with every button in a column beside it. */
+body.onstory #app { max-width: 1400px; padding: 8px 18px 10px; }
+body.onstory .storyscreen { gap: 0; align-items: stretch; }
+body.onstory .scrollwrap { gap: 14px; }
+body.onstory .scrollpage { font-size: clamp(19px, 2.2vw, 26px); line-height: 1.55; padding-left: clamp(18px, 2.4vw, 32px); padding-right: clamp(10px, 1.4vw, 18px); }
+.sidecol { display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; gap: 10px; width: clamp(150px, 15vw, 200px); flex: none; }
+.sidecol .scrollbtn { width: 100%; height: 56px; }
+.sidecol .sidemid { display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: center; }
+.sidecol .sidemid .chip { justify-content: center; }
+.sidecol .storycap { font-size: 14px; line-height: 1.3; }
+.sidecol #next { width: 100%; padding: 14px 10px; font-size: 20px; justify-content: center; }
+
+#sup .ico { transform: rotate(-90deg); }
+#sdown .ico { transform: rotate(90deg); }
+
+body.onstory #vlabel { display: none; }
