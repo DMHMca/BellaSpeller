@@ -1,5 +1,6 @@
 /* BellaSpeller: night-sky sleepover. Story text lives on cream "pages"; instructions and controls live on the sky. */
 @font-face { font-family:'Atkinson'; src:url(fonts/atkinson-400.woff2) format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:'Fredoka'; src:url(fonts/fredoka.woff2) format('woff2'); font-weight:300 700; font-style:normal; font-display:swap; }
 @font-face { font-family:'Pacifico'; src:url(fonts/pacifico.woff2) format('woff2'); font-weight:400; font-style:normal; font-display:swap; }
 @font-face { font-family:'Atkinson'; src:url(fonts/atkinson-700.woff2) format('woff2'); font-weight:700; font-style:normal; font-display:swap; }
 
@@ -372,7 +373,7 @@ mark { background:var(--mark); color:var(--ink); border-radius:10px; padding:1px
 .scenebar { text-align: center; font-size: clamp(30px, 5.2vh, 46px); letter-spacing: 8px; line-height: 1.1; }
 
 /* the silly lines: a different hand and colour from the heading */
-.waitline { font-weight: 700; color: #fff; }
+.waitline { font-family: 'Fredoka', 'Atkinson', 'Trebuchet MS', sans-serif; font-weight: 600; color: #ff8fc7; }
 
 /* pictures */
 .storypic { width: 100%; display: flex; justify-content: center; min-height: clamp(120px, 24vh, 240px); }

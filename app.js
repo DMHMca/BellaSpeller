@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.126'; // bump with every release
+const APP_VER = '3.127'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -196,7 +196,7 @@ function aiNeedKey() { if (!aiKey()) throw new Error('This device does not have 
 const aiFail = status => new Error(status === 401 || status === 403 ? 'The AI key on this device was refused. A grown-up should check it under Grown-ups, then Settings.' : 'The AI service answered ' + status + '. Please try again.');
 async function askAI(wk, problems, model, extra) {
   const words = wk.words.map(x => x.w);
-  let ask = 'This week\'s spelling words: ' + words.join(', ') + '.';
+  let ask = 'This week\'s spelling words, in no particular order: ' + shuffle(words.slice()).join(', ') + '.\nUse them in whatever order suits the story best. They do not have to appear in the order given.';
   const plan = partPlan(words.length);
   ask += '\nWrite ' + plan.length + ' part' + (plan.length === 1 ? '' : 's') + ', with ' + plan.join(', ') + ' word paragraph' + (plan.length === 1 && plan[0] === 1 ? '' : 's') + ' in each (' + words.length + ' words in all).';
   ask += storyBrief(extra);

@@ -1,6 +1,6 @@
 // Always checks the server for a fresh copy (so updates arrive promptly); falls back to the saved copy when offline.
-const C = 'bellaspeller-v243';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'episodes.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'fonts/atkinson-400.woff2', 'fonts/atkinson-700.woff2', 'fonts/pacifico.woff2', 'qrgen.js', 'jsqr.js'];
+const C = 'bellaspeller-v244';
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'episodes.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'fonts/atkinson-400.woff2', 'fonts/atkinson-700.woff2', 'fonts/pacifico.woff2', 'fonts/fredoka.woff2', 'qrgen.js', 'jsqr.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(C).then(c => Promise.all(FILES.map(f =>
     fetch(new Request(f, { cache: 'reload' })).then(r => { if (r.ok) return c.put(f, r); }).catch(() => { })
