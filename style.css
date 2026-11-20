@@ -693,3 +693,14 @@ body.onstory .storybtns #next { padding: 12px 28px; font-size: 22px; }
 body.inkmode .writescreen .row { margin: 0; }
 
 body.inkmode .writescreen .helpbox:empty, body.inkmode .writescreen .surebox:empty, body.inkmode .writescreen #remindbox:empty { display: none; }
+
+/* Handwriting: the side buttons are parked in the bottom corners, so the middle of the screen is only the sentence, the word read back, the box and its three buttons. */
+body.inkmode .optrow { display: contents; }
+body.inkmode .optrow .btn { position: fixed; z-index: 40; font-size: 18px; padding: 10px 18px; min-height: 0; }
+body.inkmode .optrow #hear { left: 14px; bottom: 14px; }
+body.inkmode .optrow #helpfirst { left: 14px; bottom: 76px; }
+body.inkmode .optrow #remind { left: 14px; bottom: 138px; }
+body.inkmode .optrow #modesw { right: 14px; bottom: 14px; }
+body.inkmode .optrow #hint { right: 14px; bottom: 76px; }
+
+body.inkmode #vlabel, body.onwrite #vlabel { display: none; }
