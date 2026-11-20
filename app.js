@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.127'; // bump with every release
+const APP_VER = '3.128'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1138,7 +1138,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       <div id="slots" class="slots"></div>
       <div class="row"><button id="hear" class="btn small" aria-label="Hear it again">${ico('speaker')}<span>Hear it again</span></button><button id="modesw" class="btn small"></button>${remind ? `<button id="remind" class="btn small">${ico('bulb')}<span>Remind me</span></button>` : ''}${ask && wobj && !help ? `<button id="helpfirst" class="btn small">${ico('bulb')}<span>Help me first</span></button>` : ''}<button id="hint" class="btn small" style="display:${help === 'nextletter' ? '' : 'none'}">${ico('bulb')}<span>Next letter</span></button></div>
       <div id="wpanel" class="wpanel" style="display:none"><div id="wread" class="wread"></div><div id="wwrap" class="wwrap"><canvas id="wguide"></canvas><canvas id="wink"></canvas></div>
-        <div class="row"><button id="wclear" class="btn small">Clear</button><button id="wlines" class="btn small">Letter lines</button><button id="wdone" class="btn">Done ${ico('check')}</button></div></div>
+        <div class="row"><button id="wrub" class="btn small">Rub out</button><button id="wclear" class="btn clearbtn">Clear</button><button id="wdone" class="btn">Done ${ico('check')}</button></div></div>
       ${kbHtml()}</div>`);
     const draw = () => {
       $('#slots').innerHTML = typed ? [...typed].map(c => `<span class="slot">${esc(c)}</span>`).join('') : '<span class="slot empty">&nbsp;</span>';
@@ -1187,7 +1187,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     on('#remind', () => { reminded = true; $('#remindbox').innerHTML = `<div class="page small"><p class="story">${remind.html}</p></div>`; say(remind.spoken); });
     // ----- keyboard or writing: she (or a grown-up) chooses, and the choice is remembered -----
     const pre = { t: 0, n: 0, p: null }; let paintGuide = () => { };
-    let mode = S.input === 'write' ? 'write' : 'keyboard', inkReady = false, strokes = [], cur = null, penSeen = 0, W = 0, H = 0, ix = null;
+    let mode = S.input === 'write' ? 'write' : 'keyboard', inkReady = false, strokes = [], cur = null, penSeen = 0, W = 0, H = 0, ix = null, erasing = false;
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
@@ -1204,11 +1204,15 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
         if (!armed) return;
         if (e.pointerType === 'pen') penSeen = Date.now(); else if (e.pointerType === 'touch' && (Date.now() - penSeen < 600 || (cur && Date.now() - cur.pts[cur.pts.length - 1].t < 400) || e.width > 60 || e.height > 60)) return; // a palm, or a second contact; a stroke left open by a lost pen-up never blocks for long
         try { ink.setPointerCapture(e.pointerId); } catch (x) { }
-        const [x, y] = pos(e); cur = { id: e.pointerId, pts: [{ x, y, t: Date.now() }] }; strokes.push(cur);
+        const [x, y] = pos(e);
+        if (erasing) { cur = { id: e.pointerId, erase: true }; eraseAt(x, y); return; }
+        resetRead();
+        cur = { id: e.pointerId, pts: [{ x, y, t: Date.now() }] }; strokes.push(cur);
         ix.fillStyle = '#111'; ix.beginPath(); ix.arc(x, y, 2.5, 0, 7); ix.fill();
       };
       ink.onpointermove = e => {
         if (!cur || e.pointerId !== cur.id) return;
+        if (cur.erase) { const [ex, ey] = pos(e); eraseAt(ex, ey); return; }
         const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
         ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineJoin = 'round'; ix.lineWidth = 4;
         (evs.length ? evs : [e]).forEach(ev => {
@@ -1221,14 +1225,31 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       };
       // start reading as soon as the pen pauses, so the answer is usually ready by the time she presses Done
       ink.onpointerup = ink.onpointercancel = () => {
+        if (cur && cur.erase) { cur = null; clearTimeout(pre.t); pre.t = setTimeout(() => { if (!strokes.length || done) return; pre.n = strokes.length; pre.p = readHandwriting(strokes, ink, W, H); pre.p.catch(() => { }); }, 1500); return; }
         if (cur && cur.mid) { const l = cur.pts[cur.pts.length - 1]; ix.beginPath(); ix.moveTo(cur.mid.x, cur.mid.y); ix.lineTo(l.x, l.y); ix.stroke(); }
         cur = null; clearTimeout(pre.t);
         pre.t = setTimeout(() => { if (!strokes.length || done) return; const n = strokes.length; pre.n = n; pre.p = readHandwriting(strokes, ink, W, H); pre.p.catch(() => { }); }, 1500);
       };
       ink.oncontextmenu = e => e.preventDefault();
     };
+    // Rubbing out: any stroke the eraser touches is taken away, and what is left is drawn again.
+    const drawStroke = st => {
+      const p = st.pts; if (!p.length) return;
+      ix.fillStyle = '#111'; ix.strokeStyle = '#111'; ix.lineCap = 'round'; ix.lineJoin = 'round'; ix.lineWidth = 4;
+      ix.beginPath(); ix.arc(p[0].x, p[0].y, 2.5, 0, 7); ix.fill();
+      if (p.length < 2) return;
+      let m0 = { x: p[0].x, y: p[0].y };
+      for (let k = 1; k < p.length; k++) { const m1 = { x: (p[k - 1].x + p[k].x) / 2, y: (p[k - 1].y + p[k].y) / 2 }; ix.beginPath(); ix.moveTo(m0.x, m0.y); ix.quadraticCurveTo(p[k - 1].x, p[k - 1].y, m1.x, m1.y); ix.stroke(); m0 = m1; }
+      const l = p[p.length - 1]; ix.beginPath(); ix.moveTo(m0.x, m0.y); ix.lineTo(l.x, l.y); ix.stroke();
+    };
+    const eraseAt = (x, y) => {
+      const R = 26, keep = strokes.filter(st => !st.pts.some(q => Math.hypot(q.x - x, q.y - y) < R));
+      if (keep.length === strokes.length) return;
+      strokes = keep; clearTimeout(pre.t); pre.n = 0; pre.p = null; ix.clearRect(0, 0, W, H); strokes.forEach(drawStroke); resetRead();
+    };
+    const resetRead = () => { const r = $('#wread'); if (r) r.innerHTML = ''; const d = $('#wdone'); if (d) d.style.display = ''; typed = ''; draw(); };
     const wrow = () => document.querySelector('#wpanel > .row');
-    const clearInk = () => { clearTimeout(pre.t); pre.n = 0; pre.p = null; if (ix) ix.clearRect(0, 0, W, H); strokes = []; cur = null; $('#wread').innerHTML = ''; const r = wrow(); if (r) r.style.display = ''; };
+    const clearInk = () => { clearTimeout(pre.t); pre.n = 0; pre.p = null; if (ix) ix.clearRect(0, 0, W, H); strokes = []; cur = null; $('#wread').innerHTML = ''; const r = wrow(); if (r) r.style.display = ''; const d = $('#wdone'); if (d) d.style.display = ''; };
     const setMode = m => {
       mode = m; S.input = m; save(); document.body.classList.toggle('inkmode', m === 'write');
       const kb = document.querySelector('.kb'), wp = $('#wpanel'), sw = $('#modesw');
@@ -1240,8 +1261,8 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     };
     const clearInkIfReady = () => { if (inkReady) clearInk(); };
     on('#modesw', () => { if (armed) setMode(mode === 'write' ? 'keyboard' : 'write'); });
-    on('#wlines', () => { S.hwLines = S.hwLines === false; save(); paintGuide(); });
-    on('#wclear', () => { clearInk(); typed = ''; draw(); });
+    on('#wrub', () => { erasing = !erasing; const b = $('#wrub'); b.classList.toggle('on', erasing); b.textContent = erasing ? 'Rubbing out: tap to write' : 'Rub out'; const w = $('#wwrap'); if (w) w.classList.toggle('erasing', erasing); });
+    on('#wclear', () => { clearInk(); typed = ''; draw(); erasing = false; const b = $('#wrub'); if (b) { b.classList.remove('on'); b.textContent = 'Rub out'; } const w = $('#wwrap'); if (w) w.classList.remove('erasing'); });
     on('#wdone', async () => {
       if (!armed || done) return;
       if (!strokes.length) { $('#wread').textContent = 'Write the word first.'; return; }
@@ -1251,9 +1272,9 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
       catch (e) { $('#wread').textContent = e.message || 'I could not read that.'; return; }
       if (!text) { $('#wread').textContent = 'I could not read that. Please write it again.'; return; }
       typed = text.slice(0, Math.min(24, word.length + 3)); draw();
-      $('#wread').innerHTML = '<div class="readback"><span>I read:</span> <b class="readword">' + esc(typed) + '</b></div><div class="row"><button id="wyes" class="btn">Yes, that is what I wrote</button><button id="wagain" class="btn small">Write it again</button></div>';
-      const r0 = wrow(); if (r0) r0.style.display = 'none'; // the read-back has its own buttons
-      on('#wyes', () => finish()); on('#wagain', () => { clearInk(); typed = ''; draw(); });
+      $('#wread').innerHTML = '<div class="readline"><span>I read:</span> <b class="readword">' + esc(typed) + '</b><button id="wyes" class="btn">Yes, that is what I wrote</button></div>';
+      const dn = $('#wdone'); if (dn) dn.style.display = 'none'; // Rub out and Clear stay; Done comes back when she changes anything
+      on('#wyes', () => finish());
     });
     if (!noBack) backBtn(res);
     draw(); sayIt();

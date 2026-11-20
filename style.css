@@ -679,3 +679,12 @@ body.onstory .storycap2 { margin: 0; color: #ffd54a; font-weight: 800; font-size
 body.onstory .storybtns { display: flex; justify-content: space-between; align-items: center; gap: 14px; width: min(740px, 100%); }
 body.onstory .storybtns .chip { font-size: 20px; padding: 12px 22px; }
 body.onstory .storybtns #next { padding: 12px 28px; font-size: 22px; }
+
+/* Handwriting screen: a one-line read-back, a prominent Clear, and a Rub out tool. */
+.readline { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; font-size: 22px; margin: 2px 0 8px; }
+.readline .readword { font-size: clamp(28px, 4.6vh, 42px); line-height: 1.1; letter-spacing: .05em; background: var(--paper, #fdf8ec); color: var(--ink, #2a2154); padding: 2px 18px 4px; border-radius: 12px; }
+.readline .btn { font-size: 20px; padding: 12px 22px; }
+#wpanel .clearbtn { background: #ff8fc7; color: #2a1f5c; box-shadow: 0 5px 0 #c4568f; font-weight: 800; }
+#wpanel #wrub { font-size: 20px; padding: 12px 22px; background-color: rgba(30, 26, 90, .92); }
+#wpanel #wrub.on { background: #ffd54a; color: #2a1f5c; border-color: #ffd54a; }
+.wwrap.erasing { outline: 4px solid #ffd54a; cursor: cell; }
