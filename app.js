@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.119'; // bump with every release
+const APP_VER = '3.120'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -337,7 +337,7 @@ const cueSpoken = (sentence, word) => sentence.trim().replace(/([^.!?])$/, '$1.'
 const HELP_Q = 'That is not quite right. Would you like some help to spell this, or would you like to have another go?';
 const HELP_MENU = 'Which help would you like?';
 function helpsFor(x) { return ['family', 'hint', 'sure', 'choice']; } // the main helps, in this order; none shows the word
-const HELP_LABEL = { family: 'The spelling rule', hint: 'A hint', sure: "I will tell you if a letter doesn't look right", voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Multiple choice' };
+const HELP_LABEL = { family: 'A spelling tip', hint: 'A hint', sure: "I will tell you if a letter doesn't look right", voice: 'Spelling voice', hard: 'Hard part', parts: 'Word parts', choice: 'Multiple choice' };
 // Empty boxes, one per letter, so she can see how long the word is and where the tricky bit is, without seeing any letters.
 function boxesHtml(x, marks, groups) {
   const w = x.w, hi = x.hard ? w.indexOf(x.hard) : -1; let i = 0, out = '';
@@ -447,11 +447,11 @@ function hintFor(x) {
   if (typed.length < w.length) return 'The word has ' + w.length + ' letters, and you wrote ' + typed.length + '. A letter is missing.';
   return 'The word has ' + w.length + ' letters. Look again at the ' + nth + ' letter.';
 }
-const familyText = x => { const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return (body || 'Listen carefully, and say it slowly, sound by sound.') + wordAgain(x); };
+const familyText = x => { const tip = trickText(x) ? spokenTip(x) : ''; if (tip) return x.w + '. ' + tip; const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return x.w + '. ' + (body || 'Listen carefully, and say it slowly, sound by sound.'); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
-  if (id === 'hint') { const t = hintFor(x); return { html: '<div class="helpline"><b>A hint:</b> ' + esc(t) + '</div><button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the hint again</span></button>', say: t + wordAgain(x) }; }
-  if (id === 'family') { const f = famOf(x); return { html: '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling rule again</span></button>', say: familyText(x) }; }
+  if (id === 'hint') { const t = hintFor(x); return { html: '<div class="helpline"><b>A hint:</b> ' + esc(t) + '</div><button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the hint again</span></button>', say: x.w + '. ' + t }; }
+  if (id === 'family') { const tip = trickText(x); return { html: (tip ? '<div class="helpline"><b>A spelling tip:</b> ' + esc(tip) + '</div>' : '') + '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling tip again</span></button>', say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say + '.' + wordAgain(x) };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
@@ -1126,7 +1126,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     let typed = '', hints = 0, done = false, reminded = false;
     const used = new Set();
     const sp = cue && sentenceParts(cue, word);
-    const sayIt = () => say(help === 'family' && wobj && familyText(wobj) ? familyText(wobj) : sp ? cueSpoken(cue, word) : word);
+    const sayIt = () => say((help === 'family' || help === 'hint') && wobj ? helpContent(wobj, help).say : sp ? cueSpoken(cue, word) : word); // with a help showing, she hears the word and then the help, not the whole sentence again
     if (help) used.add(help);
     h(`<div class="screen writescreen">
       ${sp ? `<div class="page small gapcard"><p class="story">${esc(sp.pre)}<span class="gapw"></span>${esc(sp.post)}</p></div>` : `<div class="cue">${ico('speaker')}<span>${soundOn() ? 'Listen, then write the word' : 'Write the word'}</span></div>`}
@@ -1189,7 +1189,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
-      W = Math.max(380, Math.min(Math.round((wrap.parentNode.clientWidth || 800) * 0.5), 640)); H = Math.max(150, Math.min(300, Math.round(innerHeight * 0.27)));
+      W = Math.max(380, Math.min(Math.round((wrap.parentNode.clientWidth || 800) * 0.8), 1100)); H = Math.max(150, Math.min(300, Math.round(innerHeight * 0.27)));
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       paintGuide = () => {
@@ -1838,7 +1838,7 @@ function showAnswer(word) {
 // Returns 'again', 'show', {help: id}, or BACK.
 // The spelling rule button is greyed out for a word that has no built-in rule.
 // Are you sure? needs the letters as she types them, so it is greyed out when she writes by hand.
-const hasRule = x => !!phonicsRule(x.w);
+const hasRule = x => !!phonicsRule(x.w) || !!trickText(x); // the spelling tip help is there when the word has a tip or a rule
 const helpBtns = x => helpsFor(x).map(id => { const off = (id === 'family' && !hasRule(x)) || (id === 'sure' && S.input === 'write'); return `<button class="choice${off ? ' off' : ''}" data-h="${id}"${off ? ' disabled aria-disabled="true"' : ''}>${esc(HELP_LABEL[id])}</button>`; }).join('');
 function helpMenu(x) {
   return new Promise(r => {
@@ -2204,7 +2204,7 @@ function reviseEnd(wk, firsts, sound) {
 // Everything the spelling steps need spoken, fetched ahead so nothing waits.
 function spellTexts(wk) {
   const texts = wk.words.map(x => x.w).concat(COMMON);
-  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say + '.' + wordAgain(x)); if (familyText(x)) texts.push(familyText(x)); texts.push(hintText(x)); });
+  wk.words.forEach(x => { const s0 = storySentence(wk, x.w), r = remindOf(s0, x.w); if (s0) { texts.push(s0); texts.push(cueSpoken(s0, x.w)); } if (r) texts.push(r.spoken); if (x.say) texts.push(x.say + '.' + wordAgain(x)); texts.push(familyText(x)); texts.push(hintText(x)); });
   for (let i = 1; i <= wk.words.length; i++) { texts.push(celebrateText(i, wk.words.length, true)); texts.push(celebrateText(i, wk.words.length, false)); }
   OOPS.forEach(t => texts.push(t)); texts.push('This word keeps hiding. A memory trick can help you hold on to it.'); wk.words.forEach(x => { if (x.mnem) texts.push('This word keeps hiding. A memory trick can help you hold on to it. ' + x.mnem); }); texts.push(PICKED_RIGHT, CLUE, ANSWER_MSG, 'Have another go.', SPELL_INTRO, SURE_MSG, HELP_Q, HELP_MENU); wk.words.forEach(x => texts.push(ANSWER_MSG + ' ' + x.w));
   return texts;
@@ -2436,7 +2436,7 @@ function helpPane() {
       <p>After three wrong goes in practice or revision, the app says the word is still hiding and brings it back in a later sitting rather than showing it. In her story, after three wrong goes it shows her the word once and she writes it from memory. <b>Hear it again</b> repeats the word.</p>`)}
     ${sub('The spelling helps', `
       <p>Each use is recorded, and a word where she used a help does not count as right first time.</p>
-      <p><b>The spelling rule.</b> Says a spelling pattern for the word, with similar words. Greyed out for a word with no rule in the app.</p>
+      <p><b>A spelling tip.</b> Says the word, then its spelling tip (or a spelling pattern if it has no tip). Greyed out for a word with neither.</p>
       <p><b>A hint.</b> Says how many letters the word has and where her go went wrong. It never gives the letter away.</p>
       <p><b>I will tell you if a letter doesn't look right.</b> A nudge once per word. It never says which letter. Not available when she writes by hand.</p>
       <p><b>Multiple choice.</b> She picks the right spelling from several, then goes back and spells it herself.</p>`)}
