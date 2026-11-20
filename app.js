@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.128'; // bump with every release
+const APP_VER = '3.129'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1191,7 +1191,7 @@ function writeWord(word, noBack, remind, wobj, force, cue, help, ask, autoSure, 
     const initInk = () => {
       if (inkReady) return; inkReady = true;
       const wrap = $('#wwrap'), guide = $('#wguide'), ink = $('#wink');
-      W = Math.max(380, Math.min(Math.round((wrap.parentNode.clientWidth || 800) * 0.8), 1100)); H = Math.max(150, Math.min(300, Math.round(innerHeight * 0.27)));
+      W = Math.max(380, Math.min(Math.round((wrap.parentNode.clientWidth || 800) * 0.8), 1100)); H = Math.max(160, Math.min(380, Math.round(innerHeight * 0.36)));
       [guide, ink].forEach(c => { c.width = W; c.height = H; c.style.width = W + 'px'; c.style.height = H + 'px'; });
       wrap.style.width = W + 'px'; wrap.style.height = H + 'px';
       paintGuide = () => {

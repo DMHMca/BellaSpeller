@@ -501,7 +501,7 @@ body.inkmode .writescreen .slots { display: none; }
 .wread .row { justify-content: center; }
 
 /* writing page: the box is about half the width and centred, and the parts are spread down the screen instead of crowded at the top */
-body.inkmode .writescreen { min-height: calc(100vh - 100px); justify-content: space-evenly; gap: 10px; }
+body.inkmode .writescreen { min-height: calc(100vh - 100px); justify-content: flex-start; gap: 14px; }
 body.inkmode .wpanel { gap: 14px; }
 body.inkmode .wwrap { margin: 0 auto; }
 
@@ -688,3 +688,8 @@ body.onstory .storybtns #next { padding: 12px 28px; font-size: 22px; }
 #wpanel #wrub { font-size: 20px; padding: 12px 22px; background-color: rgba(30, 26, 90, .92); }
 #wpanel #wrub.on { background: #ffd54a; color: #2a1f5c; border-color: #ffd54a; }
 .wwrap.erasing { outline: 4px solid #ffd54a; cursor: cell; }
+
+.readline .readword { font-size: clamp(44px, 8vh, 70px); padding: 2px 22px 6px; }
+body.inkmode .writescreen .row { margin: 0; }
+
+body.inkmode .writescreen .helpbox:empty, body.inkmode .writescreen .surebox:empty, body.inkmode .writescreen #remindbox:empty { display: none; }
