@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.123'; // bump with every release
+const APP_VER = '3.124'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -756,7 +756,7 @@ async function prep(texts, msg, ready) {
         n++;
       }
     };
-    Promise.all([worker(), worker(), worker()]).then(() => { if (!ready || err || skip) return res(); const r = $('#rdy'); if (r) r.textContent = 'Everything is ready!'; const g = $('#go'); if (g) g.innerHTML = 'Start the story ' + ico('next'); }); // the ready screen waits for her tap
+    Promise.all([worker(), worker(), worker()]).then(() => { if (!ready || err || skip) return res();  res(); }); // when everything is ready the story simply starts
   });
   lastTtsErr = err ? err.message : '';
   return err;
@@ -976,7 +976,7 @@ function chunkItems(items) { // groups of sentences of about 40 words, for the v
 }
 const chunkText = c => c.map(q => q.t).join(' ');
 
-function storyScroll(items) {
+function storyScroll(items, intro) {
   const chunks = chunkItems(items);
   return new Promise(res => {
     h(`<div class="screen storyscreen"><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="sidecol"><button id="sup" class="scrollbtn" aria-label="Scroll up">${ico('next')}</button><div class="sidemid"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><button id="sdown" class="scrollbtn" aria-label="Scroll down">${ico('next')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div></div>`);
@@ -1002,7 +1002,8 @@ function storyScroll(items) {
     let snapT = 0;
     $('#sp').addEventListener('scroll', () => { clearTimeout(snapT); snapT = setTimeout(() => { const sp = $('#sp'); if (!sp) return; const t = snap(sp.scrollTop); if (Math.abs(sp.scrollTop - t) > 1) sp.scrollTo({ top: t, behavior: 'smooth' }); }, 160); });
     const lines = () => Math.max(1, Math.round(winH / lineH()));
-    let run = 0;
+    let run = 0, introSaid = false;
+    if (intro) { const tt = document.createElement('div'); tt.className = 'storytoast'; tt.textContent = intro; document.body.appendChild(tt); setTimeout(() => tt.remove(), 4200); }
     // The voice reads a short piece at a time. The window only moves when the piece being read is not fully in view,
     // and then it moves so that piece is at the top, so what is being said is always on screen.
     const follow = el => {
@@ -1015,6 +1016,7 @@ function storyScroll(items) {
     const play = async () => {
       const my = ++run; hush();
       if (!soundOn() || !S.readAloud) return;
+      if (intro && !introSaid) { introSaid = true; await sayDone(intro); if (my !== run) return; }
       for (let i = 0; i < chunks.length; i++) {
         if (my !== run) return;
         const el = document.querySelector(`.chunk[data-i="${i}"]`);
@@ -1645,13 +1647,6 @@ function clubSetup() {
     say(msg);
   });
 }
-function storyReadyScreen() {
-  return new Promise(res => {
-    h(`<div class="screen cheer">${confettiHtml()}<div class="bigstar"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.star}</svg></div><h1>Your story is ready!</h1><button id="next" class="btn big">Start the story ${ico('next')}</button></div>`);
-    on('#next', () => { hush(); res(); }); keyHandler = e => { if (e.key === 'Enter') { hush(); res(); } };
-    fanfare();
-  });
-}
 async function storyDay() {
   const wk = curWeek();
   if (!(await storyStart(wk))) return home();
@@ -1661,14 +1656,14 @@ async function storyDay() {
   wk.words.forEach(x => { if (!order.includes(x.w)) order.push(x.w); });
   const steps = storySegments(beats);
   prepShown = false;
-  await prep((S.readAloud ? [].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk)) : []).concat(spellTexts(wk)), 'Your story is ready!', true);
-  if (justWritten) { justWritten = false; if (!prepShown) await storyReadyScreen(); }
+  await prep((S.readAloud ? [].concat(...steps.filter(x => x.seg).map(x => chunkItems(x.seg).map(chunkText))).concat(partTexts(beats.filter(b => b.c), wk)) : []).concat(spellTexts(wk)), 'Getting your story ready', true);
+  const intro = justWritten ? 'Your story is ready!' : ''; justWritten = false;
   prog = ep.title;
   let i = 0;
   while (i < steps.length) {
     const st0 = steps[i];
     let r;
-    if (st0.seg) r = await storyScroll(st0.seg);
+    if (st0.seg) r = await storyScroll(st0.seg, i === 0 ? intro : '');
     else {
       const b = { c: st0.choice };
       for (;;) {
