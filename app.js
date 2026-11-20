@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.124'; // bump with every release
+const APP_VER = '3.125'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -979,7 +979,7 @@ const chunkText = c => c.map(q => q.t).join(' ');
 function storyScroll(items, intro) {
   const chunks = chunkItems(items);
   return new Promise(res => {
-    h(`<div class="screen storyscreen"><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="sidecol"><button id="sup" class="scrollbtn" aria-label="Scroll up">${ico('next')}</button><div class="sidemid"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><button id="sdown" class="scrollbtn" aria-label="Scroll down">${ico('next')}</button><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div></div>`);
+    h(`<div class="screen storyscreen"><div class="scrollwrap"><div class="scrollpage" id="sp">${chunks.map((c, i) => `<span class="chunk" data-i="${i}"${c.find(q => q.w) ? ' data-pw="' + esc(c.find(q => q.w).w) + '"' : ''}>${c.map(q => (q.w ? hlHtml(q.t, q.w) : esc(q.t)) + (q.pic ? `<span class="scene" aria-hidden="true">${q.pic}</span>` : '')).join(' ')}</span> `).join('')}</div><div class="sidecol"><div class="sidemid"><button id="readtoggle" class="chip small${S.readAloud ? ' on' : ''}">${ico('speaker')} Read it to me</button><span class="subtle storycap">The yellow words are this week's words.</span></div><button id="next" class="btn big">I've read it ${ico('next')}</button></div></div></div>`);
     // The window is always a whole number of lines tall, and it only ever rests on a whole line, so a word is never cut in half.
     const lineH = () => { const sp = $('#sp'); return sp ? (parseFloat(getComputedStyle(sp).lineHeight) || 40) : 40; };
     let winH = 0;
@@ -989,12 +989,14 @@ function storyScroll(items, intro) {
     // so the last line can always be scrolled fully into view.
     const fitLines = () => {
       const sp = $('#sp'); if (!sp) return;
-      const cs = getComputedStyle(sp), b = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth), lh = lineH();
-      const row = $('#next') && $('#next').parentElement, app = $('#app');
+      const cs = getComputedStyle(sp), b = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth), lh = lineH(), app = $('#app');
       const reserve = (app ? parseFloat(getComputedStyle(app).paddingBottom) || 0 : 0) + 10;
-      const n = Math.max(3, Math.floor((innerHeight - sp.getBoundingClientRect().top - reserve - b) / lh));
+      const maxN = Math.max(3, Math.floor((innerHeight - sp.getBoundingClientRect().top - reserve - b) / lh));
+      sp.style.height = 'auto'; sp.style.paddingBottom = '0px';
+      const total = Math.ceil(sp.scrollHeight / lh - 0.001);
+      const n = total <= 6 ? Math.min(total, maxN) : Math.min(maxN, Math.max(5, Math.ceil(total * 0.55)));
       winH = n * lh; sp.style.height = (winH + b) + 'px';
-      sp.style.paddingBottom = '0px'; const ch = sp.scrollHeight; sp.style.paddingBottom = (Math.ceil(ch / lh - 0.001) * lh - ch) + 'px';
+      const ch = sp.scrollHeight; sp.style.paddingBottom = (Math.ceil(ch / lh - 0.001) * lh - ch) + 'px';
       sp.scrollTop = snap(sp.scrollTop);
     };
     const onResize = () => { if (!$('#sp')) return removeEventListener('resize', onResize); fitLines(); };
@@ -1002,16 +1004,17 @@ function storyScroll(items, intro) {
     let snapT = 0;
     $('#sp').addEventListener('scroll', () => { clearTimeout(snapT); snapT = setTimeout(() => { const sp = $('#sp'); if (!sp) return; const t = snap(sp.scrollTop); if (Math.abs(sp.scrollTop - t) > 1) sp.scrollTo({ top: t, behavior: 'smooth' }); }, 160); });
     const lines = () => Math.max(1, Math.round(winH / lineH()));
-    let run = 0, introSaid = false;
+    let run = 0, introSaid = false, manual = false;
+    ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(ev => $('#sp').addEventListener(ev, () => { manual = true; }, { passive: true })); // once she scrolls for herself, the window stays where she puts it
     if (intro) { const tt = document.createElement('div'); tt.className = 'storytoast'; tt.textContent = intro; document.body.appendChild(tt); setTimeout(() => tt.remove(), 4200); }
     // The voice reads a short piece at a time. The window only moves when the piece being read is not fully in view,
     // and then it moves so that piece is at the top, so what is being said is always on screen.
     const follow = el => {
-      const sp = $('#sp'); if (!sp || !el) return;
+      const sp = $('#sp'); if (!sp || !el || manual) return;
       const r = el.getClientRects(), sr = sp.getBoundingClientRect(), bt = parseFloat(getComputedStyle(sp).borderTopWidth);
       if (!r.length) return;
       const rt = r[0].top - sr.top - bt + sp.scrollTop, rb = r[r.length - 1].bottom - sr.top - bt + sp.scrollTop;
-      if (rt < sp.scrollTop - 1 || rb > sp.scrollTop + winH + 1) sp.scrollTo({ top: snap(Math.floor((rt + 2) / lineH()) * lineH()), behavior: 'smooth' });
+      if (rt < sp.scrollTop - 1 || rb > sp.scrollTop + winH + 1) sp.scrollTo({ top: snap(Math.floor((rt + 2) / lineH()) * lineH() - lineH()), behavior: 'smooth' });
     };
     const play = async () => {
       const my = ++run; hush();
@@ -1028,10 +1031,8 @@ function storyScroll(items, intro) {
         if (my !== run) return;
       }
     };
-    on('#sup', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: snap(sp.scrollTop - Math.max(1, lines() - 1) * lineH()), behavior: 'smooth' }); });
-    on('#sdown', () => { const sp = $('#sp'); if (sp) sp.scrollTo({ top: snap(sp.scrollTop + Math.max(1, lines() - 1) * lineH()), behavior: 'smooth' }); });
     on('#readtoggle', () => {
-      S.readAloud = !S.readAloud; if (S.readAloud && !soundOn()) S.sound = true; save(); paintSound();
+      S.readAloud = !S.readAloud; manual = false; if (S.readAloud && !soundOn()) S.sound = true; save(); paintSound();
       $('#readtoggle').classList.toggle('on', !!S.readAloud);
       if (S.readAloud) { chunks.forEach(c => { const t = chunkText(c); getClipUrl(t).then(u => { if (!u && ttsOn() && sendable(t)) fetchClip(t).catch(() => { }); }); }); const sp = $('#sp'); if (sp) sp.scrollTo({ top: 0 }); play(); }
       else { run++; hush(); document.querySelectorAll('.chunk.now').forEach(x => x.classList.remove('now')); }

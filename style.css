@@ -666,3 +666,7 @@ body.onstory #vlabel { display: none; }
 
 .storytoast { position: fixed; top: 84px; left: 50%; transform: translateX(-50%); z-index: 80; background: #ffc83d; color: #2a1f5c; font-weight: 800; font-size: 24px; padding: 12px 28px; border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,.35); pointer-events: none; animation: toastfade 4.2s ease forwards; }
 @keyframes toastfade { 0% { opacity: 0; transform: translate(-50%, -10px); } 8% { opacity: 1; transform: translate(-50%, 0); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* A narrower reading box, centred, with its scroll bar and the buttons beside it. */
+body.onstory .scrollwrap { max-width: 1080px; margin: 0 auto; }
+body.onstory .sidecol { justify-content: space-between; }
