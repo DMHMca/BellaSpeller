@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.131'; // bump with every release
+const APP_VER = '3.132'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2612,7 +2612,7 @@ function adult() {
     <div><button id="psample" class="btn small">Hear a sample</button> <button id="pready" class="btn small">Get this week's words ready</button></div>
     <p id="pstat" class="note">${esc(lastTtsErr)}</p>
     <label>OpenRouter key, for writing stories (stays on this device, and is left out of backups)</label><input id="orKey" type="password" autocomplete="off" value="${esc(S.orKey || '')}">
-    <div class="row"><button id="qrShow" class="btn small">Show the key as a QR code</button><button id="qrWeek" class="btn small">Show this week's words as a QR code</button><button id="qrScan" class="btn small">Scan a QR code</button></div>
+    <div class="row"><button id="qrShow" class="btn small">Show the key as a QR code</button><button id="qrWeek" class="btn small">Show this week's words as a QR code</button><button id="qrData" class="btn small">Send everything (progress, stories, words) as QR codes</button><button id="qrScan" class="btn small">Scan a QR code</button></div>
     <p class="note">To set up Bella's tablet: show a QR code here (the key, then this week's words), and on the tablet press Scan a QR code and point it at this screen each time.</p>
     <label>Family rules for the stories (added to every story request)</label><textarea id="famRules" style="min-height:110px">${esc(S.familyRules === undefined ? DEFAULT_FAMILY_RULES : S.familyRules)}</textarea>
     <label>AI model for writing stories</label>${modelSelect('orModel')}
@@ -2655,7 +2655,7 @@ function adult() {
   on('#reqSave', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([requestsText(false)], { type: 'text/plain;charset=utf-8' })); a.download = 'bellaspeller-requests-' + today() + '.txt'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
-  on('#qrShow', () => showKeyQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
+  on('#qrShow', () => showKeyQr()); on('#qrData', () => showDataQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
   if ($('#name')) $('#name').onchange = () => { S.name = $('#name').value.trim(); save(); };
   on('#saveName', () => { S.name = $('#name').value.trim(); S.orKey = $('#orKey').value.trim(); S.orModel = $('#orModelOther').value.trim() || $('#orModel').value || DEFAULT_MODEL; S.aiBase = $('#aiBase').value.trim(); S.aiKey = $('#aiKey').value.trim(); S.familyRules = $('#famRules').value; save(); adult(); });
   wireHandwriting();
@@ -2824,6 +2824,28 @@ async function addWeekFromQr(packed) {
   if (typeof o.n === 'string' && o.n && !S.name) S.name = o.n.slice(0, 20);
   save(); return true;
 }
+// Everything on this device except the keys (words, stories, answers, stars, sittings, scores, settings), as a short run of QR codes shown one after another.
+const DATA_PREFIX = 'BELLASPELLER-DATA-1:';
+async function showDataQr() {
+  try { await loadScriptOnce('qrgen.js'); } catch (e) { alert('Could not load the QR code maker. Check the internet connection and try again.'); return; }
+  const text = await packText(JSON.stringify(Object.assign({}, S, { orKey: undefined, aiKey: undefined, aiBase: undefined })));
+  const CH = 1200, total = Math.ceil(text.length / CH), id = Math.random().toString(36).slice(2, 6);
+  if (total > 30) { alert('There is too much to send as QR codes (' + total + ' parts). Use Save a backup file instead.'); return; }
+  let tm = 0;
+  const size = Math.max(240, Math.min(innerWidth - 60, innerHeight - 300, 520));
+  const { ov, close } = qrOverlay('Send everything to another device', `<p class="note">On the other device, open Grown-ups, Settings, and press <b>Scan a QR code</b>. Hold it up to this screen and keep it steady while the pictures change. ${total > 1 ? 'There are ' + total + ' of them, repeating until the other device says it is done. ' : ''}This does not include the AI key: send that separately. Turn the screen brightness up.</p><p class="note" id="qrPart"></p><div style="display:flex;justify-content:center"><canvas id="qrCanvas" width="${size}" height="${size}" style="max-width:100%;height:auto;background:#fff;border-radius:12px"></canvas></div>`, () => clearInterval(tm));
+  const c = ov.querySelector('#qrCanvas'), x = c.getContext('2d'); let i = 0;
+  const draw = () => {
+    const qr = qrcode(0, 'L'); qr.addData(DATA_PREFIX + id + ':' + (i + 1) + '/' + total + ':' + text.slice(i * CH, (i + 1) * CH)); qr.make();
+    const m = qr.getModuleCount(), cell = Math.max(2, Math.floor(size / (m + 8))), off = Math.floor((size - m * cell) / 2);
+    x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); x.fillStyle = '#000';
+    for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) if (qr.isDark(a, b)) x.fillRect(off + b * cell, off + a * cell, cell, cell);
+    ov.querySelector('#qrPart').textContent = total > 1 ? 'Picture ' + (i + 1) + ' of ' + total : '';
+    i = (i + 1) % total;
+  };
+  draw(); if (total > 1) tm = setInterval(draw, 2500);
+  setTimeout(close, 300000);
+}
 // Shows the key as a QR code, for another device to scan. Closes itself after two minutes.
 async function showKeyQr() {
   const key = S.orKey || S.aiKey;
@@ -2851,9 +2873,26 @@ async function scanKeyQr() {
   const det = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
   if (!det) { try { await loadScriptOnce('jsqr.js'); } catch (e) { msg('Could not load the QR reader.'); done(); return; } }
   const wk = ov.querySelector('#qrWork'), wx = wk.getContext('2d', { willReadFrequently: true });
+  const got = { id: '', n: 0, p: {} };
+  // One picture of a run. Once all of them are in, the whole lot is checked, and only then offered as a replacement for what is on this device.
+  const acceptPart = async t => {
+    const m = /^([a-z0-9]{1,8}):(\d{1,2})\/(\d{1,2}):([\s\S]*)$/.exec(t); if (!m) return false;
+    const n = +m[3], i = +m[2]; if (!n || i < 1 || i > n) return false;
+    if (got.id !== m[1] || got.n !== n) { got.id = m[1]; got.n = n; got.p = {}; }
+    got.p[i] = m[4];
+    const have = Object.keys(got.p).length;
+    if (have < n) { msg('Scanned ' + have + ' of ' + n + '. Keep the camera on the screen.'); return 'part'; }
+    let o; try { let all = ''; for (let k = 1; k <= n; k++) all += got.p[k]; o = JSON.parse(await unpackText(all)); } catch (e) { got.p = {}; return false; }
+    if (!o || !Array.isArray(o.weeks) || !o.weeks.length) { got.p = {}; return false; }
+    if (!confirm('Replace everything on this device with what was sent (' + o.weeks.length + ' weeks of words, ' + Object.keys(o.used || {}).length + ' stories told)? The AI key on this device is kept.')) return 'cancel';
+    const keep = { orKey: S.orKey, aiKey: S.aiKey, aiBase: S.aiBase };
+    S = Object.assign({}, o); Object.keys(keep).forEach(k => { if (keep[k]) S[k] = keep[k]; });
+    save(); return 'data';
+  };
   // Returns what the code was ('key' or 'week'), or false. Nothing is saved unless the contents check out.
   const accept = async text => {
     if (typeof text !== 'string') return false;
+    if (text.startsWith(DATA_PREFIX)) return acceptPart(text.slice(DATA_PREFIX.length));
     if (text.startsWith(WEEK_PREFIX)) return (await addWeekFromQr(text.slice(WEEK_PREFIX.length))) ? 'week' : false;
     if (!text.startsWith(QR_PREFIX)) return false;
     let o; try { o = JSON.parse(text.slice(QR_PREFIX.length)); } catch (e) { return false; }
@@ -2870,8 +2909,11 @@ async function scanKeyQr() {
         if (det) { const r = await det.detect(v); if (r && r[0]) text = r[0].rawValue; }
         else { wk.width = v.videoWidth; wk.height = v.videoHeight; wx.drawImage(v, 0, 0); const im = wx.getImageData(0, 0, wk.width, wk.height), r = jsQR(im.data, im.width, im.height); if (r) text = r.data; }
         if (text) {
-          const got = await accept(text);
-          if (got) { done(); msg(got === 'week' ? 'Done. The words have been added and are this week\'s words.' : 'Done. The AI key is now saved on this device.'); setTimeout(() => { close(); adult(); }, 1800); return; }
+          const res = await accept(text);
+          if (res === 'part') { raf = requestAnimationFrame(() => setTimeout(tick, 120)); return; }
+          if (res === 'cancel') { done(); msg('Nothing was changed.'); setTimeout(close, 1500); return; }
+          if (res === 'data') { done(); msg('Done. This device now has everything that was sent.'); setTimeout(() => location.reload(), 1500); return; }
+          if (res) { done(); msg(res === 'week' ? 'Done. The words have been added and are this week\'s words.' : 'Done. The AI key is now saved on this device.'); setTimeout(() => { close(); adult(); }, 1800); return; }
           msg('That QR code is not from BellaSpeller. Try again.');
         }
       }
