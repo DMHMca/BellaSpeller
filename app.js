@@ -6,8 +6,8 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.135'; // bump with every release
-const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
+const APP_VER = '3.136'; // bump with every release
+const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -2321,19 +2321,24 @@ function home() {
 }
 
 // ---------- grown-ups ----------
+// No code is set unless the adults set one in Settings. A reset code that never expires also opens the page, in case the adults forget theirs; only its hash is kept here.
+const GATE_RESET = '3a29b7344c5a190cdd61fe338cdbc2f0a1c283d725ec9be07e6a8f27488b2e7a';
+const sha256hex = async t => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('bellaspeller-gate:' + t)))].map(b => b.toString(16).padStart(2, '0')).join('');
 function adultGate() {
-  if (DEBUG) return adult(); // no PIN while debugging
-  const setting = !S.pin;
+  if (!S.pin) return adult();
   h(`<div class="screen adult"><h1>Grown-ups</h1>
-    <p>${setting ? 'Choose a four-digit code. You will need it to open this page.' : 'Enter the four-digit code.'}</p>
-    <input id="pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="max-width:160px;text-align:center;font-size:28px">
-    <p id="err" class="note"></p><button id="ok" class="btn">${setting ? 'Set code' : 'Open'}</button></div>`);
-  const go = () => {
-    const v = $('#pin').value.trim();
-    if (setting) { if (!/^\d{4}$/.test(v)) { $('#err').textContent = 'Please use four digits.'; return; } S.pin = v; save(); adult(); }
-    else if (v === S.pin) adult(); else { $('#err').textContent = 'That is not the code.'; $('#pin').value = ''; }
+    <p>Enter the code.</p>
+    <input id="pin" type="password" inputmode="numeric" maxlength="24" autocomplete="off" style="max-width:240px;text-align:center;font-size:28px">
+    <p id="err" class="note"></p><div class="row"><button id="ok" class="btn">Open</button><button id="forgot" class="btn small">Forgotten the code?</button></div></div>`);
+  const go = async () => {
+    const v = $('#pin').value.trim(); if (!v) return;
+    if (v === S.pin) { adult(); return; }
+    let reset = false; try { reset = (await sha256hex(v)) === GATE_RESET; } catch (e) { }
+    if (reset) { adultTab = 'settings'; adultFlash = 'You came in with the reset code. If the code was forgotten, set a new one here, or remove it.'; adult(); return; }
+    $('#err').textContent = 'That is not the code.'; $('#pin').value = '';
   };
   on('#ok', go);
+  on('#forgot', () => { const p = $('#pin'); p.inputMode = 'text'; $('#err').textContent = 'Type the reset code you were given, then press Open.'; p.focus(); });
   $('#pin').onkeydown = e => { if (e.key === 'Enter') go(); };
   $('#pin').focus();
 }
@@ -2613,6 +2618,9 @@ function adult() {
 
     </div><div class="tabpane" data-tab="record"><h2>Progress, week by week</h2>${recordPane()}</div><div class="tabpane" data-tab="requests">${requestsPane()}</div><div class="tabpane" data-tab="help">${helpPane()}</div><div class="tabpane" data-tab="tools">${toolsPane(wk)}</div><div class="tabpane" data-tab="settings"><h2>Settings</h2>
     <label>Her first name (saved as soon as you leave the box; it appears on the home screen)</label><input id="name" type="text" value="${esc(S.name)}" maxlength="14">
+    <label>Grown-ups code (optional: if one is set, it is asked for whenever Grown-ups is opened)</label>
+    <div class="row" style="justify-content:flex-start"><input id="pinNew" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="4 to 8 digits" style="max-width:180px;text-align:center"><button id="pinSet" class="btn small">${S.pin ? 'Change the code' : 'Set a code'}</button>${S.pin ? '<button id="pinOff" class="btn small">Remove the code</button>' : ''}</div>
+    <p id="pinMsg" class="note">${S.pin ? 'A code is set.' : 'No code is set, so anyone can open Grown-ups.'} It travels with a backup file or a data QR code.</p>
     <label>Voice that reads aloud (try each one)</label><select id="vsel"><option value="">Automatic</option>${('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(x => /^en/i.test(x.lang)).map(x => `<option value="${esc(x.name)}" ${S.voiceName === x.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
     <p class="note">This is the device's own free voice. It is used when no recorded voice is chosen, while a recorded phrase is not ready yet, and for any line that contains her name.</p>
     <label>Recorded voice (uses the OpenRouter key below; saved on this device after first use)</label><select id="psel"><option value="">None: use this device's voice</option>${PRESETS.map(p => `<option value="${p.id}" ${effVp() === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}</select>
@@ -2661,6 +2669,8 @@ function adult() {
   on('#reqCopy', async () => { const t = requestsText(true), m = $('#reqMsg'); try { await navigator.clipboard.writeText(t); m.textContent = 'Copied. Paste it into a message.'; } catch (e) { m.textContent = 'Could not copy on this device. Use Save as a text file instead.'; } });
   on('#reqSave', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([requestsText(false)], { type: 'text/plain;charset=utf-8' })); a.download = 'bellaspeller-requests-' + today() + '.txt'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
   on('#recCsv', () => downloadRecord('csv')); on('#recXls', () => downloadRecord('xls'));
+  on('#pinSet', () => { const v = $('#pinNew').value.trim(); if (!/^\d{4,8}$/.test(v)) { $('#pinMsg').textContent = 'Please use 4 to 8 digits.'; return; } S.pin = v; save(); adultTab = 'settings'; adultFlash = 'The code is set. It will be asked for the next time Grown-ups is opened.'; adult(); });
+  on('#pinOff', () => { if (!confirm('Remove the code? Anyone will then be able to open Grown-ups.')) return; S.pin = null; save(); adultTab = 'settings'; adultFlash = 'The code is removed.'; adult(); });
   document.querySelectorAll('.recv').forEach(b => { b.onclick = () => { recView = b.dataset.v; adultTab = 'record'; adult(); }; });
   on('#qrShow', () => showKeyQr()); on('#qrData', () => showDataQr()); on('#qrWeek', () => showWeekQr()); on('#qrScan', () => scanKeyQr());
   if ($('#name')) $('#name').onchange = () => { S.name = $('#name').value.trim(); save(); };
