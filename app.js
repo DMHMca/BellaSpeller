@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.134'; // bump with every release
+const APP_VER = '3.135'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1627,11 +1627,9 @@ async function storyStart(wk) {
       if (idea === BACK) { step = 'shelf'; continue; }
       step = 'confirm';
     } else if (step === 'confirm') {
-      waiting('Tidying your idea'); say('One moment.');
+      waiting(SCREEN_PROMPTS[3]); // the same waiting screen carries on into writing: the idea is tidied quietly and the story is started, with no panel that only says it again
       const tidy = await tidyIdea(idea);
-      if (!tidy) { final = idea; step = 'ready'; continue; }
-      if ((await confirmIdea(tidy)) === BACK) { step = 'outline'; continue; }
-      final = 'Tidied version: ' + tidy + ' Original: ' + idea; step = 'ready';
+      final = tidy ? 'Tidied version: ' + tidy + ' Original: ' + idea : idea; step = 'write';
     } else if (step === 'ready') {
       const r = await readyScreen(pick.kind === 'type' ? pick.type.title : 'Your own story');
       if (r === BACK) { step = pick.kind === 'own' ? 'outline' : 'shelf'; continue; }
