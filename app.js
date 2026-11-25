@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.132'; // bump with every release
+const APP_VER = '3.133'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode: no PIN)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -447,11 +447,11 @@ function hintFor(x) {
   if (typed.length < w.length) return 'The word has ' + w.length + ' letters, and you wrote ' + typed.length + '. A letter is missing.';
   return 'The word has ' + w.length + ' letters. Look again at the ' + nth + ' letter.';
 }
-const familyText = x => { const tip = trickText(x) ? spokenTip(x) : ''; if (tip) return x.w + '. ' + tip; const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return x.w + '. ' + (body || 'Listen carefully, and say it slowly, sound by sound.'); };
+const familyText = x => { const tip = trickText(x) ? spokenHint(x) : ''; if (tip) return x.w + '. ' + tip; const f = famOf(x); const body = (f.spoken || f.rule || '') + (!f.rule && f.family.length ? 'Other words spelled like it are ' + f.family.slice(0, 3).join(', ') + '.' : ''); return x.w + '. ' + (body || 'Listen carefully, and say it slowly, sound by sound.'); };
 function helpContent(x, id) {
   const L = (t, v) => `<div class="helpline">${t ? '<b>' + esc(t) + '</b> ' : ''}${v}</div>`;
   if (id === 'hint') { const t = hintFor(x); return { html: '<div class="helpline"><b>A hint:</b> ' + esc(t) + '</div><button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the hint again</span></button>', say: x.w + '. ' + t }; }
-  if (id === 'family') { const tip = trickText(x); return { html: (tip ? '<div class="helpline"><b>A spelling tip:</b> ' + esc(tip) + '</div>' : '') + '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling tip again</span></button>', say: familyText(x) }; }
+  if (id === 'family') { const tip = hintTip(x); return { html: (tip ? '<div class="helpline"><b>A spelling tip:</b> ' + esc(tip) + '</div>' : '') + '<button class="hearbar" id="hearsay">' + ico('speaker') + '<span>Tap to hear the spelling tip again</span></button>', say: familyText(x) }; }
   if (id === 'voice' && x.say) return { html: L('Listen to it said the spelling way:', '<button class="btn small" id="hearsay">Hear it</button>'), say: x.say + '.' + wordAgain(x) };
   if (id === 'parts' && x.parts) return { html: L('This word is built from ' + x.parts.split('|').length + ' smaller pieces. Here is a box for each letter, so you can see how big each piece is:', '<div class="bxrow">' + boxesHtml(x, false, x.parts.split('|')) + '</div>') };
   if (id === 'hard' && x.hard) return { html: L('One box for each letter. The yellow ones are the tricky ones:', '<div class="bxrow">' + boxesHtml(x, true) + '</div>') };
@@ -2042,6 +2042,14 @@ const TIP_SAY = {
   special: 'Special has the letters {c} and {i} in the middle: {s,p,e,c,i,a,l}.'
 };
 const spokenTip = x => speakLetters(x.mnemSay || (!x.mnem && TIP_SAY[x.w]) || trickText(x));
+// While she is working on a word, a spelling tip is a hint and never the answer. The whole word spelled out is taken away (fr-ie-nd, or the letters in curly braces), and on the screen the word itself is hidden behind a row of dashes. The study screens keep the full tip.
+const lettersOf = g => String(g).toLowerCase().replace(/[^a-z]/g, '');
+const hideSpelling = (t, w) => String(t)
+  .replace(/\{([a-z, ]+)\}/gi, (m, g) => lettersOf(g) === w ? '' : m)
+  .replace(/\b[a-z]+(?:-[a-z]+)+\b/gi, m => lettersOf(m) === w ? '' : m)
+  .replace(/\s*[:;,]\s*(?=[.!?]|$)/g, '').replace(/\s+([.,;:!?])/g, '$1').replace(/ {2,}/g, ' ').trim();
+const hintTip = x => { const t = trickText(x); return t ? hideSpelling(t, x.w).replace(new RegExp('\\b' + x.w + '\\b', 'gi'), '_'.repeat(x.w.length)) : ''; };
+const spokenHint = x => speakLetters(hideSpelling(x.mnemSay || (!x.mnem && TIP_SAY[x.w]) || trickText(x), x.w));
 function trickText(x) {
   return x.mnem || TIP_TABLE[x.w] || ''; // only a real spelling trick: the built-in phonics rules can be wrong for a particular word (great does not say ee), so they are not used here
 }
@@ -2050,7 +2058,7 @@ async function aiTips(words) {
   aiNeedKey();
   const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
   if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
-  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Also give a "say" version for a text-to-speech voice: the same tip, but put every letter or letter group that should be said as letters inside curly braces with commas between them (for example {o,u,g,h}, never ough), and write any sound the way it is said (for example uff), because the voice cannot read letter groups or sounds properly. Reply with JSON only, like {"word": {"tip": "...", "say": "..."}}.' }] }) });
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 1500, temperature: 0.2, messages: [{ role: 'user', content: 'For a nine-year-old in England who finds spelling hard, give one short, accurate spelling tip for each of these words (British spelling): ' + words.join(', ') + '. The tip should point out the tricky part of the word in plain words, for example a silent letter, a letter pair that makes a sound, or how the word is built from a smaller word. Never write the whole word out letter by letter, with hyphens or in curly braces: name only the tricky part. Do not make up word origins, do not write a silly sentence or mnemonic, and keep each tip under 90 characters. If there is no honest tip for a word, use an empty string. Also give a "say" version for a text-to-speech voice: the same tip, but put every letter or letter group that should be said as letters inside curly braces with commas between them (for example {o,u,g,h}, never ough), and write any sound the way it is said (for example uff), because the voice cannot read letter groups or sounds properly. Reply with JSON only, like {"word": {"tip": "...", "say": "..."}}.' }] }) });
   if (!r.ok) throw aiFail(r.status);
   const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
   const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}'); if (i0 < 0 || i1 <= i0) throw new Error('The reply was not a list of tips.');
