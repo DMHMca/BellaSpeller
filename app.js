@@ -6,7 +6,7 @@ const DEBUG = true; // true: settings button on every screen and no PIN. Set fal
 const QUIET = location.search.indexOf('quiet') >= 0; // adding ?quiet=1 to the address silences everything (for testing)
 function soundOn() { return QUIET ? false : S.sound === undefined ? true : S.sound === true; } // on by default
 let testMode = false; // true while she is being tested: the spoken word is the test, so it is always on and there is no button to turn it off
-const APP_VER = '3.136'; // bump with every release
+const APP_VER = '3.137'; // bump with every release
 const APP_VERSION = 'version ' + APP_VER + ', 15 November 2026' + (DEBUG ? ' (debug mode)' : '');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2598,7 +2598,9 @@ function adult() {
     <h2>Add a new week</h2>
     <label>Day of the spelling test</label><input id="nl" type="date" value="${new Date(Date.now() + 4 * 864e5).toISOString().slice(0, 10)}" style="max-width:220px">
     <label>The spelling rule, as printed on the sheet (optional)</label><input id="nr" type="text">
-    <label>Paste the words here, separated by spaces, commas or new lines</label><textarea id="nw" spellcheck="false"></textarea>
+    <div class="row" style="justify-content:flex-start;margin-top:10px"><button id="slipCam" class="btn small">Photograph the word slip</button><button id="slipPick" class="btn small">Use a photo already taken</button><input id="slipFile" type="file" accept="image/*" hidden></div>
+    <p id="slipMsg" class="note">The AI reads the words off the photo, and which ones are in red. It needs the AI key on this device. You check the list before anything is saved.</p>
+    <label>Or paste the words here, separated by spaces, commas or new lines</label><textarea id="nw" spellcheck="false"></textarea>
     <p class="note">To add a spelling voice for a tricky word, write it after a bar, like this: every | ev-er-y</p>
     <button id="read" class="btn">Add these words</button>
     <div id="preview"></div>
@@ -2764,20 +2766,64 @@ function adult() {
     if (changed) { wk.ep = null; delete S.story[wk.id]; }
     save(); ensureTools(wk); adultFlash = 'Saved. This week now has ' + nw.length + ' words.' + (changed ? '' : ''); adult();
   });
+  on('#slipCam', () => slipCamera($('#slipMsg'))); on('#slipPick', () => $('#slipFile').click());
+  const sf = $('#slipFile'); if (sf) sf.onchange = async () => { const f = sf.files && sf.files[0]; sf.value = ''; if (!f) return; try { const bm = await createImageBitmap(f); useSlipPhoto(slipPrep(bm, bm.width, bm.height), $('#slipMsg')); } catch (e) { $('#slipMsg').textContent = 'That file could not be opened as a picture.'; } };
   on('#read', () => {
     const ws = parseWords($('#nw').value);
     if (!ws.length) { $('#preview').innerHTML = '<p class="note">No words found.</p>'; return; }
     const redFrom = ws.length >= 6 ? ws.length - 3 : ws.length;
-    $('#preview').innerHTML = `<p>Nearly done. Tick any red words from the school list, then save.</p>` +
-      ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${i >= redFrom ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
+    $('#preview').innerHTML = `<p>${slipRed ? 'Read from the photo. Please check each word and the red ticks against the slip, then save.' : 'Nearly done. Tick any red words from the school list, then save.'}</p>` +
+      ws.map((x, i) => `<div class="wl"><input type="checkbox" id="r${i}" ${(slipRed ? slipRed.has(x.w) : i >= redFrom) ? 'checked' : ''}><b>${esc(x.w)}</b>${x.say ? ' <span class="note">' + esc(x.say) + '</span>' : ''}</div>`).join('') +
       `<p class="note">Bella can make a story with these words from her own home screen.</p><button id="saveWeek" class="btn">Save this week and use it</button>`;
     on('#saveWeek', () => {
       ws.forEach((x, i) => { x.red = $('#r' + i).checked || undefined; });
       const id = 'w' + Date.now();
       S.weeks.push({ id, label: $('#nl').value ? 'Test on ' + new Date($('#nl').value + 'T12:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Week added ' + today(), rule: $('#nr').value.trim(), words: ws, score: null, ep: null });
-      S.cur = id; save(); ensureTools(S.weeks[S.weeks.length - 1]); adultTab = 'words'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '.'; adult();
+      slipRed = null; S.cur = id; save(); ensureTools(S.weeks[S.weeks.length - 1]); adultTab = 'words'; adultFlash = 'Saved. This week is now: ' + ws.map(x => x.w).join(', ') + '.'; adult();
     });
   });
+}
+
+// ---------- The week's words from a photo of the school's word slip ----------
+// A photo is shrunk, sent to the AI vision model (the same one and the same key as the stories), and the words come back in order with
+// the ones printed in red marked. They are put into the word list for a grown-up to check; nothing is saved until the grown-up saves.
+const slipPrep = (src, w, h) => { const k = Math.min(1, 1600 / Math.max(w, h)), c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(src, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.85); };
+const SLIP_PROMPT = 'This is a photo of a school spelling word slip. List every spelling word printed on it, from top to bottom, exactly as printed. Ignore the child\'s name, any handwritten date, and any border or decoration. For each word say whether it is printed in red ink (red: true) or in black or any other colour (red: false). If a rule or heading is printed with the words, give it as "rule", otherwise use an empty string. If you cannot read a word clearly, leave it out. Reply with JSON only, like {"rule": "", "words": [{"w": "energy", "red": false}]}';
+async function readSlipPhoto(dataUrl) {
+  aiNeedKey();
+  const headers = { 'Authorization': 'Bearer ' + aiKey(), 'Content-Type': 'application/json' };
+  if (/openrouter\.ai/.test(aiBase())) headers['X-Title'] = 'BellaSpeller';
+  const r = await fetch(aiBase() + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model: S.orModel || DEFAULT_MODEL, max_tokens: 800, temperature: 0, messages: [{ role: 'user', content: [{ type: 'text', text: SLIP_PROMPT }, { type: 'image_url', image_url: { url: dataUrl } }] }] }) });
+  if (!r.ok) throw aiFail(r.status);
+  const j = await r.json(), c = j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content, t = typeof c === 'string' ? c : Array.isArray(c) ? c.map(z => z.text || '').join('') : '';
+  const i0 = t.indexOf('{'), i1 = t.lastIndexOf('}'); let o; try { o = JSON.parse(t.slice(i0, i1 + 1)); } catch (e) { o = null; }
+  const words = o && Array.isArray(o.words) ? o.words.map(x => ({ w: String(x && x.w || '').trim().toLowerCase(), red: !!(x && x.red) })).filter(x => /^[a-z'’ -]{1,30}$/.test(x.w)) : [];
+  if (!words.length || words.length > 40) throw new Error('I could not read the words from that photo. Try again with the slip flat, well lit and filling the picture, or type the words instead.');
+  return { words, rule: o && typeof o.rule === 'string' ? o.rule.trim().slice(0, 200) : '' };
+}
+// Puts what was read into the word box, remembers which were red, and shows the usual check-and-save list.
+async function useSlipPhoto(dataUrl, msg) {
+  msg.textContent = 'Reading the words from the photo...';
+  try {
+    const got = await readSlipPhoto(dataUrl);
+    slipRed = new Set(got.words.filter(x => x.red).map(x => x.w));
+    $('#nw').value = got.words.map(x => x.w).join('\n');
+    if (got.rule && !$('#nr').value.trim()) $('#nr').value = got.rule;
+    msg.textContent = 'Read ' + got.words.length + ' words' + (slipRed.size ? ', ' + slipRed.size + ' in red' : '') + '. Check every word against the slip below, then save.';
+    $('#read').click();
+  } catch (e) { msg.textContent = e.message || 'That did not work. Please try again.'; }
+}
+let slipRed = null;
+async function slipCamera(msg) {
+  let stream = null;
+  const done = () => { try { stream && stream.getTracks().forEach(t => t.stop()); } catch (e) { } };
+  const { ov, close } = qrOverlay('Photograph the word slip', `<p class="note" id="slipHelp">Hold the slip flat so all the words fill the picture, then press Take photo.</p><video id="slipVideo" playsinline muted style="width:100%;border-radius:12px;background:#000;max-height:60vh"></video><div class="row"><button class="btn" id="slipShot">Take photo</button></div>`, done);
+  const note = t => { const n = ov.querySelector('#slipHelp'); if (n) n.textContent = t; };
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { note('This device cannot use its camera here. Use "Use a photo already taken" instead.'); return; }
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }); }
+  catch (e) { note('The camera could not be opened. Allow the camera for this page and try again, or use "Use a photo already taken".'); return; }
+  const v = ov.querySelector('#slipVideo'); v.srcObject = stream; try { await v.play(); } catch (e) { }
+  ov.querySelector('#slipShot').onclick = () => { if (!v.videoWidth) return; const url = slipPrep(v, v.videoWidth, v.videoHeight); close(); useSlipPhoto(url, msg); };
 }
 
 // ---------- Setting up another device by QR code ----------
